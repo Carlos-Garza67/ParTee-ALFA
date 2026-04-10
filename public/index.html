@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="15.3.3">
+<meta name="version" content="15.4.1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -225,12 +225,12 @@ const SB_FN_URL="https://yuyifyflsnxnwasobnqg.supabase.co/functions/v1";
 const SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1eWlmeWZsc254bndhc29ibnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjUyNzIsImV4cCI6MjA4NDk0MTI3Mn0.oDg7kKn_eQp19_3X256v9mS0gIB14vaIGKgMR-hL3ZE";
 async function stripeCheckout(params){
   try{
-    await sb.auth.refreshSession();
-    const{data:{session}}=await sb.auth.getSession();
+    let{data:{session}}=await sb.auth.getSession();
+    if(!session){try{await sb.auth.refreshSession();({data:{session}}=await sb.auth.getSession())}catch(e){}}
     const token=session?.access_token;
-    if(!token)return{error:"No autenticado. Inicia sesión de nuevo."};
+    if(!token)return{error:"Inicia sesión para continuar."};
     const res=await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify(params)});
-    if(res.status===401)return{error:"Sesión expirada. Recarga la página e intenta de nuevo."};
+    if(res.status===401){try{await sb.auth.refreshSession()}catch(e){}return{error:"Sesión expirada. Recarga la página."}}
     const data=await res.json();
     if(data.free)return{free:true};
     if(data.url){window.location.href=data.url;return{ok:true}}
@@ -302,7 +302,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
   const splitPerPerson=selFr.length>0?Math.round(splitTotal/(selFr.length+1)):0;
 
   const doShare=async()=>{if(!shareModal||selFr.length===0)return;
-    const bk=shareModal;
+    try{const bk=shareModal;
     for(const fid of selFr){
       await sb.from("share_requests").upsert({
         booking_id:bk.id,sender_id:s.user.id,receiver_id:fid,
@@ -313,7 +313,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         booking_date:bk.booking_date,
         booking_time:bk.booking_time,total_cost:Number(bk.total_cost)
       },{onConflict:"booking_id,receiver_id"})}
-    for(const fid of selFr){createNotif(fid,"share_request","Solicitud de reserva compartida",bk.course_name+" — "+(shareMode==="split"?"Split $"+splitPerPerson:"Invitación"),{booking_id:bk.id,course_name:bk.course_name})}alert("Solicitud enviada!");setShareModal(null);setShareMode(null);setSelFr([]);setSplitItems([{name:"Green Fee",amount:""}]);loadReqs()};
+    for(const fid of selFr){createNotif(fid,"share_request","Solicitud de reserva compartida",bk.course_name+" — "+(shareMode==="split"?"Split $"+splitPerPerson:"Invitación"),{booking_id:bk.id,course_name:bk.course_name})}alert("Solicitud enviada!");setShareModal(null);setShareMode(null);setSelFr([]);setSplitItems([{name:"Green Fee",amount:""}]);loadReqs()}catch(e){alert("Error al compartir: "+e.message);console.error(e)}};
 
   const acceptReq=async(req)=>{
     await sb.from("share_requests").update({status:"accepted",updated_at:new Date().toISOString()}).eq("id",req.id);
@@ -353,7 +353,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       <HoleLayout courseId={detail.course_id}/>
     </div>}
     {/* SHARE MODAL */}
-    {shareModal&&<div className="modal-bg" onClick={()=>{setShareModal(null);setShareMode(null)}}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{maxHeight:"90vh",overflowY:"auto"}}>
+    {shareModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{setShareModal(null);setShareMode(null)}}><div onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:20,width:"100%",maxWidth:400,maxHeight:"80vh",overflowY:"auto",padding:24,border:"1px solid "+C.bd}}>
       <h3 style={{color:C.txt,fontSize:17,fontWeight:700,marginBottom:6}}>Compartir Reserva</h3>
       <p style={{color:C.ts,fontSize:13,marginBottom:14}}>{shareModal.course_name} — ${fm(shareModal.total_cost)} MXN</p>
       {!shareMode&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -829,9 +829,8 @@ function Profile({onRanking,onScorecard}){const{p:pr,out,ref,s,setP}=useA();cons
   </div>}
 
 function PaymentCard({userId,email,cardLast4:initLast4,cardBrand:initBrand}){
-  const[last4,setLast4]=useState(initLast4||"");const[brand,setBrand]=useState(initBrand||"");const[adding,setAdding]=useState(false);
+  const[last4,setLast4]=useState(initLast4||"");const[brand,setBrand]=useState(initBrand||"");
   const hasCard=last4&&last4.length>=2;
-  const addCard=async()=>{setAdding(true);const sr=await stripeCheckout({type:"setup",user_email:email});if(sr.error)alert(sr.error);setAdding(false)};
   const removeCard=async()=>{if(!confirm("¿Eliminar método de pago?"))return;await sb.from("user_profiles").update({card_last4:null,card_brand:null,stripe_customer_id:null}).eq("id",userId);setLast4("");setBrand("")};
   return<div>
     {hasCard?<div style={{display:"flex",alignItems:"center",gap:12,padding:14,background:C.bg,borderRadius:12,border:"1px solid "+C.bd}}>
@@ -839,16 +838,10 @@ function PaymentCard({userId,email,cardLast4:initLast4,cardBrand:initBrand}){
       <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:C.txt,fontFamily:"monospace"}}>{"•••• •••• •••• "+last4}</div><div style={{fontSize:11,color:C.grn,marginTop:2}}>Predeterminada</div></div>
       <button onClick={removeCard} style={{background:"none",border:"none",color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>Eliminar</button>
     </div>
-    :<div style={{textAlign:"center",padding:16}}>
-      <div style={{fontSize:28,marginBottom:8}}>&#128179;</div>
-      <div style={{fontSize:13,color:C.ts,marginBottom:12}}>Sin método de pago guardado</div>
-      <div style={{fontSize:11,color:C.tm,marginBottom:14}}>Agrega una tarjeta para pagar reservas más rápido</div>
-      <button onClick={addCard} disabled={adding} style={{padding:"10px 24px",background:`linear-gradient(135deg,${C.pri},#1a5276)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>{adding?"Conectando...":"+ Agregar Tarjeta"}</button>
+    :<div style={{display:"flex",alignItems:"center",gap:12,padding:14,background:C.bg,borderRadius:12,border:"1px solid "+C.bd}}>
+      <div style={{width:44,height:28,borderRadius:6,background:C.bd,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:14}}>&#128179;</span></div>
+      <div style={{flex:1}}><div style={{fontSize:13,color:C.ts}}>Sin método de pago</div><div style={{fontSize:11,color:C.tm,marginTop:2}}>Se guardará al hacer tu primera reserva</div></div>
     </div>}
-    <div style={{marginTop:10,padding:10,background:C.bg,borderRadius:8}}>
-      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><span style={{fontSize:12}}>&#128274;</span><span style={{fontSize:11,fontWeight:600,color:C.ts}}>Pagos seguros con Stripe</span></div>
-      <div style={{fontSize:10,color:C.tm}}>Tus datos de tarjeta nunca se guardan en nuestros servidores</div>
-    </div>
   </div>}
 
 /* ═══ ADMIN (Dashboard + Bookings + Profile with bottom nav) ═══ */
