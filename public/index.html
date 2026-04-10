@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="14.0.0">
+<meta name="version" content="14.1.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -36,6 +36,8 @@
 .bnav>div:active{-webkit-transform:scale(.95);transform:scale(.95)}
 .scorecard{width:100%;border-collapse:collapse;font-size:12px}.scorecard th,.scorecard td{padding:6px 4px;text-align:center;border:1px solid var(--bd,rgba(255,255,255,.08))}.scorecard th{background:var(--card2-bg,#16213e);color:var(--txt-s,#a0aec0);font-weight:600;font-size:10px}.scorecard td{color:var(--txt,#fff)}.scorecard input{width:36px;background:var(--app-bg,#0a0a1a);border:1px solid var(--bd,rgba(255,255,255,.12));border-radius:6px;padding:4px;text-align:center;color:var(--txt,#fff);font-size:13px;font-weight:700}
 </style>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-XXXXXXXXXX")</script>
 </head>
 <body>
 <div id="root"><div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;flex-direction:column"><div style="font-size:48px;margin-bottom:16px">⛳</div><div style="color:#a0aec0;font-size:16px;font-family:-apple-system,system-ui,sans-serif">Cargando Partee...</div></div></div>
@@ -80,6 +82,8 @@ function ThemeToggle(){const{theme,toggle}=useTheme();return<div style={{display
 
 function gcalUrl(title,date,time,location,desc){const dt=date.replace(/-/g,"");const t=(time||"08:00").replace(/:/g,"").slice(0,4);const start=dt+"T"+t+"00";const h=parseInt(t.slice(0,2))+2;const end=dt+"T"+(h<10?"0":"")+h+t.slice(2)+"00";return"https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(title)+"&dates="+start+"/"+end+"&location="+encodeURIComponent(location||"")+"&details="+encodeURIComponent(desc||"")}
 function CalBtn({course,date,time}){const title="Tee Time - "+course;const loc=course;const desc="Reserva en "+course+" via Partee Golf\nhttps://www.partee.com.mx";const url=gcalUrl(title,date,time,loc,desc);return<a href={url} target="_blank" rel="noopener" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 20px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,cursor:"pointer",textDecoration:"none",marginTop:10}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.grn} strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg><span style={{fontSize:13,fontWeight:600,color:C.grn}}>Agregar al Calendario</span></a>}
+
+function MapEmbed({lat,lng,name}){if(!lat||!lng)return null;const src="https://www.google.com/maps?q="+lat+","+lng+"&z=15&output=embed";return<div style={{borderRadius:12,overflow:"hidden",marginTop:12,border:"1px solid "+C.bd}}><iframe src={src} width="100%" height="180" style={{border:0}} allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade" title={"Mapa "+name}/></div>}
 
 /* ═══ NOTIFICATIONS ═══ */
 function createNotif(userId,type,title,message,extra){
@@ -195,6 +199,9 @@ function Detail({c,onBack,onBook}){const{s}=useA();const[slots,setSlots]=useStat
   <div style={{padding:16}}>
     {(()=>{const ft=c.facility_type||"campo";const stats=ft==="campo"?[{n:c.hole_count,l:"Hoyos"},{n:"Par "+c.total_par,l:"Par"},{n:"$"+fm(c.green_fee_min),l:"Desde"}]:ft==="plataforma"?[{n:c.stations_count||0,l:"Bahias"},{n:"$"+fm(c.green_fee_min),l:"Desde"},{n:c.has_food_service?"Si":"No",l:"Comida"}]:[{n:c.cabins_count||0,l:"Cabinas"},{n:c.simulator_brand||"--",l:"Tech"},{n:"$"+fm(c.green_fee_min),l:"Desde"}];return<div style={{display:"flex",gap:10,marginBottom:16}}>{stats.map((x,i)=><div key={i} style={{flex:1,background:C.cd,borderRadius:12,padding:10,textAlign:"center",border:"1px solid "+C.bd}}><div style={{fontSize:15,fontWeight:800,color:C.txt}}>{x.n}</div><div style={{fontSize:10,color:C.tm}}>{x.l}</div></div>)}</div>})()}
     {c.description&&<p style={{fontSize:13,color:C.ts,lineHeight:1.6,marginBottom:14}}>{c.description}</p>}
+    {c.address&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}><span style={{fontSize:14}}>&#128205;</span><span style={{fontSize:12,color:C.ts}}>{c.address}</span></div>}
+    {c.phone_number&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><span style={{fontSize:14}}>&#128222;</span><a href={"tel:"+c.phone_number} style={{fontSize:12,color:C.pri,textDecoration:"none"}}>{c.phone_number}</a></div>}
+    {(()=>{try{const loc=typeof c.location==="string"?JSON.parse(c.location):c.location;if(loc&&loc.coordinates)return<MapEmbed lat={loc.coordinates[1]} lng={loc.coordinates[0]} name={c.course_name}/>}catch(e){}return null})()}
     {promos.length>0&&<div style={{marginBottom:14}}>{promos.map(p=><div key={p.id} style={{background:"linear-gradient(135deg,#fdcb6e20,#e1705520)",border:"1px solid #fdcb6e40",borderRadius:12,padding:12,marginBottom:6}}>
       <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>&#127915;</span><span style={{fontSize:14,fontWeight:800,color:C.gld}}>{p.promo_type==="2x1"?"2x1":p.promo_type==="percent"?p.discount_value+"% OFF":p.promo_type==="early_bird"?"Early Bird":"$"+fm(p.discount_value)+" OFF"}</span></div>
       {p.description&&<p style={{fontSize:12,color:C.ts,marginTop:4}}>{p.description}</p>}
