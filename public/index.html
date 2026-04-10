@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="14.1.0">
+<meta name="version" content="15.2.1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -218,12 +218,45 @@ function Detail({c,onBack,onBook}){const{s}=useA();const[slots,setSlots]=useStat
   </div></div>;
 }
 
+
+
+/* ═══ STRIPE CHECKOUT ═══ */
+const SB_FN_URL="https://yuyifyflsnxnwasobnqg.supabase.co/functions/v1";
+async function stripeCheckout(params){
+  const token=(await sb.auth.getSession()).data.session?.access_token;
+  if(!token)return{error:"No autenticado"};
+  const res=await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(params)});
+  const data=await res.json();
+  if(data.free)return{free:true};
+  if(data.url){window.location.href=data.url;return{ok:true}}
+  return{error:data.error||"Error al crear pago"}}
+
+/* ═══ PROMO CODES ═══ */
+async function validatePromo(code,userId,role){
+  if(!code||!code.trim())return{ok:false,msg:"Ingresa un código"};
+  const cd=code.trim().toUpperCase();
+  const{data:pc,error}=await sb.from("promo_codes").select("*").eq("code",cd).eq("status","active").single();
+  if(error||!pc)return{ok:false,msg:"Código inválido o expirado"};
+  if(pc.target_role!==role)return{ok:false,msg:"Este código no aplica para tu perfil"};
+  if(pc.current_uses>=pc.max_uses_global)return{ok:false,msg:"Código agotado (límite global alcanzado)"};
+  if(pc.valid_until&&new Date(pc.valid_until)<new Date())return{ok:false,msg:"Código expirado"};
+  const{data:used}=await sb.from("promo_code_uses").select("id").eq("promo_code_id",pc.id).eq("user_id",userId);
+  if(used&&used.length>=pc.max_uses_per_user)return{ok:false,msg:"Ya usaste este código"};
+  return{ok:true,promo:pc,msg:pc.discount_type==="percent"?pc.discount_value+"% de descuento":pc.discount_type==="free"?"100% gratis":"$"+fm(pc.discount_value)+" de descuento"}}
+
+async function redeemPromo(promoId,userId,contextType,contextId,discountApplied){
+  await sb.from("promo_code_uses").insert({promo_code_id:promoId,user_id:userId,context_type:contextType,context_id:contextId,discount_applied:discountApplied});
+  await sb.rpc("increment_promo_uses",{promo_id:promoId}).catch(()=>{
+    sb.from("promo_codes").select("current_uses").eq("id",promoId).single().then(({data})=>{
+      if(data)sb.from("promo_codes").update({current_uses:(data.current_uses||0)+1}).eq("id",promoId)})
+  })}
+
 /* ═══ CONFIRM ═══ */
-function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});
+function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});const[promoCode,setPromoCode]=useState("");const[promoResult,setPromoResult]=useState(null);const[promoLoading,setPromoLoading]=useState(false);const[appliedPromo,setAppliedPromo]=useState(null);
   useEffect(()=>{sb.from("extras_catalog").select("*").eq("is_active",true).order("sort_order").then(({data})=>setExtras(data||[]))},[]);
-  const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const grand=gT+eT;
+  const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;const grand=Math.max(0,gT-discount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
-  const go=async()=>{if(!s)return;setBusy(true);const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed"}).select().single();if(error){alert(error.message);setBusy(false);return}const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);if(ei.length>0)await sb.from("booking_extras").insert(ei);createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});setBusy(false);onOk({bk,tot:grand})};
+  const go=async()=>{if(!s)return;setBusy(true);const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();if(error){alert(error.message);setBusy(false);return}const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);if(ei.length>0)await sb.from("booking_extras").insert(ei);if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});if(grand>0){const sr=await stripeCheckout({type:"booking",booking_id:bk.id,course_name:c.course_name,amount:grand,date:sl.slot_date,time:sl.slot_time,party_size:n,promo_code:appliedPromo?.code||null,discount:discount||0,user_email:s.user.email});if(sr.error){alert("Reserva creada. Pago pendiente: "+sr.error);setBusy(false);onOk({bk,tot:grand});return}return}setBusy(false);onOk({bk,tot:grand})};
   const cats=[{k:"equipo",l:"&#127948; Equipo"},{k:"pelotas",l:"&#9898; Pelotas"},{k:"caddie",l:"&#129489; Caddie"},{k:"alimentos",l:"&#127860; Alimentos"}];
   return<div className="fi" style={{padding:20}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt}}>&#8592;</button><h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>Confirmar</h2></div>
     <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}><h3 style={{color:C.txt,fontSize:15,fontWeight:700}}>{c.course_name}</h3><p style={{color:C.ts,fontSize:13,marginTop:4}}>{sl.slot_date} &#183; {sl.slot_time?.slice(0,5)}</p></div>
@@ -232,7 +265,13 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     <h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}}>&#128722; Extras</h3>
     <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:10}}>{cats.map(ct=><button key={ct.k} className={"etab "+(cat===ct.k?"on":"off")} onClick={()=>setCat(ct.k)} dangerouslySetInnerHTML={{__html:ct.l}}/>)}</div>
     {extras.filter(e=>e.category===cat).map(ex=>{const qty=cart[ex.id]||0;return<div key={ex.id} className={"ecard"+(qty>0?" sel":"")}><span style={{fontSize:22}} dangerouslySetInnerHTML={{__html:ex.icon}}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{ex.name}</div><div style={{fontSize:13,fontWeight:800,color:qty>0?C.grn:C.acc,marginTop:2}}>${fm(ex.price)}</div></div><div style={{display:"flex",alignItems:"center",gap:5}}>{qty>0&&<><button onClick={()=>setQty(ex.id,-1)} style={{width:24,height:24,borderRadius:12,border:"1px solid "+C.bd,background:C.bg,color:C.txt,cursor:"pointer",fontSize:13}}>-</button><span style={{fontSize:13,fontWeight:700,color:C.txt,minWidth:14,textAlign:"center"}}>{qty}</span></>}<button onClick={()=>setQty(ex.id,1)} style={{width:24,height:24,borderRadius:12,border:"1px solid "+(qty?C.bd:C.grn),background:qty?C.bg:C.grn+"25",color:qty?C.txt:C.grn,cursor:"pointer",fontSize:13}}>+</button></div></div>})}
-    <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Extras</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:17,fontWeight:700,color:C.txt}}>Total</span><span style={{fontSize:17,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
+    <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginTop:14}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>&#127381; Código Promocional</div>
+      {appliedPromo?<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:10,background:C.grn+"15",borderRadius:8,border:"1px solid "+C.grn+"30"}}><div><div style={{fontSize:12,fontWeight:700,color:C.grn}}>&#10003; {appliedPromo.code} aplicado</div><div style={{fontSize:11,color:C.ts}}>{promoResult?.msg}</div></div><button onClick={()=>{setAppliedPromo(null);setPromoResult(null);setPromoCode("")}} style={{background:"none",border:"none",color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>Quitar</button></div>
+      :<div style={{display:"flex",gap:8}}><input value={promoCode} onChange={e=>setPromoCode(e.target.value.toUpperCase())} placeholder="Ej: OMNIMAN" maxLength={20} style={{flex:1,padding:10,background:C.bg,border:"1px solid "+(promoResult&&!promoResult.ok?C.acc:C.bd),borderRadius:8,color:C.txt,fontSize:13,fontFamily:"monospace",letterSpacing:2,outline:"none"}}/><button onClick={async()=>{setPromoLoading(true);const r=await validatePromo(promoCode,s.user.id,"player");setPromoResult(r);if(r.ok)setAppliedPromo(r.promo);setPromoLoading(false)}} disabled={promoLoading||!promoCode.trim()} style={{padding:"10px 16px",background:promoCode.trim()?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:"none",borderRadius:8,color:promoCode.trim()?"#fff":C.tm,fontWeight:700,fontSize:12,cursor:"pointer"}}>{promoLoading?"...":"Aplicar"}</button></div>}
+      {promoResult&&!promoResult.ok&&<div style={{fontSize:11,color:C.acc,marginTop:4}}>{promoResult.msg}</div>}
+    </div>
+    <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.grn}}>&#127381; Descuento ({appliedPromo?.code})</span><span style={{color:C.grn,fontWeight:700}}>-${fm(discount)}</span></div>}{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Extras</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:17,fontWeight:700,color:C.txt}}>Total</span><span style={{fontSize:17,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
     <button onClick={go} disabled={busy} style={{width:"100%",padding:16,marginTop:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,color:"#fff",border:"none",borderRadius:14,fontSize:16,fontWeight:700,cursor:"pointer",opacity:busy?.6:1}}>Confirmar y Pagar</button></div>;
 }
 
@@ -1082,6 +1121,165 @@ function MatchScreen({onBack,embedded}){
     </div>})}
   </div>}
 
+
+/* ═══ PREMIUM SYSTEM ═══ */
+const PLANS={free:{name:"Básico",price:0,features:["Analítica de tu campo","Ocupación por horario","Segmentación de clientes","Export CSV"]},monthly:{name:"Premium Mensual",price:1499,features:["Todo lo Básico","Comparativa vs mercado","Inteligencia comercial","Pricing dinámico con IA","Recomendaciones de inventario","Análisis de demanda"]},annual:{name:"Premium Anual",price:11990,features:["Todo lo Premium","Ahorra $5,998 al año","Soporte prioritario","Reportes ejecutivos"]}};
+
+function usePremium(){const{s,p}=useA();const[sub,setSub]=useState(null);const[ld,setLd]=useState(true);
+  useEffect(()=>{if(!s)return;sb.from("admin_subscriptions").select("*").eq("user_id",s.user.id).single().then(({data})=>{setSub(data);setLd(false)}).catch(()=>setLd(false))},[s]);
+  const isPremium=sub&&(sub.plan==="monthly"||sub.plan==="annual")&&sub.status==="active"&&(!sub.expires_at||new Date(sub.expires_at)>new Date());
+  return{sub,isPremium,ld}}
+
+function PremiumBadge({plan}){if(!plan||plan==="free")return null;return<span style={{fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:6,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",marginLeft:6}}>PRO</span>}
+
+function LockedOverlay({title,desc,onUpgrade}){return<div style={{position:"relative",borderRadius:14,overflow:"hidden",marginBottom:16}}>
+  <div style={{filter:"blur(4px)",opacity:.3,pointerEvents:"none",padding:16,background:C.cd,borderRadius:14,border:"1px solid "+C.bd}}>
+    <div style={{height:20,background:C.tm+"30",borderRadius:4,marginBottom:8,width:"70%"}}/><div style={{height:14,background:C.tm+"20",borderRadius:4,marginBottom:6,width:"90%"}}/><div style={{height:14,background:C.tm+"20",borderRadius:4,width:"60%"}}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}><div style={{height:50,background:C.tm+"15",borderRadius:8}}/><div style={{height:50,background:C.tm+"15",borderRadius:8}}/></div>
+  </div>
+  <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.5)",borderRadius:14}}>
+    <div style={{fontSize:28,marginBottom:8}}>&#128274;</div>
+    <div style={{fontSize:15,fontWeight:800,color:"#fff",marginBottom:4}}>{title}</div>
+    <div style={{fontSize:11,color:"rgba(255,255,255,.7)",textAlign:"center",padding:"0 20px",marginBottom:12}}>{desc}</div>
+    <button onClick={onUpgrade} style={{padding:"10px 24px",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>&#128142; Mejorar a Premium</button>
+  </div>
+</div>}
+
+function PricingModal({onClose,onSelect,userId}){const[adminPromoInput,setAdminPromoInput]=useState("");const[adminPromoApplied,setAdminPromoApplied]=useState(null);const[adminPromoMsg,setAdminPromoMsg]=useState("");const[adminPromoOk,setAdminPromoOk]=useState(false);const[adminPromoLoading,setAdminPromoLoading]=useState(false);return<div className="modal-bg" onClick={onClose}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{maxHeight:"85vh",overflowY:"auto"}}>
+  <div style={{textAlign:"center",marginBottom:16}}><div style={{fontSize:32}}>&#128142;</div><h2 style={{color:C.txt,fontSize:20,fontWeight:800,margin:"8px 0"}}>Partee Premium</h2><p style={{color:C.ts,fontSize:13}}>Desbloquea inteligencia de mercado para tu campo</p></div>
+  {["monthly","annual"].map(k=>{const pl=PLANS[k];const isAnnual=k==="annual";return<div key={k} style={{background:C.cd,border:isAnnual?"2px solid #f59e0b":"1px solid "+C.bd,borderRadius:14,padding:16,marginBottom:12,position:"relative"}}>
+    {isAnnual&&<div style={{position:"absolute",top:-10,right:16,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",fontSize:10,fontWeight:800,padding:"3px 10px",borderRadius:6}}>AHORRA 33%</div>}
+    <h3 style={{color:C.txt,fontSize:16,fontWeight:700,margin:0}}>{pl.name}</h3>
+    <div style={{marginTop:6}}><span style={{fontSize:28,fontWeight:800,color:C.txt}}>${pl.price.toLocaleString()}</span><span style={{fontSize:13,color:C.ts}}> MXN/{isAnnual?"año":"mes"}</span></div>
+    {isAnnual&&<div style={{fontSize:11,color:"#f59e0b",fontWeight:600,marginTop:2}}>= $999/mes (vs $1,499)</div>}
+    <div style={{marginTop:12}}>{pl.features.map((f,i)=><div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}><span style={{color:C.grn,fontSize:12}}>&#10003;</span><span style={{fontSize:12,color:C.ts}}>{f}</span></div>)}</div>
+    <button onClick={()=>onSelect(k,adminPromoApplied)} style={{width:"100%",padding:12,marginTop:12,background:isAnnual?"linear-gradient(135deg,#f59e0b,#d97706)":`linear-gradient(135deg,${C.pri},#1a5276)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>{isAnnual?"Elegir Anual":"Elegir Mensual"}</button>
+  </div>})}
+  <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:14,marginBottom:12}}>
+    <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>&#127381; ¿Tienes un código?</div>
+    {adminPromoApplied?<div style={{padding:10,background:C.grn+"15",borderRadius:8,border:"1px solid "+C.grn+"30"}}><div style={{fontSize:12,fontWeight:700,color:C.grn}}>&#10003; {adminPromoApplied.code} — Premium GRATIS</div><div style={{fontSize:11,color:C.ts}}>100% de descuento aplicado</div></div>
+    :<><div style={{display:"flex",gap:8}}><input value={adminPromoInput} onChange={e=>setAdminPromoInput(e.target.value.toUpperCase())} placeholder="Ej: OLIVER" maxLength={20} style={{flex:1,padding:10,background:C.bg,border:"1px solid "+(adminPromoMsg&&!adminPromoOk?C.acc:C.bd),borderRadius:8,color:C.txt,fontSize:13,fontFamily:"monospace",letterSpacing:2,outline:"none"}}/><button onClick={async()=>{setAdminPromoLoading(true);const r=await validatePromo(adminPromoInput,userId,"course_admin");setAdminPromoMsg(r.msg);setAdminPromoOk(r.ok);if(r.ok)setAdminPromoApplied(r.promo);setAdminPromoLoading(false)}} disabled={adminPromoLoading||!adminPromoInput.trim()} style={{padding:"10px 16px",background:adminPromoInput.trim()?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:"none",borderRadius:8,color:adminPromoInput.trim()?"#fff":C.tm,fontWeight:700,fontSize:12,cursor:"pointer"}}>{adminPromoLoading?"...":"Aplicar"}</button></div>
+    {adminPromoMsg&&!adminPromoOk&&<div style={{fontSize:11,color:C.acc,marginTop:4}}>{adminPromoMsg}</div>}</>}
+  </div>
+  <p style={{textAlign:"center",fontSize:10,color:C.tm,marginTop:8}}>Pagos procesados de forma segura. Cancela cuando quieras.</p>
+  <button onClick={onClose} style={{width:"100%",padding:10,marginTop:8,background:"none",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontSize:13,cursor:"pointer"}}>Ahora no</button>
+</div></div>}
+
+function PremiumInsights({course}){const{s,p}=useA();const{sub,isPremium}=usePremium();const[showPricing,setShowPricing]=useState(false);const[bench,setBench]=useState(null);const[mySt,setMySt]=useState(null);const[ld,setLd]=useState(true);
+  useEffect(()=>{loadData()},[]);
+  async function loadData(){
+    const[bkR,slR,bmR,extR]=await Promise.all([
+      sb.from("bookings").select("id,total_cost,booking_date,booking_time,party_size").eq("course_id",course.id).eq("status","confirmed"),
+      sb.from("time_slots").select("id,slot_time,slot_date,status,price,booked_count,capacity,course_id").eq("course_name",course.course_name),
+      sb.from("market_benchmarks").select("*"),
+      sb.from("booking_extras").select("quantity,unit_price,total_price,extras_catalog(name,category)").eq("booking_id",course.id).limit(0)
+    ]);
+    const bks=bkR.data||[];const slots=slR.data||[];const benchmarks=bmR.data||[];
+    // My stats
+    const rev=bks.reduce((s,b)=>s+Number(b.total_cost||0),0);
+    const avgTicket=bks.length?Math.round(rev/bks.length):0;
+    const cap=slots.reduce((s,x)=>s+(x.capacity||0),0);
+    const booked=slots.reduce((s,x)=>s+(x.booked_count||0),0);
+    const occ=cap?Math.round(booked/cap*100):0;
+    // By hour
+    const byHour={};slots.forEach(sl=>{const h=parseInt(sl.slot_time?.split(":")[0]||"0");if(!byHour[h])byHour[h]={t:0,b:0,rev:0};byHour[h].t+=sl.capacity||0;byHour[h].b+=sl.booked_count||0});
+    bks.forEach(b=>{const h=parseInt(b.booking_time?.split(":")[0]||"0");if(byHour[h])byHour[h].rev+=Number(b.total_cost||0)});
+    const hourData=Object.entries(byHour).map(([h,d])=>({hour:parseInt(h),occ:d.t?Math.round(d.b/d.t*100):0,rev:d.rev})).sort((a,b)=>a.hour-b.hour);
+    // Benchmark match
+    const myBench=benchmarks.find(b=>b.course_type===course.course_type&&b.facility_type===(course.facility_type||"campo"))||benchmarks[0];
+    setBench(myBench);setMySt({rev,avgTicket,occ,bks:bks.length,hourData,feeMin:course.green_fee_min,feeMax:course.green_fee_max});setLd(false)}
+  
+  async function activatePlan(plan,promo){
+    const price=promo&&promo.discount_type==="free"?0:PLANS[plan].price;
+    if(price===0){const exp=new Date();plan==="annual"?exp.setFullYear(exp.getFullYear()+1):exp.setMonth(exp.getMonth()+1);
+      await sb.from("admin_subscriptions").upsert({user_id:s.user.id,plan,status:"active",price_mxn:0,started_at:new Date().toISOString(),expires_at:exp.toISOString()},{onConflict:"user_id"});
+      await sb.from("user_profiles").update({subscription_plan:plan}).eq("id",s.user.id);
+      if(promo)await redeemPromo(promo.id,s.user.id,"premium",null,PLANS[plan].price);setShowPricing(false);location.reload();return}
+    const sr=await stripeCheckout({type:"premium",plan,user_email:s.user.email});if(sr.error)alert("Error: "+sr.error);setShowPricing(false)}
+
+  if(ld)return<div className="pl" style={{textAlign:"center",padding:40,color:C.tm}}>Cargando...</div>;
+  const m=mySt;const b=bench;
+  const mktOcc=b&&(b.booked_slots_7d+b.available_slots_7d)>0?Math.round(b.booked_slots_7d/(b.booked_slots_7d+b.available_slots_7d)*100):0;
+
+  return<div className="fi">
+    {showPricing&&<PricingModal onClose={()=>setShowPricing(false)} onSelect={activatePlan} userId={s?.user?.id}/>}
+    {/* Sub status */}
+    {isPremium?<div style={{background:"linear-gradient(135deg,#f59e0b20,#d9770620)",border:"1px solid #f59e0b40",borderRadius:12,padding:12,marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+      <span style={{fontSize:22}}>&#128142;</span><div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>Premium Activo<PremiumBadge plan={sub?.plan}/></div><div style={{fontSize:11,color:C.ts}}>Acceso completo a inteligencia de mercado</div></div>
+    </div>:<div style={{background:`linear-gradient(135deg,${C.pri}15,${C.acc}15)`,border:"1px solid "+C.pri+"30",borderRadius:12,padding:14,marginBottom:16,textAlign:"center"}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:4}}>&#128202; Analítica Básica</div><div style={{fontSize:11,color:C.ts,marginBottom:10}}>Mejora a Premium para desbloquear comparativas, IA y recomendaciones</div>
+      <button onClick={()=>setShowPricing(true)} style={{padding:"10px 24px",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>&#128142; Ver Planes Premium</button>
+    </div>}
+
+    {/* ═══ SECTION 1: COMPARATIVA (premium) ═══ */}
+    <h4 style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:10}}>&#128200; Comparativa vs Mercado</h4>
+    {isPremium&&b?<div style={{marginBottom:16}}>
+      <div style={{fontSize:11,color:C.tm,marginBottom:8}}>{b.venue_count} campos {b.course_type} en {b.state||"tu región"}</div>
+      {[{l:"Ocupación",my:m.occ+"%",mkt:mktOcc+"%",good:m.occ>=mktOcc},{l:"Ticket Promedio",my:"$"+fm(m.avgTicket),mkt:"$"+fm(b.avg_ticket||0),good:m.avgTicket>=(b.avg_ticket||0)},{l:"Green Fee Mín",my:"$"+fm(m.feeMin),mkt:"$"+fm(b.avg_fee_min||0),good:true},{l:"Reservas (30d)",my:m.bks+"",mkt:Math.round((b.bookings_last_30d||0)/Math.max(b.venue_count,1))+"",good:m.bks>=Math.round((b.bookings_last_30d||0)/Math.max(b.venue_count,1))}].map((r,i)=>
+        <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8,background:C.cd,borderRadius:10,padding:10,border:"1px solid "+C.bd}}>
+          <div style={{fontSize:11,color:C.ts,fontWeight:600}}>{r.l}</div>
+          <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:r.good?C.grn:C.acc}}>{r.my}</div><div style={{fontSize:9,color:C.tm}}>Tu campo</div></div>
+          <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:C.ts}}>{r.mkt}</div><div style={{fontSize:9,color:C.tm}}>Mercado</div></div>
+        </div>)}
+    </div>:<LockedOverlay title="Comparativa vs Mercado" desc="Compara tu ocupación, ingresos y ticket promedio contra otros campos de tu categoría" onUpgrade={()=>setShowPricing(true)}/>}
+
+    {/* ═══ SECTION 2: INTELIGENCIA COMERCIAL (premium) ═══ */}
+    <h4 style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:10}}>&#128161; Inteligencia Comercial</h4>
+    {isPremium?<div style={{marginBottom:16}}>
+      {(()=>{const recs=[];
+        if(m.occ<40)recs.push({icon:"&#127775;",title:"Lanza una promo Early Bird",desc:"Tu ocupación ("+m.occ+"%) está por debajo del mercado. Una promo 6-9am puede atraer +20% jugadores."});
+        if(m.avgTicket<(b?.avg_ticket||0))recs.push({icon:"&#128176;",title:"Sube tu ticket promedio",desc:"Tu ticket ($"+fm(m.avgTicket)+") está por debajo del mercado ($"+fm(b?.avg_ticket||0)+"). Considera paquetes con extras."});
+        if(!course.has_food_service)recs.push({icon:"&#127860;",title:"Agrega servicio de comida",desc:"Los campos con comida generan 35% más ingreso por visita. Considera snack bar o food truck."});
+        if(!course.has_pro_shop)recs.push({icon:"&#128092;",title:"Abre un Pro Shop",desc:"Los campos con pro shop incrementan el ticket promedio un 25%. Empieza con accesorios básicos."});
+        const peakHour=m.hourData.reduce((best,h)=>h.occ>best.occ?h:best,{hour:0,occ:0});
+        const lowHour=m.hourData.filter(h=>h.occ>0).reduce((worst,h)=>h.occ<worst.occ?h:worst,{hour:0,occ:100});
+        if(peakHour.occ>70&&lowHour.occ<30)recs.push({icon:"&#9200;",title:"Redistribuye demanda",desc:"Horario "+peakHour.hour+":00 tiene "+peakHour.occ+"% ocupación. Ofrece descuento en "+lowHour.hour+":00 ("+lowHour.occ+"%) para equilibrar."});
+        recs.push({icon:"&#127942;",title:"Organiza torneos",desc:"Los campos que organizan torneos mensuales incrementan retención un 40%. Crea uno desde la app."});
+        if(recs.length===0)recs.push({icon:"&#128077;",title:"Buen trabajo",desc:"Tu campo opera por encima del mercado en las métricas principales."});
+        return recs.slice(0,4).map((r,i)=><div key={i} style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:12,marginBottom:8,display:"flex",gap:10}}>
+          <span style={{fontSize:22,flexShrink:0}} dangerouslySetInnerHTML={{__html:r.icon}}/><div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{r.title}</div><div style={{fontSize:11,color:C.ts,marginTop:2,lineHeight:1.5}}>{r.desc}</div></div>
+        </div>)})()}
+    </div>:<LockedOverlay title="Inteligencia Comercial" desc="Recibe recomendaciones de productos, servicios y estrategias basadas en datos del mercado" onUpgrade={()=>setShowPricing(true)}/>}
+
+    {/* ═══ SECTION 3: PRICING DINÁMICO (premium) ═══ */}
+    <h4 style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:10}}>&#129302; Pricing Dinámico con IA</h4>
+    {isPremium?<div style={{marginBottom:16}}>
+      {(()=>{const suggestions=[];
+        const hourly=m.hourData||[];
+        hourly.forEach(h=>{
+          if(h.occ>80)suggestions.push({hour:h.hour,type:"increase",pct:15,reason:"Alta demanda ("+h.occ+"% ocupación)"});
+          else if(h.occ<20&&h.hour>=6&&h.hour<=17)suggestions.push({hour:h.hour,type:"decrease",pct:20,reason:"Baja demanda ("+h.occ+"% ocupación)"});
+        });
+        const mktFeeAvg=b?.avg_fee_min||0;
+        const diff=m.feeMin-mktFeeAvg;
+        return<>
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>&#128178; Posición de Precio</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div><div style={{fontSize:20,fontWeight:800,color:C.grn}}>${fm(m.feeMin)}</div><div style={{fontSize:10,color:C.tm}}>Tu green fee</div></div>
+              <div><div style={{fontSize:20,fontWeight:800,color:C.ts}}>${fm(mktFeeAvg)}</div><div style={{fontSize:10,color:C.tm}}>Promedio mercado</div></div>
+            </div>
+            <div style={{marginTop:8,fontSize:12,color:diff>0?C.gld:C.grn,fontWeight:600}}>{diff>0?"↑ $"+fm(Math.abs(diff))+" arriba del mercado":"↓ $"+fm(Math.abs(diff))+" debajo del mercado"}{diff>0?" — Considera ofertas en horarios bajos":" — Margen para subir en horarios pico"}</div>
+          </div>
+          {suggestions.length>0&&<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>&#9202; Ajustes Sugeridos por Horario</div>
+            {suggestions.slice(0,5).map((sg,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:8,background:sg.type==="increase"?C.grn+"10":C.acc+"10",borderRadius:8}}>
+              <span style={{fontSize:18}}>{sg.type==="increase"?"&#128200;":"&#128201;"}</span>
+              <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:sg.type==="increase"?C.grn:C.acc}}>{sg.hour}:00 — {sg.type==="increase"?"Subir":"Bajar"} {sg.pct}%</div><div style={{fontSize:10,color:C.ts}}>{sg.reason}</div></div>
+            </div>)}
+          </div>}
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>&#128230; Inventario Óptimo (próx 7 días)</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div style={{textAlign:"center",padding:10,background:C.grn+"10",borderRadius:8}}><div style={{fontSize:18,fontWeight:800,color:C.grn}}>{b?.available_slots_7d||0}</div><div style={{fontSize:10,color:C.tm}}>Slots disponibles</div></div>
+              <div style={{textAlign:"center",padding:10,background:C.acc+"10",borderRadius:8}}><div style={{fontSize:18,fontWeight:800,color:C.acc}}>{b?.booked_slots_7d||0}</div><div style={{fontSize:10,color:C.tm}}>Slots reservados</div></div>
+            </div>
+            {(b?.available_slots_7d||0)>50&&<div style={{marginTop:8,fontSize:11,color:C.gld}}>&#128161; Tienes muchos slots disponibles. Considera crear una promo flash para llenar horarios bajos.</div>}
+          </div>
+        </>})()}
+    </div>:<LockedOverlay title="Pricing Dinámico con IA" desc="Ajusta precios automáticamente según demanda, temporada y competencia para maximizar ingresos" onUpgrade={()=>setShowPricing(true)}/>}
+  </div>}
+
+
 /* ═══ ADMIN PROMOTIONS ═══ */
 function AdminPromos({course}){
   const[promos,setPromos]=useState([]);const[ld,setLd]=useState(true);const[create,setCreate]=useState(false);
@@ -1128,10 +1326,10 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
   if(ld)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación asignada</h2><p style={{color:C.ts,fontSize:13,marginTop:8}}>Contacta soporte para asignar una locación a tu cuenta.</p><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:12,color:"#fff",fontWeight:700,cursor:"pointer"}}>Cerrar Sesión</button></div></div>;
   const ft=course.facility_type||"campo";
-  const tabs=[{i:"&#128202;",l:"Dashboard"},{i:"&#128197;",l:"Reservas"},{i:"&#127915;",l:"Promos"},{i:"&#128100;",l:"Perfil"}];
+  const tabs=[{i:"&#128202;",l:"Dashboard"},{i:"&#128197;",l:"Reservas"},{i:"&#127915;",l:"Promos"},{i:"&#128142;",l:"Insights"},{i:"&#128100;",l:"Perfil"}];
   return<div style={{maxWidth:430,margin:"0 auto",background:C.bg,minHeight:"100vh"}}>
-    <div style={{background:theme==="light"?"#ffffff":`linear-gradient(135deg,${C.bg},${C.pri})`,padding:"14px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:20}} dangerouslySetInnerHTML={{__html:FI[ft]}}/><span style={{fontSize:18,fontWeight:800,color:theme==="light"?C.pri:"#fff"}}>Partee Admin</span></div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}><p style={{fontSize:12,color:C.ts,margin:0}}>{course.course_name} · <span style={{color:"#6c5ce7"}} dangerouslySetInnerHTML={{__html:({campo:"Campo",plataforma:"Plataforma",simulador:"Simulador"})[ft]}}/></p><NotifBell/></div></div>
-    <div style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminPromos course={course}/>}{tab===3&&<AdminProfile course={course} onOut={out} onRefresh={loadC}/>}</div>
+    <div style={{background:theme==="light"?"#ffffff":`linear-gradient(135deg,${C.bg},${C.pri})`,padding:"14px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:20}} dangerouslySetInnerHTML={{__html:FI[ft]}}/><span style={{fontSize:18,fontWeight:800,color:theme==="light"?C.pri:"#fff"}}>Partee Admin</span>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}><p style={{fontSize:12,color:C.ts,margin:0}}>{course.course_name} · <span style={{color:"#6c5ce7"}} dangerouslySetInnerHTML={{__html:({campo:"Campo",plataforma:"Plataforma",simulador:"Simulador"})[ft]}}/></p><NotifBell/></div></div>
+    <div style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminPromos course={course}/>}{tab===3&&<PremiumInsights course={course}/>}{tab===4&&<AdminProfile course={course} onOut={out} onRefresh={loadC}/>}</div>
     <div className="bnav">{tabs.map((t,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?"rgba(0,184,148,0.1)":"transparent",opacity:tab===i?1:.55}}><div style={{fontSize:20}} dangerouslySetInnerHTML={{__html:t.i}}/><div style={{fontSize:10,fontWeight:600,color:tab===i?C.grn:"#8a8f98",marginTop:2}}>{t.l}</div></div>)}</div>
   </div>}
 
@@ -1180,6 +1378,7 @@ function PlayerOnboarding(){
 
 /* ═══ MAIN ═══ */
 function Main(){const{s,p,ld}=useA();const{theme}=useTheme();const[tab,setTab]=useState(0);const[scr,setScr]=useState("home");const[co,setCo]=useState(null);const[sl,setSl]=useState(null);const[okd,setOkd]=useState(null);
+  useEffect(()=>{try{const url=new URL(location.href);const pay=url.searchParams.get("payment");if(pay==="success")setTimeout(()=>alert("Pago completado. Tu reserva está confirmada."),500);if(pay==="premium_success")setTimeout(()=>alert("Premium activado."),500);if(pay==="cancelled")setTimeout(()=>alert("Pago cancelado."),500);if(pay){url.searchParams.delete("payment");url.searchParams.delete("booking_id");url.searchParams.delete("plan");history.replaceState(null,"",url.pathname)}}catch(e){}},[]);
   if(ld)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>&#9971; Cargando...</div></div>;
   if(!s)return<Login/>;
   if(p?.is_deleted)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Cuenta eliminada</h2><p style={{color:C.ts,fontSize:13,marginTop:8}}>Esta cuenta ha sido desactivada.</p><button onClick={()=>sb.auth.signOut().then(()=>location.reload())} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:12,color:"#fff",fontWeight:700,cursor:"pointer"}}>Salir</button></div></div>;
