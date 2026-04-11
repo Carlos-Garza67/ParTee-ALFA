@@ -356,7 +356,7 @@ async function stripeCheckout(params){
 
 
 /* ═══ STRIPE EMBEDDED PAYMENT ═══ */
-const STRIPE_PK="pk_test_51RKk1IPbfR39rPLyAWk5ML2tFgKT431EzxMSvWBRVfFJ8gxRDJPkCjT1RI30CkK0cEq1E9hrcCpHtv7gC1P17jnk00VGxEpJwR";
+const STRIPE_PK="pk_test_51TKk1IPbfR39rPLyAWk5ML2tFgKT431Ez2kPmCx1D1EjyaCN84MRpbSqNOytccNoRM7vapAMgRKjyvQjkzEElXl100BEc1YeTX";
 function StripePayment({amount,bookingId,courseName,date,time,partySize,onSuccess,onCancel}){
   const[phase,setPhase]=useState("loading");const[paying,setPaying]=useState(false);const[error,setError]=useState("");
   const stripeRef=useRef(null);const cardRef=useRef(null);const secretRef=useRef("");const mountRef=useRef(null);
