@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="16.0.1">
+<meta name="version" content="16.1.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -28,6 +28,20 @@
 .ecard{background:var(--card-bg,#1a1a2e);border:1px solid var(--bd,rgba(255,255,255,.08));border-radius:14px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px}.ecard.sel{border-color:#00b894;background:rgba(0,184,148,.06)}
 .sc{background:var(--card-bg,#1a1a2e);border:1px solid var(--bd,rgba(255,255,255,.08));border-radius:14px;padding:16px;text-align:center}.sc .n{font-size:24px;font-weight:800;margin-bottom:2px}.sc .l{font-size:11px;color:var(--txt-m,#4a5568)}
 .ar{display:flex;align-items:center;gap:12px;padding:14px;background:var(--card-bg,#1a1a2e);border:1px solid var(--bd,rgba(255,255,255,.08));border-radius:12px;margin-bottom:8px}
+.toast-wrap{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:90%;max-width:380px}
+.toast{pointer-events:auto;padding:14px 20px;border-radius:14px;color:#fff;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;animation:toast-in .35s cubic-bezier(.34,1.56,.64,1);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.toast.success{background:rgba(0,184,148,.92)}.toast.error{background:rgba(233,69,96,.92)}.toast.info{background:rgba(26,26,46,.92);border:1px solid rgba(255,255,255,.1)}.toast.warn{background:rgba(253,203,110,.92);color:#1a1a2e}
+.toast-out{animation:toast-out .3s ease-in forwards}
+@keyframes toast-in{from{opacity:0;transform:translateY(-20px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-20px) scale(.9)}}
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:998;display:flex;align-items:center;justify-content:center;animation:fade-in .2s ease}
+.confirm-box{background:var(--card-bg,#1e1e3a);border-radius:20px;padding:28px;max-width:340px;width:90%;text-align:center;animation:toast-in .3s cubic-bezier(.34,1.56,.64,1);border:1px solid var(--bd,rgba(255,255,255,.08))}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+.skeleton{background:linear-gradient(90deg,var(--card-bg,#1e1e3a) 25%,rgba(255,255,255,.06) 50%,var(--card-bg,#1e1e3a) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.btn-pulse{animation:pulse 2s infinite}@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(233,69,96,.4)}70%{box-shadow:0 0 0 12px rgba(233,69,96,0)}}
+.fav-bounce{animation:fav-pop .4s cubic-bezier(.34,1.56,.64,1)}@keyframes fav-pop{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
+.tab-content{animation:tab-fade .25s ease}@keyframes tab-fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);z-index:200;display:flex;align-items:flex-end;justify-content:center}.modal-box{background:var(--card-bg,#1a1a2e);border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px;padding-bottom:max(24px,env(safe-area-inset-bottom,24px));border:1px solid var(--bd,rgba(255,255,255,.08))}
 .hole-row{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--card-bg,#1a1a2e);border:1px solid var(--bd,rgba(255,255,255,.08));border-radius:10px;margin-bottom:6px}
 .hole-num{width:32px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0}
@@ -68,10 +82,34 @@ const DN=["Dom","Lun","Mar","Mie","Jue","Vie","Sab"];const fm=n=>Number(n).toLoc
 const fmtNames={stroke_play:"Stroke Play",stableford:"Stableford",match_play:"Match Play",scramble:"Scramble",four_ball:"Four-Ball"};
 const n7=()=>Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toISOString().split("T")[0]});
 
+
+/* ═══ TOAST SYSTEM ═══ */
+const ToastCtx=createContext({});
+function ToastProvider({children}){const[toasts,setToasts]=useState([]);const[cDialog,setCDialog]=useState(null);
+  const toast=(msg,type="info")=>{const id=Date.now();setToasts(p=>[...p,{id,msg,type}]);setTimeout(()=>setToasts(p=>p.map(t=>t.id===id?{...t,out:true}:t)),2800);setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3200)};
+  const confirm=(msg,onYes,onNo)=>setCDialog({msg,onYes:()=>{setCDialog(null);onYes?.()},onNo:()=>{setCDialog(null);onNo?.()}});
+  return<ToastCtx.Provider value={{toast,confirm}}>{children}
+    <div className="toast-wrap">{toasts.map(t=><div key={t.id} className={"toast "+t.type+(t.out?" toast-out":"")}>
+      <span>{t.type==="success"?"✓":t.type==="error"?"✕":t.type==="warn"?"⚠":"ℹ"}</span><span>{t.msg}</span>
+    </div>)}</div>
+    {cDialog&&<div className="confirm-overlay" onClick={cDialog.onNo}><div className="confirm-box" onClick={e=>e.stopPropagation()}>
+      <div style={{fontSize:28,marginBottom:12}}>&#9888;</div>
+      <p style={{color:"var(--txt,#fff)",fontSize:15,fontWeight:600,marginBottom:20}}>{cDialog.msg}</p>
+      <div style={{display:"flex",gap:10}}><button onClick={cDialog.onNo} style={{flex:1,padding:12,background:"transparent",border:"1px solid var(--bd,rgba(255,255,255,.08))",borderRadius:12,color:"var(--ts,#ccc)",fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
+      <button onClick={cDialog.onYes} style={{flex:1,padding:12,background:"linear-gradient(135deg,#e94560,#ff6b6b)",border:"none",borderRadius:12,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>Confirmar</button></div>
+    </div></div>}
+  </ToastCtx.Provider>}
+const useToast=()=>useContext(ToastCtx);
+
 /* ═══ REVIEWS HELPERS ═══ */
 function useRating(courseId){const[avg,setAvg]=useState(0);const[cnt,setCnt]=useState(0);
   useEffect(()=>{if(!courseId)return;sb.from("reviews").select("rating").eq("course_id",courseId).then(({data})=>{if(data&&data.length>0){setAvg(Math.round(data.reduce((s,r)=>s+r.rating,0)/data.length*10)/10);setCnt(data.length)}})},[courseId]);
   return{avg,cnt}}
+
+
+function Skeleton({w="100%",h=14,r=8,mb=8}){return<div className="skeleton" style={{width:w,height:h,borderRadius:r,marginBottom:mb}}/>}
+function CardSkeleton(){return<div style={{width:180,background:"var(--card-bg,#1e1e3a)",borderRadius:14,overflow:"hidden",border:"1px solid var(--bd,rgba(255,255,255,.08))"}}>
+  <Skeleton w="100%" h={120} r={0} mb={0}/><div style={{padding:10}}><Skeleton w="80%" h={14}/><Skeleton w="60%" h={12}/></div></div>}
 
 const Stars=({r,s=14,edit,onRate})=><span style={{display:"inline-flex",gap:2}}>{[1,2,3,4,5].map(i=><span key={i} onClick={edit?()=>onRate?.(i):undefined} style={{color:i<=Math.round(r)?C.gld:C.tm,fontSize:s,cursor:edit?"pointer":"default"}}>&#9733;</span>)}</span>;
 const BRANDS=[{id:"Ping",logo:"https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Ping_logo.svg/200px-Ping_logo.svg.png"},{id:"Callaway",logo:"https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Callaway_Golf_Company_logo.svg/200px-Callaway_Golf_Company_logo.svg.png"},{id:"Wilson",logo:"https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Wilson_Sporting_Goods_logo.svg/200px-Wilson_Sporting_Goods_logo.svg.png"},{id:"Titleist",logo:"https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Titleist_logo.svg/200px-Titleist_logo.svg.png"},{id:"TaylorMade",logo:"https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/TaylorMade_Golf_logo.svg/200px-TaylorMade_Golf_logo.svg.png"}];
@@ -247,7 +285,7 @@ function Detail({c,onBack,onBook}){const{s}=useA();const[slots,setSlots]=useStat
   useEffect(()=>{sb.from("reviews").select("*,user_profiles(full_name)").eq("course_id",c.id).order("created_at",{ascending:false}).limit(10).then(({data})=>setRevs(data||[]));if(s)sb.from("course_favorites").select("id").eq("course_id",c.id).eq("user_id",s.user.id).then(({data})=>setFav(data?.length>0));const td=new Date().toISOString().split("T")[0];sb.from("promotions").select("*").eq("course_id",c.id).eq("is_active",true).gte("valid_until",td).lte("valid_from",td).then(({data})=>setPromos(data||[]))},[]);
   const rv=async()=>{if(!s||!rt)return;setSub(true);await sb.from("reviews").upsert({user_id:s.user.id,course_id:c.id,rating:rt,comment:cm||null},{onConflict:"user_id,course_id"});const{data}=await sb.from("reviews").select("*,user_profiles(full_name)").eq("course_id",c.id).order("created_at",{ascending:false}).limit(10);setRevs(data||[]);setSr(false);setSub(false);setRt(0);setCm("")};
   const tf=async()=>{if(!s)return;if(fav){await sb.from("course_favorites").delete().eq("course_id",c.id).eq("user_id",s.user.id);setFav(false)}else{await sb.from("course_favorites").insert({course_id:c.id,user_id:s.user.id});setFav(true)}};
-  return<div className="fi" style={{paddingBottom:30}}><div style={{position:"relative"}}><Img imgs={c.photo_urls} h={220}/><button onClick={onBack} style={{position:"absolute",top:16,left:16,background:"rgba(0,0,0,.5)",border:"none",color:"#fff",borderRadius:24,width:40,height:40,cursor:"pointer",fontSize:20,zIndex:2,display:"flex",alignItems:"center",justifyContent:"center"}}>&#8592;</button><button onClick={tf} style={{position:"absolute",top:16,right:16,background:"rgba(0,0,0,.5)",border:"none",color:fav?C.acc:"#fff",borderRadius:24,width:40,height:40,cursor:"pointer",fontSize:20,zIndex:2,display:"flex",alignItems:"center",justifyContent:"center"}}>{fav?"\u2764":"\u2661"}</button><div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,rgba(0,0,0,.85))",padding:"40px 20px 16px"}}><h1 style={{color:"#fff",fontSize:20,fontWeight:800}}>{c.course_name}</h1><p style={{color:"rgba(255,255,255,.7)",fontSize:13}}>{c.city}, {c.state}</p>{revs.length>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><span style={{color:"#fdcb6e",fontSize:14}}>&#9733;</span><span style={{color:"#fff",fontSize:14,fontWeight:700}}>{(revs.reduce((s,r)=>s+r.rating,0)/revs.length).toFixed(1)}</span><span style={{color:"rgba(255,255,255,.5)",fontSize:12}}>({revs.length} reseñas)</span></div>}</div></div>
+  return<div className="fi" style={{paddingBottom:30}}><div style={{position:"relative"}}><Img imgs={c.photo_urls} h={220}/><button onClick={onBack} style={{position:"absolute",top:16,left:16,background:"rgba(0,0,0,.5)",border:"none",color:"#fff",borderRadius:24,width:40,height:40,cursor:"pointer",fontSize:20,zIndex:2,display:"flex",alignItems:"center",justifyContent:"center"}}>&#8592;</button><button onClick={tf} style={{position:"absolute",top:16,right:16,background:"rgba(0,0,0,.5)",border:"none",color:fav?C.acc:"#fff",borderRadius:24,width:40,height:40,cursor:"pointer",fontSize:20,zIndex:2,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{display:"inline-block",animation:fav?"fav-pop .4s cubic-bezier(.34,1.56,.64,1)":"none"}}>{fav?"\u2764":"\u2661"}</span></button><div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,rgba(0,0,0,.85))",padding:"40px 20px 16px"}}><h1 style={{color:"#fff",fontSize:20,fontWeight:800}}>{c.course_name}</h1><p style={{color:"rgba(255,255,255,.7)",fontSize:13}}>{c.city}, {c.state}</p>{revs.length>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><span style={{color:"#fdcb6e",fontSize:14}}>&#9733;</span><span style={{color:"#fff",fontSize:14,fontWeight:700}}>{(revs.reduce((s,r)=>s+r.rating,0)/revs.length).toFixed(1)}</span><span style={{color:"rgba(255,255,255,.5)",fontSize:12}}>({revs.length} reseñas)</span></div>}</div></div>
   <div style={{padding:16}}>
     {(()=>{const ft=c.facility_type||"campo";const stats=ft==="campo"?[{n:c.hole_count,l:"Hoyos"},{n:"Par "+c.total_par,l:"Par"},{n:"$"+fm(c.green_fee_min),l:"Desde"}]:ft==="plataforma"?[{n:c.stations_count||0,l:"Bahias"},{n:"$"+fm(c.green_fee_min),l:"Desde"},{n:c.has_food_service?"Si":"No",l:"Comida"}]:[{n:c.cabins_count||0,l:"Cabinas"},{n:c.simulator_brand||"--",l:"Tech"},{n:"$"+fm(c.green_fee_min),l:"Desde"}];return<div style={{display:"flex",gap:10,marginBottom:16}}>{stats.map((x,i)=><div key={i} style={{flex:1,background:C.cd,borderRadius:12,padding:10,textAlign:"center",border:"1px solid "+C.bd}}><div style={{fontSize:15,fontWeight:800,color:C.txt}}>{x.n}</div><div style={{fontSize:10,color:C.tm}}>{x.l}</div></div>)}</div>})()}
     {c.description&&<p style={{fontSize:13,color:C.ts,lineHeight:1.6,marginBottom:14}}>{c.description}</p>}
@@ -273,6 +311,7 @@ function Detail({c,onBack,onBook}){const{s}=useA();const[slots,setSlots]=useStat
 
 
 /* ═══ STRIPE CHECKOUT ═══ */
+const hap=()=>{try{navigator.vibrate?.(15)}catch(e){}};
 const SB_FN_URL="https://yuyifyflsnxnwasobnqg.supabase.co/functions/v1";
 const SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1eWlmeWZsc254bndhc29ibnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjUyNzIsImV4cCI6MjA4NDk0MTI3Mn0.oDg7kKn_eQp19_3X256v9mS0gIB14vaIGKgMR-hL3ZE";
 async function stripeCheckout(params){
@@ -335,8 +374,8 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
   useEffect(()=>{sb.from("extras_catalog").select("*").eq("is_active",true).order("sort_order").then(({data})=>setExtras(data||[]))},[]);
   const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;const grand=Math.max(0,gT-discount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
-  const go=async()=>{if(!s)return;setBusy(true);const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();if(error){alert(error.message);setBusy(false);return}const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);if(ei.length>0)await sb.from("booking_extras").insert(ei);if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});
-      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:s.user.email,data:{course_name:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),total:grand,party_size:n}})}).catch(()=>{});if(grand>0){const sr=await stripeCheckout({type:"booking",booking_id:bk.id,course_name:c.course_name,amount:grand,date:sl.slot_date,time:sl.slot_time,party_size:n,promo_code:appliedPromo?.code||null,discount:discount||0,user_email:s.user.email});if(sr.error){alert("Reserva creada. Pago pendiente: "+sr.error);setBusy(false);onOk({bk,tot:grand});return}return}setBusy(false);onOk({bk,tot:grand})};
+  const go=async()=>{if(!s)return;setBusy(true);const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();if(error){if(window.__toast)window.__toast(error.message,"error");else alert(error.message);setBusy(false);return}const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);if(ei.length>0)await sb.from("booking_extras").insert(ei);if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});
+      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:s.user.email,data:{course_name:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),total:grand,party_size:n}})}).catch(()=>{});if(grand>0){const sr=await stripeCheckout({type:"booking",booking_id:bk.id,course_name:c.course_name,amount:grand,date:sl.slot_date,time:sl.slot_time,party_size:n,promo_code:appliedPromo?.code||null,discount:discount||0,user_email:s.user.email});if(sr.error){if(window.__toast)window.__toast("Reserva creada. Pago pendiente: "+sr.error,"warn");else alert("Reserva creada. Pago pendiente: "+sr.error);setBusy(false);onOk({bk,tot:grand});return}return}setBusy(false);onOk({bk,tot:grand})};
   const cats=[{k:"equipo",l:"&#127948; Equipo"},{k:"pelotas",l:"&#9898; Pelotas"},{k:"caddie",l:"&#129489; Caddie"},{k:"alimentos",l:"&#127860; Alimentos"}];
   return<div className="fi" style={{padding:20}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt}}>&#8592;</button><h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>Confirmar</h2></div>
     <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}><h3 style={{color:C.txt,fontSize:15,fontWeight:700}}>{c.course_name}</h3><p style={{color:C.ts,fontSize:13,marginTop:4}}>{sl.slot_date} &#183; {sl.slot_time?.slice(0,5)}</p></div>
@@ -352,7 +391,7 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       {promoResult&&!promoResult.ok&&<div style={{fontSize:11,color:C.acc,marginTop:4}}>{promoResult.msg}</div>}
     </div>
     <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.grn}}>&#127381; Descuento ({appliedPromo?.code})</span><span style={{color:C.grn,fontWeight:700}}>-${fm(discount)}</span></div>}{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Extras</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:17,fontWeight:700,color:C.txt}}>Total</span><span style={{fontSize:17,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
-    <button onClick={go} disabled={busy} style={{width:"100%",padding:16,marginTop:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,color:"#fff",border:"none",borderRadius:14,fontSize:16,fontWeight:700,cursor:"pointer",opacity:busy?.6:1}}>Confirmar y Pagar</button></div>;
+    <button onClick={go} disabled={busy} style={{width:"100%",padding:16,marginTop:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,color:"#fff",border:"none",borderRadius:14,fontSize:16,fontWeight:700,cursor:"pointer",opacity:busy?.6:1,boxShadow:busy?"none":"0 0 0 0 rgba(233,69,96,.4)",animation:busy?"none":"pulse 2s infinite"}}>Confirmar y Pagar</button></div>;
 }
 
 function Ok({d,onHome}){return<div className="fi" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"80vh",padding:24,textAlign:"center"}}><div style={{width:80,height:80,borderRadius:40,background:`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,fontSize:36}}>&#10003;</div><h2 style={{fontSize:22,fontWeight:800,color:C.txt}}>Reserva Confirmada!</h2>{d?.bk&&<CalBtn course={d.bk.course_name} date={d.bk.booking_date} time={d.bk.booking_time}/>}<button onClick={onHome} style={{marginTop:14,padding:"14px 40px",background:`linear-gradient(135deg,${C.pri},#1a5276)`,color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer"}}>Explorar</button></div>}
@@ -387,7 +426,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         booking_date:bk.booking_date,
         booking_time:bk.booking_time,total_cost:Number(bk.total_cost)
       },{onConflict:"booking_id,receiver_id"})}
-    for(const fid of selFr){createNotif(fid,"share_request","Solicitud de reserva compartida",bk.course_name+" — "+(shareMode==="split"?"Split $"+splitPerPerson:"Invitación"),{booking_id:bk.id,course_name:bk.course_name})}alert("Solicitud enviada!");setShareModal(null);setShareMode(null);setSelFr([]);setSplitItems([{name:"Green Fee",amount:""}]);loadReqs()}catch(e){alert("Error al compartir: "+e.message);console.error(e)}};
+    for(const fid of selFr){createNotif(fid,"share_request","Solicitud de reserva compartida",bk.course_name+" — "+(shareMode==="split"?"Split $"+splitPerPerson:"Invitación"),{booking_id:bk.id,course_name:bk.course_name})}if(window.__toast)window.__toast("Solicitud enviada!","success");else alert("Solicitud enviada!");setShareModal(null);setShareMode(null);setSelFr([]);setSplitItems([{name:"Green Fee",amount:""}]);loadReqs()}catch(e){if(window.__toast)window.__toast("Error al compartir: "+e.message,"error");else alert("Error al compartir: "+e.message);console.error(e)}};
 
   const acceptReq=async(req)=>{
     await sb.from("share_requests").update({status:"accepted",updated_at:new Date().toISOString()}).eq("id",req.id);
@@ -900,9 +939,9 @@ function Profile({onRanking,onScorecard}){const{p:pr,out,ref,s,setP}=useA();cons
       <h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:12}}>&#128179; Método de Pago</h3>
       <PaymentCard userId={s.user.id} email={s.user.email} cardLast4={pr?.card_last4} cardBrand={pr?.card_brand}/>
     </div>
-    <button onClick={()=>{if(confirm("Cerrar sesión?"))out()}} style={{width:"100%",padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:10}}>Cerrar Sesión</button>
+    <button onClick={()=>{if(window.__confirm)window.__confirm("¿Cerrar sesión?",()=>out());else if(confirm("Cerrar sesión?"))out()}} style={{width:"100%",padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:10}}>Cerrar Sesión</button>
     <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:10}}><span onClick={()=>setTermsView("terms")} style={{fontSize:11,color:C.ts,cursor:"pointer",textDecoration:"underline"}}>Términos</span><span onClick={()=>setTermsView("privacy")} style={{fontSize:11,color:C.ts,cursor:"pointer",textDecoration:"underline"}}>Privacidad</span></div>{termsView&&<TermsModal type={termsView} onClose={()=>setTermsView(null)}/>}
-    <button onClick={async()=>{if(!confirm("¿Estás seguro de eliminar tu cuenta?"))return;if(!confirm("Esta acción es permanente. ¿Confirmar eliminación?"))return;await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);out()}} style={{width:"100%",padding:12,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>Eliminar cuenta</button>
+    <button onClick={async()=>{const del=async()=>{await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);out()};if(window.__confirm)window.__confirm("¿Eliminar tu cuenta? Esta acción es permanente.",del);else{if(confirm("¿Eliminar tu cuenta?"))del()}}} style={{width:"100%",padding:12,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>Eliminar cuenta</button>
   </div>}
 
 
@@ -1347,7 +1386,7 @@ function PremiumInsights({course}){const{s,p}=useA();const{sub,isPremium}=usePre
       await sb.from("admin_subscriptions").upsert({user_id:s.user.id,plan,status:"active",price_mxn:0,started_at:new Date().toISOString(),expires_at:exp.toISOString()},{onConflict:"user_id"});
       await sb.from("user_profiles").update({subscription_plan:plan}).eq("id",s.user.id);
       if(promo)await redeemPromo(promo.id,s.user.id,"premium",null,PLANS[plan].price);setShowPricing(false);location.reload();return}
-    const sr=await stripeCheckout({type:"premium",plan,user_email:s.user.email});if(sr.error)alert("Error: "+sr.error);setShowPricing(false)}
+    const sr=await stripeCheckout({type:"premium",plan,user_email:s.user.email});if(sr.error)if(window.__toast)window.__toast(sr.error,"error");else alert("Error: "+sr.error);setShowPricing(false)}
 
   if(ld)return<div className="pl" style={{textAlign:"center",padding:40,color:C.tm}}>Cargando...</div>;
   const m=mySt;const b=bench;
@@ -1534,6 +1573,8 @@ function PlayerOnboarding(){
 /* ═══ MAIN ═══ */
 function Main(){const{s,p,ld}=useA();const{theme}=useTheme();const[tab,setTab]=useState(0);const[scr,setScr]=useState("home");const[co,setCo]=useState(null);const[sl,setSl]=useState(null);const[okd,setOkd]=useState(null);
   const[payResult,setPayResult]=useState(null);
+  const{toast:_t,confirm:_c}=useToast();
+  useEffect(()=>{window.__toast=_t;window.__confirm=_c;return()=>{delete window.__toast;delete window.__confirm}},[_t,_c]);
   useEffect(()=>{try{const url=new URL(location.href);const pay=url.searchParams.get("payment");if(pay)setPayResult(pay);if(pay){url.searchParams.delete("payment");url.searchParams.delete("booking_id");url.searchParams.delete("plan");history.replaceState(null,"",url.pathname)}}catch(e){}},[]);
   if(payResult)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}}>
     <div style={{width:90,height:90,borderRadius:45,background:payResult==="cancelled"?"linear-gradient(135deg,#e74c3c,#c0392b)":`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24,fontSize:40}}>{payResult==="cancelled"?"✕":"✓"}</div>
