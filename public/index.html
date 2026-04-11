@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="16.3.0">
+<meta name="version" content="16.4.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -64,6 +64,7 @@
 </style>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-0BQWH11JPN"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-0BQWH11JPN")</script>
+<script src="https://js.stripe.com/v3/"></script>
 <link rel="manifest" href="/manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -353,6 +354,66 @@ async function stripeCheckout(params){
   }catch(e){return{error:"Error de conexión: "+e.message}}}
 
 
+
+/* ═══ STRIPE EMBEDDED PAYMENT ═══ */
+const STRIPE_PK="pk_test_51RKk1IPbfR39rPLyAWk5ML2tFgKT431EzxMSvWBRVfFJ8gxRDJPkCjT1RI30CkK0cEq1E9hrcCpHtv7gC1P17jnk00VGxEpJwR";
+function StripePayment({amount,bookingId,courseName,date,time,partySize,onSuccess,onCancel}){
+  const{s}=useA();
+  const[loading,setLoading]=useState(true);const[paying,setPaying]=useState(false);const[error,setError]=useState("");const[stripe,setStripe]=useState(null);const[elements,setElements]=useState(null);const[ready,setReady]=useState(false);
+
+  useEffect(()=>{
+    if(!window.Stripe){setError("Stripe no disponible");setLoading(false);return}
+    const st=window.Stripe(STRIPE_PK,{locale:"es"});setStripe(st);
+    (async()=>{
+      try{
+        const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+        const res=await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking",mode:"embedded",amount,booking_id:bookingId,course_name:courseName,date,time,party_size:partySize})});
+        const data=await res.json();
+        if(data.error){setError(data.error);setLoading(false);return}
+        if(data.free){onSuccess?.();return}
+        const el=st.elements({clientSecret:data.client_secret,appearance:{theme:"night",variables:{colorPrimary:"#00b894",colorBackground:"#1e1e3a",colorText:"#ffffff",colorDanger:"#e94560",fontFamily:"-apple-system,system-ui,sans-serif",borderRadius:"14px",spacingUnit:"4px"},rules:{"input":{"borderColor":"rgba(255,255,255,0.08)"}}}});
+        const card=el.create("payment");card.mount("#stripe-element");
+        card.on("ready",()=>{setReady(true);setLoading(false)});
+        card.on("change",ev=>{if(ev.error)setError(ev.error.message);else setError("")});
+        setElements(el);
+      }catch(e){setError("Error al conectar con pagos");setLoading(false)}
+    })()
+  },[]);
+
+  const handlePay=async()=>{
+    if(!stripe||!elements)return;setPaying(true);setError("");
+    const{error:submitErr}=await elements.submit();
+    if(submitErr){setError(submitErr.message);setPaying(false);return}
+    const{error:confirmErr,paymentIntent}=await stripe.confirmPayment({elements,confirmParams:{return_url:"https://www.partee.com.mx"},redirect:"if_required"});
+    if(confirmErr){setError(confirmErr.message);setPaying(false);return}
+    if(paymentIntent?.status==="succeeded"){
+      await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"confirm_payment",payment_intent_id:paymentIntent.id,booking_id:bookingId})});
+      setPaying(false);onSuccess?.()
+    }else{setError("Pago pendiente: "+paymentIntent?.status);setPaying(false)}
+  };
+
+  return<div style={{background:C.cd,borderRadius:20,padding:20,border:"1px solid "+C.bd}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+      <span style={{fontSize:22}}>&#128179;</span>
+      <div><h3 style={{margin:0,fontSize:15,fontWeight:700,color:C.txt}}>Pago seguro</h3><p style={{margin:0,fontSize:11,color:C.ts}}>Procesado por Stripe</p></div>
+      <span style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:C.grn}}>${fm(amount)} MXN</span>
+    </div>
+    {loading&&<div style={{padding:20,textAlign:"center"}}><div className="ptr-spin" style={{width:28,height:28,margin:"0 auto 8px",borderTopColor:C.grn}}/><p style={{fontSize:12,color:C.ts}}>Preparando formulario...</p></div>}
+    <div id="stripe-element" style={{marginBottom:error?8:16,display:loading?"none":"block"}}/>
+    {error&&<p style={{fontSize:12,color:C.acc,marginBottom:10,padding:"8px 12px",background:C.acc+"15",borderRadius:10}}>{error}</p>}
+    {!loading&&<button onClick={handlePay} disabled={paying||!ready} style={{width:"100%",padding:15,background:paying?"rgba(0,184,148,.5)":`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+      {paying?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:<>&#128274; Pagar ${fm(amount)} MXN</>}
+    </button>}
+    <button onClick={onCancel} disabled={paying} style={{width:"100%",padding:10,marginTop:8,background:"transparent",border:"none",color:C.ts,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:12,opacity:.5}}>
+      <span style={{fontSize:10,color:C.tm}}>&#128274; Cifrado SSL</span>
+      <span style={{fontSize:10,color:C.tm}}>&#183;</span>
+      <span style={{fontSize:10,color:C.tm}}>Powered by Stripe</span>
+    </div>
+  </div>
+}
+
+
 /* ═══ PUSH NOTIFICATIONS ═══ */
 const VAPID_PUB="BDB0DG-cSt-uK1nOLHx1_g6zjC8jY_jz9qNuXNMwB8DUUeyExkFq12H3Y_7_3eO5e6CAQvh9gjQ97f1OOvaRbUM";
 function urlB64ToUint8(b64){const p="=".repeat((4-b64.length%4)%4);const b=(b64+p).replace(/-/g,"+").replace(/_/g,"/");const r=atob(b);return Uint8Array.from(r,c=>c.charCodeAt(0))}
@@ -394,12 +455,12 @@ async function redeemPromo(promoId,userId,contextType,contextId,discountApplied)
   })}
 
 /* ═══ CONFIRM ═══ */
-function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});const[promoCode,setPromoCode]=useState("");const[promoResult,setPromoResult]=useState(null);const[promoLoading,setPromoLoading]=useState(false);const[appliedPromo,setAppliedPromo]=useState(null);
+function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});const[promoCode,setPromoCode]=useState("");const[promoResult,setPromoResult]=useState(null);const[promoLoading,setPromoLoading]=useState(false);const[appliedPromo,setAppliedPromo]=useState(null);const[payData,setPayData]=useState(null);
   useEffect(()=>{sb.from("extras_catalog").select("*").eq("is_active",true).order("sort_order").then(({data})=>setExtras(data||[]))},[]);
   const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;const grand=Math.max(0,gT-discount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
   const go=async()=>{if(!s)return;setBusy(true);const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();if(error){if(window.__toast)window.__toast(error.message,"error");else alert(error.message);setBusy(false);return}const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);if(ei.length>0)await sb.from("booking_extras").insert(ei);if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});
-      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:s.user.email,data:{course_name:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),total:grand,party_size:n}})}).catch(()=>{});if(grand>0){const sr=await stripeCheckout({type:"booking",booking_id:bk.id,course_name:c.course_name,amount:grand,date:sl.slot_date,time:sl.slot_time,party_size:n,promo_code:appliedPromo?.code||null,discount:discount||0,user_email:s.user.email});if(sr.error){if(window.__toast)window.__toast("Reserva creada. Pago pendiente: "+sr.error,"warn");else alert("Reserva creada. Pago pendiente: "+sr.error);setBusy(false);onOk({bk,tot:grand});return}return}setBusy(false);onOk({bk,tot:grand})};
+      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:s.user.email,data:{course_name:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),total:grand,party_size:n}})}).catch(()=>{});if(grand>0){setBusy(false);setPayData({amount:grand,bookingId:bk.id,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n});return}setBusy(false);onOk({bk,tot:grand})};
   const cats=[{k:"equipo",l:"&#127948; Equipo"},{k:"pelotas",l:"&#9898; Pelotas"},{k:"caddie",l:"&#129489; Caddie"},{k:"alimentos",l:"&#127860; Alimentos"}];
   return<div className="fi scr-enter" style={{padding:20}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt}}>&#8592;</button><h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>Confirmar</h2></div>
     <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}><h3 style={{color:C.txt,fontSize:15,fontWeight:700}}>{c.course_name}</h3><p style={{color:C.ts,fontSize:13,marginTop:4}}>{sl.slot_date} &#183; {sl.slot_time?.slice(0,5)}</p></div>
@@ -415,7 +476,15 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       {promoResult&&!promoResult.ok&&<div style={{fontSize:11,color:C.acc,marginTop:4}}>{promoResult.msg}</div>}
     </div>
     <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.grn}}>&#127381; Descuento ({appliedPromo?.code})</span><span style={{color:C.grn,fontWeight:700}}>-${fm(discount)}</span></div>}{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Extras</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>Total</span><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
-    <button onClick={go} disabled={busy} style={{width:"100%",padding:16,marginTop:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1,boxShadow:busy?"none":"0 0 0 0 rgba(233,69,96,.4)",animation:busy?"none":"pulse 2s infinite"}}>Confirmar y Pagar</button></div>;
+    <button onClick={go} disabled={busy} style={{width:"100%",padding:16,marginTop:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1,boxShadow:busy?"none":"0 0 0 0 rgba(233,69,96,.4)",animation:busy?"none":"pulse 2s infinite"}}>Confirmar y Pagar</button>
+    {payData&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:250,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:0}} onClick={()=>setPayData(null)}>
+      <div onClick={e=>e.stopPropagation()} className="bsheet" style={{maxWidth:480}}>
+        <StripePayment amount={payData.amount} bookingId={payData.bookingId} courseName={payData.courseName} date={payData.date} time={payData.time} partySize={payData.partySize}
+          onSuccess={()=>{setPayData(null);window.__toast?.("¡Pago exitoso! Reserva confirmada","success");onOk({bk:{id:payData.bookingId,course_name:payData.courseName,booking_date:payData.date,booking_time:payData.time},tot:payData.amount})}}
+          onCancel={()=>setPayData(null)}/>
+      </div>
+    </div>}
+  </div>;
 }
 
 function Ok({d,onHome}){return<div className="fi scr-enter" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"80vh",padding:24,textAlign:"center"}}><div style={{width:80,height:80,borderRadius:60,background:`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,fontSize:36}}>&#10003;</div><h2 style={{fontSize:22,fontWeight:800,color:C.txt}}>Reserva Confirmada!</h2>{d?.bk&&<CalBtn course={d.bk.course_name} date={d.bk.booking_date} time={d.bk.booking_time}/>}<button onClick={onHome} style={{marginTop:14,padding:"14px 40px",background:`linear-gradient(135deg,${C.pri},#1a5276)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}}>Explorar</button></div>}
