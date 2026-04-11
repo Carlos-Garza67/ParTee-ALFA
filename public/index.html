@@ -358,40 +358,37 @@ async function stripeCheckout(params){
 /* ═══ STRIPE EMBEDDED PAYMENT ═══ */
 const STRIPE_PK="pk_test_51RKk1IPbfR39rPLyAWk5ML2tFgKT431EzxMSvWBRVfFJ8gxRDJPkCjT1RI30CkK0cEq1E9hrcCpHtv7gC1P17jnk00VGxEpJwR";
 function StripePayment({amount,bookingId,courseName,date,time,partySize,onSuccess,onCancel}){
-  const{s}=useA();
   const[phase,setPhase]=useState("loading");const[paying,setPaying]=useState(false);const[error,setError]=useState("");
-  const stripeRef=useRef(null);const elementsRef=useRef(null);const mountRef=useRef(null);
+  const stripeRef=useRef(null);const cardRef=useRef(null);const secretRef=useRef("");const mountRef=useRef(null);
 
   useEffect(()=>{
     if(!window.Stripe){setError("Stripe no disponible");setPhase("error");return}
-    let cancelled=false;
+    let dead=false;
     (async()=>{
       try{
         const st=window.Stripe(STRIPE_PK,{locale:"es"});stripeRef.current=st;
         const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
-        const res=await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking",mode:"embedded",amount,booking_id:bookingId,course_name:courseName,date,time,party_size:partySize})});
+        const res=await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking",mode:"embedded",amount,booking_id:bookingId||"",course_name:courseName,date,time,party_size:partySize})});
         const data=await res.json();
-        if(cancelled)return;
+        if(dead)return;
         if(data.error){setError(data.error);setPhase("error");return}
-        if(data.free){onSuccess?.();return}
-        const els=st.elements({clientSecret:data.client_secret,appearance:{theme:"night",variables:{colorPrimary:"#00b894",colorBackground:"#1e1e3a",colorText:"#ffffff",colorDanger:"#e94560",fontFamily:"-apple-system,system-ui,sans-serif",borderRadius:"14px"}}});
-        elementsRef.current=els;
-        const pe=els.create("payment");
-        pe.on("ready",()=>{if(!cancelled)setPhase("ready")});
-        const doMount=()=>{if(!cancelled&&mountRef.current){try{pe.mount(mountRef.current)}catch(e){console.error("Stripe mount error:",e);if(!cancelled)setError("Error montando formulario")}}};
-        if(mountRef.current)doMount();else setTimeout(doMount,300);
-        setTimeout(()=>{if(!cancelled)setPhase(p=>p==="loading"?"ready":p)},5000);
-      }catch(e){if(!cancelled){setError("Error al conectar con pagos: "+e.message);setPhase("error")}}
+        if(data.free){onSuccess?.("");return}
+        secretRef.current=data.client_secret;
+        const els=st.elements();
+        const card=els.create("card",{style:{base:{color:"#ffffff",fontFamily:"-apple-system,system-ui,sans-serif",fontSize:"16px","::placeholder":{color:"#6b7280"},iconColor:"#00b894"},invalid:{color:"#e94560",iconColor:"#e94560"}},hidePostalCode:true});
+        cardRef.current=card;
+        const tryMount=()=>{if(mountRef.current&&!dead){card.mount(mountRef.current);setPhase("ready")}else if(!dead){setTimeout(tryMount,200)}};
+        tryMount();
+      }catch(e){if(!dead){setError("Error: "+e.message);setPhase("error")}}
     })();
-    return()=>{cancelled=true}
+    return()=>{dead=true}
   },[]);
 
   const handlePay=async()=>{
-    if(!stripeRef.current||!elementsRef.current)return;setPaying(true);setError("");
-    const{error:submitErr}=await elementsRef.current.submit();
-    if(submitErr){setError(submitErr.message);setPaying(false);return}
-    const{error:confirmErr,paymentIntent}=await stripeRef.current.confirmPayment({elements:elementsRef.current,confirmParams:{return_url:"https://www.partee.com.mx"},redirect:"if_required"});
-    if(confirmErr){setError(confirmErr.message);setPaying(false);return}
+    if(!stripeRef.current||!cardRef.current||!secretRef.current)return;
+    setPaying(true);setError("");
+    const{error:err,paymentIntent}=await stripeRef.current.confirmCardPayment(secretRef.current,{payment_method:{card:cardRef.current}});
+    if(err){setError(err.message);setPaying(false);return}
     if(paymentIntent?.status==="succeeded"){
       fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"confirm_payment",payment_intent_id:paymentIntent.id,booking_id:bookingId||""})}).catch(()=>{});
       setPaying(false);onSuccess?.(paymentIntent.id)
@@ -404,12 +401,12 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
       <div><h3 style={{margin:0,fontSize:15,fontWeight:700,color:C.txt}}>Pago seguro</h3><p style={{margin:0,fontSize:11,color:C.ts}}>Procesado por Stripe</p></div>
       <span style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:C.grn}}>${fm(amount)} MXN</span>
     </div>
-    <div style={{position:"relative",minHeight:200,marginBottom:16}}>
-      {phase==="loading"&&<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:2,background:C.cd,borderRadius:14}}><div className="ptr-spin" style={{width:28,height:28,marginBottom:8,borderTopColor:C.grn}}/><p style={{fontSize:12,color:C.ts}}>Preparando formulario...</p></div>}
+    {phase==="loading"&&<div style={{padding:20,textAlign:"center"}}><div className="ptr-spin" style={{width:28,height:28,margin:"0 auto 8px",borderTopColor:C.grn}}/><p style={{fontSize:12,color:C.ts}}>Preparando...</p></div>}
+    <div style={{padding:phase==="loading"?"0 0":"14px",background:phase==="ready"?"rgba(255,255,255,.05)":"transparent",borderRadius:14,border:phase==="ready"?"1px solid rgba(255,255,255,.1)":"none",marginBottom:16,transition:"all .3s"}}>
       <div ref={mountRef}/>
     </div>
     {error&&<p style={{fontSize:12,color:C.acc,marginBottom:10,padding:"8px 14px",background:C.acc+"15",borderRadius:10}}>{error}</p>}
-    {phase!=="loading"&&<button onClick={handlePay} disabled={paying} style={{width:"100%",padding:15,background:paying?"rgba(0,184,148,.5)":`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+    {phase==="ready"&&<button onClick={handlePay} disabled={paying} style={{width:"100%",padding:15,background:paying?"rgba(0,184,148,.5)":`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
       {paying?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:<>&#128274; Pagar ${fm(amount)} MXN</>}
     </button>}
     <button onClick={onCancel} disabled={paying} style={{width:"100%",padding:10,marginTop:8,background:"transparent",border:"none",color:C.ts,fontSize:13,cursor:"pointer"}}>Cancelar</button>
