@@ -359,7 +359,7 @@ async function stripeCheckout(params){
 const STRIPE_PK="pk_test_51RKk1IPbfR39rPLyAWk5ML2tFgKT431EzxMSvWBRVfFJ8gxRDJPkCjT1RI30CkK0cEq1E9hrcCpHtv7gC1P17jnk00VGxEpJwR";
 function StripePayment({amount,bookingId,courseName,date,time,partySize,onSuccess,onCancel}){
   const{s}=useA();
-  const[loading,setLoading]=useState(true);const[paying,setPaying]=useState(false);const[error,setError]=useState("");const[stripe,setStripe]=useState(null);const[elements,setElements]=useState(null);const[ready,setReady]=useState(false);
+  const[loading,setLoading]=useState(true);const[paying,setPaying]=useState(false);const[error,setError]=useState("");const[stripe,setStripe]=useState(null);const[elements,setElements]=useState(null);const[ready,setReady]=useState(false);const elRef=useRef(null);
 
   useEffect(()=>{
     if(!window.Stripe){setError("Stripe no disponible");setLoading(false);return}
@@ -372,7 +372,7 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
         if(data.error){setError(data.error);setLoading(false);return}
         if(data.free){onSuccess?.();return}
         const el=st.elements({clientSecret:data.client_secret,appearance:{theme:"night",variables:{colorPrimary:"#00b894",colorBackground:"#1e1e3a",colorText:"#ffffff",colorDanger:"#e94560",fontFamily:"-apple-system,system-ui,sans-serif",borderRadius:"14px",spacingUnit:"4px"},rules:{"input":{"borderColor":"rgba(255,255,255,0.08)"}}}});
-        const card=el.create("payment");card.mount("#stripe-element");
+        const card=el.create("payment");if(elRef.current)card.mount(elRef.current);
         card.on("ready",()=>{setReady(true);setLoading(false)});
         card.on("change",ev=>{if(ev.error)setError(ev.error.message);else setError("")});
         setElements(el);
@@ -399,7 +399,7 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
       <span style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:C.grn}}>${fm(amount)} MXN</span>
     </div>
     {loading&&<div style={{padding:20,textAlign:"center"}}><div className="ptr-spin" style={{width:28,height:28,margin:"0 auto 8px",borderTopColor:C.grn}}/><p style={{fontSize:12,color:C.ts}}>Preparando formulario...</p></div>}
-    <div id="stripe-element" style={{marginBottom:error?8:16,display:loading?"none":"block"}}/>
+    <div ref={elRef} style={{marginBottom:error?8:16,minHeight:loading?0:200,opacity:loading?0:1,transition:"opacity .3s ease"}}/>
     {error&&<p style={{fontSize:12,color:C.acc,marginBottom:10,padding:"8px 12px",background:C.acc+"15",borderRadius:10}}>{error}</p>}
     {!loading&&<button onClick={handlePay} disabled={paying||!ready} style={{width:"100%",padding:15,background:paying?"rgba(0,184,148,.5)":`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
       {paying?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:<>&#128274; Pagar ${fm(amount)} MXN</>}
