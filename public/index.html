@@ -378,8 +378,9 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
         elementsRef.current=els;
         const pe=els.create("payment");
         pe.on("ready",()=>{if(!cancelled)setPhase("ready")});
-        setTimeout(()=>{if(!cancelled&&mountRef.current)pe.mount(mountRef.current)},100);
-        setTimeout(()=>{if(!cancelled)setPhase(p=>p==="loading"?"ready":p)},4000);
+        const doMount=()=>{if(!cancelled&&mountRef.current){try{pe.mount(mountRef.current)}catch(e){console.error("Stripe mount error:",e);if(!cancelled)setError("Error montando formulario")}}};
+        if(mountRef.current)doMount();else setTimeout(doMount,300);
+        setTimeout(()=>{if(!cancelled)setPhase(p=>p==="loading"?"ready":p)},5000);
       }catch(e){if(!cancelled){setError("Error al conectar con pagos: "+e.message);setPhase("error")}}
     })();
     return()=>{cancelled=true}
@@ -403,8 +404,10 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
       <div><h3 style={{margin:0,fontSize:15,fontWeight:700,color:C.txt}}>Pago seguro</h3><p style={{margin:0,fontSize:11,color:C.ts}}>Procesado por Stripe</p></div>
       <span style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:C.grn}}>${fm(amount)} MXN</span>
     </div>
-    {phase==="loading"&&<div style={{padding:20,textAlign:"center"}}><div className="ptr-spin" style={{width:28,height:28,margin:"0 auto 8px",borderTopColor:C.grn}}/><p style={{fontSize:12,color:C.ts}}>Preparando formulario...</p></div>}
-    <div ref={mountRef} style={{marginBottom:16,minHeight:phase==="loading"?1:undefined}}/>
+    <div style={{position:"relative",minHeight:200,marginBottom:16}}>
+      {phase==="loading"&&<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:2,background:C.cd,borderRadius:14}}><div className="ptr-spin" style={{width:28,height:28,marginBottom:8,borderTopColor:C.grn}}/><p style={{fontSize:12,color:C.ts}}>Preparando formulario...</p></div>}
+      <div ref={mountRef}/>
+    </div>
     {error&&<p style={{fontSize:12,color:C.acc,marginBottom:10,padding:"8px 14px",background:C.acc+"15",borderRadius:10}}>{error}</p>}
     {phase!=="loading"&&<button onClick={handlePay} disabled={paying} style={{width:"100%",padding:15,background:paying?"rgba(0,184,148,.5)":`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
       {paying?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:<>&#128274; Pagar ${fm(amount)} MXN</>}
