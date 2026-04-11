@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="15.4.1">
+<meta name="version" content="15.4.2">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -1361,7 +1361,7 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
   const ft=course.facility_type||"campo";
   const tabs=[{i:"&#128202;",l:"Dashboard"},{i:"&#128197;",l:"Reservas"},{i:"&#127915;",l:"Promos"},{i:"&#128142;",l:"Insights"},{i:"&#128100;",l:"Perfil"}];
   return<div style={{maxWidth:430,margin:"0 auto",background:C.bg,minHeight:"100vh"}}>
-    <div style={{background:theme==="light"?"#ffffff":`linear-gradient(135deg,${C.bg},${C.pri})`,padding:"14px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:20}} dangerouslySetInnerHTML={{__html:FI[ft]}}/><span style={{fontSize:18,fontWeight:800,color:theme==="light"?C.pri:"#fff"}}>Partee Admin</span>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}><p style={{fontSize:12,color:C.ts,margin:0}}>{course.course_name} · <span style={{color:"#6c5ce7"}} dangerouslySetInnerHTML={{__html:({campo:"Campo",plataforma:"Plataforma",simulador:"Simulador"})[ft]}}/></p><NotifBell/></div></div>
+    <div style={{background:theme==="light"?"#ffffff":`linear-gradient(135deg,${C.bg},${C.pri})`,padding:"14px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:20}} dangerouslySetInnerHTML={{__html:FI[ft]}}/><span style={{fontSize:18,fontWeight:800,color:theme==="light"?C.pri:"#fff"}}>Partee Admin</span>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}><p style={{fontSize:12,color:C.ts,margin:0}} dangerouslySetInnerHTML={{__html:course.course_name+" &middot; <span style='color:#6c5ce7'>"+({campo:"Campo",plataforma:"Plataforma",simulador:"Simulador"})[ft]+"</span>"}}/><NotifBell/></div></div>
     <div style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminPromos course={course}/>}{tab===3&&<PremiumInsights course={course}/>}{tab===4&&<AdminProfile course={course} onOut={out} onRefresh={loadC}/>}</div>
     <div className="bnav">{tabs.map((t,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?"rgba(0,184,148,0.1)":"transparent",opacity:tab===i?1:.55}}><div style={{fontSize:20}} dangerouslySetInnerHTML={{__html:t.i}}/><div style={{fontSize:10,fontWeight:600,color:tab===i?C.grn:"#8a8f98",marginTop:2}}>{t.l}</div></div>)}</div>
   </div>}
