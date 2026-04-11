@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="16.4.0">
+<meta name="version" content="16.5.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -359,37 +359,42 @@ async function stripeCheckout(params){
 const STRIPE_PK="pk_test_51RKk1IPbfR39rPLyAWk5ML2tFgKT431EzxMSvWBRVfFJ8gxRDJPkCjT1RI30CkK0cEq1E9hrcCpHtv7gC1P17jnk00VGxEpJwR";
 function StripePayment({amount,bookingId,courseName,date,time,partySize,onSuccess,onCancel}){
   const{s}=useA();
-  const[loading,setLoading]=useState(true);const[paying,setPaying]=useState(false);const[error,setError]=useState("");const[stripe,setStripe]=useState(null);const[elements,setElements]=useState(null);const[ready,setReady]=useState(false);const elRef=useRef(null);
+  const[phase,setPhase]=useState("loading");const[paying,setPaying]=useState(false);const[error,setError]=useState("");
+  const stripeRef=useRef(null);const elementsRef=useRef(null);const mountRef=useRef(null);
 
   useEffect(()=>{
-    if(!window.Stripe){setError("Stripe no disponible");setLoading(false);return}
-    const st=window.Stripe(STRIPE_PK,{locale:"es"});setStripe(st);
+    if(!window.Stripe){setError("Stripe no disponible");setPhase("error");return}
+    let cancelled=false;
     (async()=>{
       try{
+        const st=window.Stripe(STRIPE_PK,{locale:"es"});stripeRef.current=st;
         const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
         const res=await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking",mode:"embedded",amount,booking_id:bookingId,course_name:courseName,date,time,party_size:partySize})});
         const data=await res.json();
-        if(data.error){setError(data.error);setLoading(false);return}
+        if(cancelled)return;
+        if(data.error){setError(data.error);setPhase("error");return}
         if(data.free){onSuccess?.();return}
-        const el=st.elements({clientSecret:data.client_secret,appearance:{theme:"night",variables:{colorPrimary:"#00b894",colorBackground:"#1e1e3a",colorText:"#ffffff",colorDanger:"#e94560",fontFamily:"-apple-system,system-ui,sans-serif",borderRadius:"14px",spacingUnit:"4px"},rules:{"input":{"borderColor":"rgba(255,255,255,0.08)"}}}});
-        const card=el.create("payment");if(elRef.current)card.mount(elRef.current);
-        card.on("ready",()=>{setReady(true);setLoading(false)});
-        card.on("change",ev=>{if(ev.error)setError(ev.error.message);else setError("")});
-        setElements(el);
-      }catch(e){setError("Error al conectar con pagos");setLoading(false)}
-    })()
+        const els=st.elements({clientSecret:data.client_secret,appearance:{theme:"night",variables:{colorPrimary:"#00b894",colorBackground:"#1e1e3a",colorText:"#ffffff",colorDanger:"#e94560",fontFamily:"-apple-system,system-ui,sans-serif",borderRadius:"14px"}}});
+        elementsRef.current=els;
+        const pe=els.create("payment");
+        pe.on("ready",()=>{if(!cancelled)setPhase("ready")});
+        setTimeout(()=>{if(!cancelled&&mountRef.current)pe.mount(mountRef.current)},100);
+        setTimeout(()=>{if(!cancelled)setPhase(p=>p==="loading"?"ready":p)},4000);
+      }catch(e){if(!cancelled){setError("Error al conectar con pagos: "+e.message);setPhase("error")}}
+    })();
+    return()=>{cancelled=true}
   },[]);
 
   const handlePay=async()=>{
-    if(!stripe||!elements)return;setPaying(true);setError("");
-    const{error:submitErr}=await elements.submit();
+    if(!stripeRef.current||!elementsRef.current)return;setPaying(true);setError("");
+    const{error:submitErr}=await elementsRef.current.submit();
     if(submitErr){setError(submitErr.message);setPaying(false);return}
-    const{error:confirmErr,paymentIntent}=await stripe.confirmPayment({elements,confirmParams:{return_url:"https://www.partee.com.mx"},redirect:"if_required"});
+    const{error:confirmErr,paymentIntent}=await stripeRef.current.confirmPayment({elements:elementsRef.current,confirmParams:{return_url:"https://www.partee.com.mx"},redirect:"if_required"});
     if(confirmErr){setError(confirmErr.message);setPaying(false);return}
     if(paymentIntent?.status==="succeeded"){
-      await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"confirm_payment",payment_intent_id:paymentIntent.id,booking_id:bookingId})});
-      setPaying(false);onSuccess?.()
-    }else{setError("Pago pendiente: "+paymentIntent?.status);setPaying(false)}
+      fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"confirm_payment",payment_intent_id:paymentIntent.id,booking_id:bookingId||""})}).catch(()=>{});
+      setPaying(false);onSuccess?.(paymentIntent.id)
+    }else{setError("Estado: "+(paymentIntent?.status||"desconocido"));setPaying(false)}
   };
 
   return<div style={{background:C.cd,borderRadius:20,padding:20,border:"1px solid "+C.bd}}>
@@ -398,17 +403,15 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
       <div><h3 style={{margin:0,fontSize:15,fontWeight:700,color:C.txt}}>Pago seguro</h3><p style={{margin:0,fontSize:11,color:C.ts}}>Procesado por Stripe</p></div>
       <span style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:C.grn}}>${fm(amount)} MXN</span>
     </div>
-    {loading&&<div style={{padding:20,textAlign:"center"}}><div className="ptr-spin" style={{width:28,height:28,margin:"0 auto 8px",borderTopColor:C.grn}}/><p style={{fontSize:12,color:C.ts}}>Preparando formulario...</p></div>}
-    <div ref={elRef} style={{marginBottom:error?8:16,minHeight:loading?0:200,opacity:loading?0:1,transition:"opacity .3s ease"}}/>
-    {error&&<p style={{fontSize:12,color:C.acc,marginBottom:10,padding:"8px 12px",background:C.acc+"15",borderRadius:10}}>{error}</p>}
-    {!loading&&<button onClick={handlePay} disabled={paying||!ready} style={{width:"100%",padding:15,background:paying?"rgba(0,184,148,.5)":`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+    {phase==="loading"&&<div style={{padding:20,textAlign:"center"}}><div className="ptr-spin" style={{width:28,height:28,margin:"0 auto 8px",borderTopColor:C.grn}}/><p style={{fontSize:12,color:C.ts}}>Preparando formulario...</p></div>}
+    <div ref={mountRef} style={{marginBottom:16,minHeight:phase==="loading"?1:undefined}}/>
+    {error&&<p style={{fontSize:12,color:C.acc,marginBottom:10,padding:"8px 14px",background:C.acc+"15",borderRadius:10}}>{error}</p>}
+    {phase!=="loading"&&<button onClick={handlePay} disabled={paying} style={{width:"100%",padding:15,background:paying?"rgba(0,184,148,.5)":`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
       {paying?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:<>&#128274; Pagar ${fm(amount)} MXN</>}
     </button>}
     <button onClick={onCancel} disabled={paying} style={{width:"100%",padding:10,marginTop:8,background:"transparent",border:"none",color:C.ts,fontSize:13,cursor:"pointer"}}>Cancelar</button>
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:12,opacity:.5}}>
-      <span style={{fontSize:10,color:C.tm}}>&#128274; Cifrado SSL</span>
-      <span style={{fontSize:10,color:C.tm}}>&#183;</span>
-      <span style={{fontSize:10,color:C.tm}}>Powered by Stripe</span>
+      <span style={{fontSize:10,color:C.tm}}>&#128274; Cifrado SSL &#183; Powered by Stripe</span>
     </div>
   </div>
 }
@@ -459,8 +462,31 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
   useEffect(()=>{sb.from("extras_catalog").select("*").eq("is_active",true).order("sort_order").then(({data})=>setExtras(data||[]))},[]);
   const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;const grand=Math.max(0,gT-discount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
-  const go=async()=>{if(!s)return;setBusy(true);const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();if(error){if(window.__toast)window.__toast(error.message,"error");else alert(error.message);setBusy(false);return}const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);if(ei.length>0)await sb.from("booking_extras").insert(ei);if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});
-      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:s.user.email,data:{course_name:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),total:grand,party_size:n}})}).catch(()=>{});if(grand>0){setBusy(false);setPayData({amount:grand,bookingId:bk.id,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n});return}setBusy(false);onOk({bk,tot:grand})};
+  const go=async()=>{if(!s)return;
+    // FREE bookings: create directly
+    if(grand<=0){
+      setBusy(true);
+      const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:0,extras_total:eT,status:"confirmed",payment_status:"free",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();
+      if(error){if(window.__toast)window.__toast(error.message,"error");setBusy(false);return}
+      const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);
+      if(ei.length>0)await sb.from("booking_extras").insert(ei);
+      if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
+      createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});
+      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:s.user.email,data:{course_name:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),total:0,party_size:n}})}).catch(()=>{});
+      setBusy(false);onOk({bk,tot:0});return
+    }
+    // PAID bookings: show payment first, create booking after success
+    setPayData({amount:grand,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n,extras:Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0),promoCode:appliedPromo?.code||null,promoId:appliedPromo?.id||null,discountAmt:discount})
+  };
+  const createBookingAfterPay=async(paymentIntentId)=>{
+    const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",payment_status:"paid",stripe_payment_intent:paymentIntentId,promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();
+    if(error){if(window.__toast)window.__toast("Pago exitoso pero error al guardar reserva: "+error.message,"error");return null}
+    if(payData?.extras?.length>0){const ei=payData.extras.map(e=>({...e,booking_id:bk.id}));await sb.from("booking_extras").insert(ei)}
+    if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
+    createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});
+    fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:s.user.email,data:{course_name:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),total:grand,party_size:n}})}).catch(()=>{});
+    return bk
+  };
   const cats=[{k:"equipo",l:"&#127948; Equipo"},{k:"pelotas",l:"&#9898; Pelotas"},{k:"caddie",l:"&#129489; Caddie"},{k:"alimentos",l:"&#127860; Alimentos"}];
   return<div className="fi scr-enter" style={{padding:20}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt}}>&#8592;</button><h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>Confirmar</h2></div>
     <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}><h3 style={{color:C.txt,fontSize:15,fontWeight:700}}>{c.course_name}</h3><p style={{color:C.ts,fontSize:13,marginTop:4}}>{sl.slot_date} &#183; {sl.slot_time?.slice(0,5)}</p></div>
@@ -476,11 +502,11 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       {promoResult&&!promoResult.ok&&<div style={{fontSize:11,color:C.acc,marginTop:4}}>{promoResult.msg}</div>}
     </div>
     <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.grn}}>&#127381; Descuento ({appliedPromo?.code})</span><span style={{color:C.grn,fontWeight:700}}>-${fm(discount)}</span></div>}{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Extras</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>Total</span><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
-    <button onClick={go} disabled={busy} style={{width:"100%",padding:16,marginTop:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1,boxShadow:busy?"none":"0 0 0 0 rgba(233,69,96,.4)",animation:busy?"none":"pulse 2s infinite"}}>Confirmar y Pagar</button>
+    <button onClick={go} disabled={busy} style={{width:"100%",padding:16,marginTop:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1,boxShadow:busy?"none":"0 0 0 0 rgba(233,69,96,.4)",animation:busy?"none":"pulse 2s infinite"}}>{grand>0?"Confirmar y Pagar":"Confirmar Reserva"}</button>
     {payData&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:250,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:0}} onClick={()=>setPayData(null)}>
       <div onClick={e=>e.stopPropagation()} className="bsheet" style={{maxWidth:480}}>
-        <StripePayment amount={payData.amount} bookingId={payData.bookingId} courseName={payData.courseName} date={payData.date} time={payData.time} partySize={payData.partySize}
-          onSuccess={()=>{setPayData(null);window.__toast?.("¡Pago exitoso! Reserva confirmada","success");onOk({bk:{id:payData.bookingId,course_name:payData.courseName,booking_date:payData.date,booking_time:payData.time},tot:payData.amount})}}
+        <StripePayment amount={payData.amount} bookingId={null} courseName={payData.courseName} date={payData.date} time={payData.time} partySize={payData.partySize}
+          onSuccess={async(paymentIntentId)=>{const bk=await createBookingAfterPay(paymentIntentId);setPayData(null);if(bk){if(window.__toast)window.__toast("¡Pago exitoso! Reserva confirmada","success");onOk({bk,tot:payData.amount})}}}
           onCancel={()=>setPayData(null)}/>
       </div>
     </div>}
@@ -554,7 +580,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       {detail.status==="confirmed"&&<div style={{display:"flex",gap:8,marginBottom:14}}>
         {detail.party_size>=2?<button onClick={()=>{setShareModal(detail);setShareMode(null);setSelFr([]);setSplitItems([{name:"Green Fee",amount:detail.total_cost?.toString()||""}])}} style={{flex:1,padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>&#128101; Compartir</button>
         :<div style={{flex:1,padding:10,background:C.cd,borderRadius:10,textAlign:"center",opacity:.4}}><span style={{fontSize:12,color:C.tm}}>&#128101; Compartir disponible desde 2 jugadores</span></div>}
-        <button onClick={()=>{const go=async()=>{await sb.from("bookings").update({status:"cancelled"}).eq("id",detail.id);window.__toast?.("Reserva cancelada","success");setDetail(null);load()};window.__confirm?.("¿Cancelar esta reserva?",go)}} style={{padding:"10px 14px",background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
+        <button onClick={()=>{const go=async()=>{await sb.from("bookings").update({status:"cancelled"}).eq("id",detail.id);if(window.__toast)window.__toast("Reserva cancelada","success");setDetail(null);load()};if(window.__confirm)window.__confirm("¿Cancelar esta reserva?",go);else if(confirm("¿Cancelar esta reserva?"))go()}} style={{padding:"10px 14px",background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
       </div>}
       {/* REVIEW PROMPT */}
       {detail.status==="confirmed"&&new Date(detail.booking_date)<new Date()&&<ReviewPrompt bookingId={detail.id} courseId={detail.course_id} courseName={detail.course_name}/>}
@@ -1062,7 +1088,7 @@ function PushToggle(){
 function PaymentCard({userId,email,cardLast4:initLast4,cardBrand:initBrand}){
   const[last4,setLast4]=useState(initLast4||"");const[brand,setBrand]=useState(initBrand||"");
   const hasCard=last4&&last4.length>=2;
-  const removeCard=()=>{const go=async()=>{await sb.from("user_profiles").update({card_last4:null,card_brand:null,stripe_customer_id:null}).eq("id",userId);setLast4("");setBrand("")};window.__confirm?.("¿Eliminar método de pago?",go)};
+  const removeCard=()=>{const go=async()=>{await sb.from("user_profiles").update({card_last4:null,card_brand:null,stripe_customer_id:null}).eq("id",userId);setLast4("");setBrand("")};if(window.__confirm)window.__confirm("¿Eliminar método de pago?",go);else if(confirm("¿Eliminar método de pago?"))go()};
   return<div>
     {hasCard?<div style={{display:"flex",alignItems:"center",gap:12,padding:14,background:C.bg,borderRadius:14,border:"1px solid "+C.bd}}>
       <div style={{width:44,height:28,borderRadius:6,background:`linear-gradient(135deg,${C.pri},#1a5276)`,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:9,fontWeight:800}}>{(brand||"CARD").toUpperCase()}</span></div>
@@ -1214,7 +1240,7 @@ function AdminProfile({course,onOut,onRefresh}){const{s}=useA();const[ed,setEd]=
   const saveCourse=async()=>{setSv(true);const upd={description:desc||null,phone_number:phone||null,green_fee_min:feeMin?parseFloat(feeMin):null,green_fee_max:feeMax?parseFloat(feeMax):null,has_food_service:hasFood,has_pro_shop:hasShop};
     if(ft==="plataforma")upd.stations_count=stCount?parseInt(stCount):null;
     if(ft==="simulador"){upd.cabins_count=cbCount?parseInt(cbCount):null;upd.simulator_brand=simBrand||null}
-    await sb.from("golf_courses").update(upd).eq("id",course.id);setSv(false);setEd(false);if(onRefresh)onRefresh()};window.__confirm?.("¿Eliminar esta foto?",go)};
+    await sb.from("golf_courses").update(upd).eq("id",course.id);setSv(false);setEd(false);if(onRefresh)onRefresh()};if(window.__confirm)window.__confirm("¿Eliminar esta foto?",go);else if(confirm("¿Eliminar esta foto?"))go()};
   const saveHole=async()=>{if(!editHole)return;const payload={course_id:course.id,hole_number:editHole,par:parseInt(hPar),distance_yards:hDist?parseInt(hDist):null,hole_description:hDesc||null};const ex=holes.find(h=>h.hole_number===editHole);if(ex)await sb.from("course_holes").update(payload).eq("id",ex.id);else await sb.from("course_holes").insert(payload);const{data}=await sb.from("course_holes").select("*").eq("course_id",course.id).order("hole_number");setHoles(data||[]);setEditHole(null)};
   const openHole=n=>{const h=holes.find(x=>x.hole_number===n);setEditHole(n);setHPar(h?h.par.toString():"4");setHDist(h?h.distance_yards?.toString()||"":"");setHDesc(h?h.hole_description||"":"")};
   const uploadPhoto=async(e)=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith("image/")){window.__toast?.("Solo imágenes (JPG, PNG, WebP)","error")||alert("Solo imágenes");return}if(file.size>5*1024*1024){window.__toast?.("Máximo 5MB por imagen","error")||alert("Máximo 5MB");return}
@@ -1305,7 +1331,7 @@ function AdminProfile({course,onOut,onRefresh}){const{s}=useA();const[ed,setEd]=
 
     {/* 8. LOGOUT — Same for all types */}
     <ThemeToggle/><button onClick={onOut} style={{width:"100%",padding:12,marginTop:16,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar Sesión</button>
-    <button onClick={()=>{const go=async()=>{await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);onOut()};window.__confirm?.("¿Eliminar tu cuenta? Esta acción es permanente.",go)}} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid #666",borderRadius:14,color:"#888",fontSize:12,cursor:"pointer"}}>Eliminar cuenta</button>
+    <button onClick={()=>{const go=async()=>{await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);onOut()};if(window.__confirm)window.__confirm("¿Eliminar tu cuenta? Esta acción es permanente.",go);else if(confirm("¿Eliminar tu cuenta?"))go()}} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid #666",borderRadius:14,color:"#888",fontSize:12,cursor:"pointer"}}>Eliminar cuenta</button>
   </div>}
 
 /* ═══ SCORECARD DIGITAL & HANDICAP TRACKER ═══ */
