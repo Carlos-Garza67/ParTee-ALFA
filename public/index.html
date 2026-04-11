@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="15.5.1">
+<meta name="version" content="15.6.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -94,7 +94,8 @@ function MapEmbed({lat,lng,name}){if(!lat||!lng)return null;const src="https://w
 /* ═══ NOTIFICATIONS ═══ */
 function createNotif(userId,type,title,message,extra){
   if(!userId)return;
-  sb.from("notifications").insert({user_id:userId,type:type||"alert",title:title||"",message:message||"",...(extra||{})}).then(()=>{})
+  sb.from("notifications").insert({user_id:userId,type:type||"alert",title:title||"",message:message||"",...(extra||{})}).then(()=>{});
+  fetch(SB_FN_URL+"/send-push",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"send",user_id:userId,title:title||"Partee Golf",body:message||"",tag:type||"alert",url:"https://www.partee.com.mx"})}).catch(()=>{})
 }
 function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[show,setShow]=useState(false);const[notifs,setNotifs]=useState([]);const[ld,setLd]=useState(false);
   useEffect(()=>{if(!s)return;loadCount();const iv=setInterval(loadCount,30000);return()=>clearInterval(iv)},[s]);
@@ -125,7 +126,7 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     const authTimeout=setTimeout(()=>{if(ld){console.warn("Auth timeout - proceeding as logged out");setLd(false)}},8000);
     sb.auth.getSession().then(({data:{session}})=>{clearTimeout(authTimeout);setS(session);if(session)lp(session.user.id);else setLd(false)}).catch(()=>{clearTimeout(authTimeout);setLd(false)});
     const{data:{subscription}}=sb.auth.onAuthStateChange((_,ss)=>{setS(ss);if(ss)lp(ss.user.id);else{setP(null);setLd(false)}});return()=>{clearTimeout(authTimeout);subscription.unsubscribe()}},[]);
-  async function lp(uid){try{let{data}=await sb.from("user_profiles").select("*").eq("id",uid).single();if(!data){const{data:u}=await sb.auth.getUser();await sb.from("user_profiles").insert({id:uid,email:u?.user?.email||"",full_name:(u?.user?.email||"").split("@")[0]});({data}=await sb.from("user_profiles").select("*").eq("id",uid).single())}setP(data);setLd(false)}catch(e){console.error("Profile load error:",e);setLd(false)}}
+  async function lp(uid){try{let{data}=await sb.from("user_profiles").select("*").eq("id",uid).single();if(!data){const{data:u}=await sb.auth.getUser();await sb.from("user_profiles").insert({id:uid,email:u?.user?.email||"",full_name:(u?.user?.email||"").split("@")[0]});({data}=await sb.from("user_profiles").select("*").eq("id",uid).single())}setP(data);setLd(false);if(data?.user_role==="player")initPush(data.id).catch(()=>{})}catch(e){console.error("Profile load error:",e);setLd(false)}}
   return <Ctx.Provider value={{s,p,ld,setP,signIn:async(e,pw)=>sb.auth.signInWithPassword({email:e,password:pw}),signInGoogle:async()=>sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin}}),signUp:async(e,pw,nm,role,cid)=>{const{data,error}=await sb.auth.signUp({email:e,password:pw});if(!error&&data.user)await sb.from("user_profiles").insert({id:data.user.id,email:e,full_name:nm,user_role:role||'player',managed_course_id:cid||null});return{data,error}},resetPw:async e=>sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin}),out:async()=>{await sb.auth.signOut();setS(null);setP(null)},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
 }
 const useA=()=>useContext(Ctx);
@@ -245,6 +246,27 @@ async function stripeCheckout(params){
     if(data.url){window.location.href=data.url;return{ok:true}}
     return{error:data.error||"Error al crear sesión de pago"}
   }catch(e){return{error:"Error de conexión: "+e.message}}}
+
+
+/* ═══ PUSH NOTIFICATIONS ═══ */
+const VAPID_PUB="BDB0DG-cSt-uK1nOLHx1_g6zjC8jY_jz9qNuXNMwB8DUUeyExkFq12H3Y_7_3eO5e6CAQvh9gjQ97f1OOvaRbUM";
+function urlB64ToUint8(b64){const p="=".repeat((4-b64.length%4)%4);const b=(b64+p).replace(/-/g,"+").replace(/_/g,"/");const r=atob(b);return Uint8Array.from(r,c=>c.charCodeAt(0))}
+
+async function initPush(userId){
+  if(!("serviceWorker" in navigator)||!("PushManager" in window))return;
+  try{
+    const reg=await navigator.serviceWorker.register("/sw.js");
+    const existing=await reg.pushManager.getSubscription();
+    if(existing)return;
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted")return;
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8(VAPID_PUB)});
+    const key=sub.getKey("p256dh");const auth=sub.getKey("auth");
+    if(!key||!auth)return;
+    const p256dh=btoa(String.fromCharCode(...new Uint8Array(key))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    const authKey=btoa(String.fromCharCode(...new Uint8Array(auth))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    await sb.from("push_subscriptions").upsert({user_id:userId,endpoint:sub.endpoint,p256dh,auth_key:authKey},{onConflict:"user_id,endpoint"});
+  }catch(e){console.log("Push setup skipped:",e.message)}}
 
 /* ═══ PROMO CODES ═══ */
 async function validatePromo(code,userId,role){
@@ -829,7 +851,7 @@ function Profile({onRanking,onScorecard}){const{p:pr,out,ref,s,setP}=useA();cons
     <div style={{background:C.cd,borderRadius:16,padding:16,marginBottom:14,border:"1px solid "+C.bd}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt}}>Info Personal</h3><button onClick={()=>ed?save():setEd(true)} style={{background:C.acc+"20",border:"none",color:C.acc,fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:8,cursor:"pointer"}}>{sv?"...":ed?"Guardar":"Editar"}</button></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{l:"Nombre",v:nm,set:setNm,p:"Nombre"},{l:"Apodo",v:nick,set:setNick,p:"Apodo"},{l:"Ciudad",v:city,set:setCity,p:"Ciudad"},{l:"Estado",v:pst,set:setPst,p:"Estado"},{l:"Teléfono",v:ph,set:setPh,p:"Tel"},{l:"Handicap",v:hc,set:setHc,p:"HCP"}].map((f,i)=><div key={i}><label style={{fontSize:10,fontWeight:600,color:C.tm,textTransform:"uppercase"}}>{f.l}</label><input {...inp(f.v,f.set,f.p)}/></div>)}
     <div><label style={{fontSize:10,fontWeight:600,color:C.tm}}>FECHA NAC.</label><input type={ed?"date":"text"} value={bd} onChange={e=>setBd(e.target.value)} disabled={!ed} placeholder="YYYY-MM-DD" style={{width:"100%",background:ed?C.bg:C.cd,border:"1px solid "+(ed?C.bd:"transparent"),borderRadius:10,padding:"10px 14px",fontSize:14,color:ed?C.txt:C.ts,outline:"none",boxSizing:"border-box",marginTop:4}}/>{age!=null&&<div style={{fontSize:11,color:C.gld,marginTop:4}}>{age} años</div>}</div>
     </div></div>
-    <div style={{background:C.cd,borderRadius:16,padding:16,marginBottom:14,border:"1px solid "+C.bd}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:12}}>Preferencias</h3><ThemeToggle/><div style={{display:"flex",gap:10,marginBottom:14}}>{[{k:"diestro",l:"Diestro"},{k:"zurdo",l:"Zurdo"}].map(h=><button key={h.k} onClick={()=>{if(ed)setHand(h.k)}} style={{flex:1,padding:10,borderRadius:12,border:"2px solid "+(hand===h.k?C.acc:C.bd),background:hand===h.k?C.acc+"15":C.bg,cursor:ed?"pointer":"default",fontSize:13,fontWeight:700,color:hand===h.k?C.acc:C.ts}}>{h.l}</button>)}</div><div className="brand-scroll">{BRANDS.map(b=><div key={b.id} className={"brand-card"+(brand===b.id?" active":"")} onClick={()=>{if(ed)setBrand(brand===b.id?"":b.id)}} style={{opacity:ed?1:.7,cursor:ed?"pointer":"default"}}><img src={b.logo} alt={b.id} onError={e=>{e.target.style.display="none"}}/><div style={{fontSize:11,fontWeight:700,color:brand===b.id?C.acc:C.ts}}>{b.id}</div></div>)}</div></div>
+    <div style={{background:C.cd,borderRadius:16,padding:16,marginBottom:14,border:"1px solid "+C.bd}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:12}}>Preferencias</h3><PushToggle/><ThemeToggle/><div style={{display:"flex",gap:10,marginBottom:14}}>{[{k:"diestro",l:"Diestro"},{k:"zurdo",l:"Zurdo"}].map(h=><button key={h.k} onClick={()=>{if(ed)setHand(h.k)}} style={{flex:1,padding:10,borderRadius:12,border:"2px solid "+(hand===h.k?C.acc:C.bd),background:hand===h.k?C.acc+"15":C.bg,cursor:ed?"pointer":"default",fontSize:13,fontWeight:700,color:hand===h.k?C.acc:C.ts}}>{h.l}</button>)}</div><div className="brand-scroll">{BRANDS.map(b=><div key={b.id} className={"brand-card"+(brand===b.id?" active":"")} onClick={()=>{if(ed)setBrand(brand===b.id?"":b.id)}} style={{opacity:ed?1:.7,cursor:ed?"pointer":"default"}}><img src={b.logo} alt={b.id} onError={e=>{e.target.style.display="none"}}/><div style={{fontSize:11,fontWeight:700,color:brand===b.id?C.acc:C.ts}}>{b.id}</div></div>)}</div></div>
     {/* PAYMENT METHOD */}
     <div style={{background:C.cd,borderRadius:16,padding:16,marginBottom:14,border:"1px solid "+C.bd}}>
       <h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:12}}>&#128179; Método de Pago</h3>
@@ -837,6 +859,28 @@ function Profile({onRanking,onScorecard}){const{p:pr,out,ref,s,setP}=useA();cons
     </div>
     <button onClick={()=>{if(confirm("Cerrar sesión?"))out()}} style={{width:"100%",padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:10}}>Cerrar Sesión</button>
     <button onClick={async()=>{if(!confirm("¿Estás seguro de eliminar tu cuenta?"))return;if(!confirm("Esta acción es permanente. ¿Confirmar eliminación?"))return;await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);out()}} style={{width:"100%",padding:12,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>Eliminar cuenta</button>
+  </div>}
+
+
+/* ═══ PUSH TOGGLE ═══ */
+function PushToggle(){
+  const[enabled,setEnabled]=useState(false);const[loading,setLoading]=useState(true);
+  useEffect(()=>{
+    if(!("Notification" in window)){setLoading(false);return}
+    setEnabled(Notification.permission==="granted");setLoading(false)},[]);
+  const toggle=async()=>{
+    if(enabled){setEnabled(false);return}
+    setLoading(true);
+    const perm=await Notification.requestPermission();
+    setEnabled(perm==="granted");
+    if(perm==="granted"){const{s}=sb.auth;const sess=await s.getSession();if(sess.data.session)await initPush(sess.data.session.user.id)}
+    setLoading(false)};
+  if(!("Notification" in window))return null;
+  return<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+    <div><div style={{fontSize:13,fontWeight:600,color:C.txt}}>Notificaciones Push</div><div style={{fontSize:11,color:C.tm}}>Reservas, amigos y torneos</div></div>
+    <button onClick={toggle} disabled={loading} style={{width:50,height:28,borderRadius:14,border:"none",background:enabled?C.grn:C.bd,cursor:"pointer",position:"relative",transition:"background .2s"}}>
+      <div style={{width:22,height:22,borderRadius:11,background:"#fff",position:"absolute",top:3,left:enabled?25:3,transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+    </button>
   </div>}
 
 function PaymentCard({userId,email,cardLast4:initLast4,cardBrand:initBrand}){
