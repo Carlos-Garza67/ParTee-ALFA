@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="15.6.0">
+<meta name="version" content="16.0.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -38,6 +38,11 @@
 </style>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-XXXXXXXXXX")</script>
+<link rel="manifest" href="/manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Partee">
 </head>
 <body>
 <div id="root"><div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;flex-direction:column"><div style="font-size:48px;margin-bottom:16px">⛳</div><div style="color:#a0aec0;font-size:16px;font-family:-apple-system,system-ui,sans-serif">Cargando Partee...</div></div></div>
@@ -131,8 +136,43 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
 }
 const useA=()=>useContext(Ctx);
 
+
+/* ═══ TERMS & PRIVACY ═══ */
+function TermsModal({type,onClose}){
+  const isTerms=type==="terms";
+  return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.9)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}><div onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:20,width:"100%",maxWidth:500,maxHeight:"85vh",overflowY:"auto",padding:24,border:"1px solid "+C.bd}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{color:C.txt,fontSize:18,fontWeight:800,margin:0}}>{isTerms?"Términos y Condiciones":"Aviso de Privacidad"}</h2><button onClick={onClose} style={{background:"none",border:"none",color:C.ts,fontSize:20,cursor:"pointer"}}>✕</button></div>
+    {isTerms?<div style={{fontSize:12,color:C.ts,lineHeight:1.8}}>
+      <p><strong style={{color:C.txt}}>1. Aceptación.</strong> Al usar Partee aceptas estos términos. Si no estás de acuerdo, no uses la plataforma.</p>
+      <p><strong style={{color:C.txt}}>2. Servicio.</strong> Partee es una plataforma de reservaciones de tee times en campos de golf en México. Facilitamos la conexión entre jugadores y campos, pero no somos responsables de la operación de los campos.</p>
+      <p><strong style={{color:C.txt}}>3. Cuenta.</strong> Debes proporcionar información veraz. Eres responsable de mantener la confidencialidad de tu cuenta.</p>
+      <p><strong style={{color:C.txt}}>4. Reservaciones.</strong> Las reservaciones están sujetas a disponibilidad. Los precios son establecidos por cada campo. Las políticas de cancelación varían por campo.</p>
+      <p><strong style={{color:C.txt}}>5. Pagos.</strong> Los pagos se procesan de forma segura a través de terceros autorizados. Partee no almacena datos de tarjetas de crédito.</p>
+      <p><strong style={{color:C.txt}}>6. Cancelaciones.</strong> Puedes cancelar una reservación desde la app. Los reembolsos dependen de la política de cada campo y del tiempo de anticipación.</p>
+      <p><strong style={{color:C.txt}}>7. Conducta.</strong> Te comprometes a usar la plataforma de forma responsable y respetuosa. Partee se reserva el derecho de suspender cuentas que violen estos términos.</p>
+      <p><strong style={{color:C.txt}}>8. Propiedad Intelectual.</strong> Todo el contenido de Partee (marca, diseño, código) es propiedad de Partee Golf S.A. de C.V.</p>
+      <p><strong style={{color:C.txt}}>9. Limitación de Responsabilidad.</strong> Partee no es responsable por daños indirectos derivados del uso de la plataforma.</p>
+      <p><strong style={{color:C.txt}}>10. Modificaciones.</strong> Nos reservamos el derecho de modificar estos términos. Te notificaremos de cambios importantes.</p>
+      <p style={{color:C.tm,marginTop:12}}>Última actualización: Abril 2026</p>
+    </div>
+    :<div style={{fontSize:12,color:C.ts,lineHeight:1.8}}>
+      <p><strong style={{color:C.txt}}>Responsable.</strong> Partee Golf S.A. de C.V., con domicilio en Guadalajara, Jalisco, México.</p>
+      <p><strong style={{color:C.txt}}>Datos que recopilamos.</strong> Nombre, correo electrónico, teléfono, ubicación, preferencias de golf, historial de reservaciones.</p>
+      <p><strong style={{color:C.txt}}>Finalidad.</strong> Gestionar tu cuenta, procesar reservaciones, enviar confirmaciones, mejorar el servicio, análisis estadístico.</p>
+      <p><strong style={{color:C.txt}}>Base legal.</strong> Consentimiento del titular y relación contractual (Ley Federal de Protección de Datos Personales en Posesión de los Particulares, LFPDPPP).</p>
+      <p><strong style={{color:C.txt}}>Transferencias.</strong> Tus datos pueden compartirse con campos de golf para procesar reservaciones y con procesadores de pago para completar transacciones.</p>
+      <p><strong style={{color:C.txt}}>Derechos ARCO.</strong> Puedes ejercer tus derechos de Acceso, Rectificación, Cancelación y Oposición enviando correo a soporte@partee.com.mx.</p>
+      <p><strong style={{color:C.txt}}>Seguridad.</strong> Implementamos medidas técnicas y organizativas para proteger tus datos: cifrado en tránsito (TLS), almacenamiento seguro, acceso restringido.</p>
+      <p><strong style={{color:C.txt}}>Cookies.</strong> Usamos cookies técnicas necesarias para el funcionamiento de la plataforma.</p>
+      <p><strong style={{color:C.txt}}>Retención.</strong> Conservamos tus datos mientras tu cuenta esté activa. Al eliminar tu cuenta, tus datos se anonimizan en un plazo de 30 días.</p>
+      <p><strong style={{color:C.txt}}>Cambios.</strong> Te notificaremos de cambios sustanciales a este aviso por correo electrónico.</p>
+      <p><strong style={{color:C.txt}}>Contacto.</strong> soporte@partee.com.mx</p>
+      <p style={{color:C.tm,marginTop:12}}>Última actualización: Abril 2026</p>
+    </div>}
+  </div></div>}
+
 /* ═══ LOGIN ═══ */
-function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[pw2,setPw2]=useState("");const[nm,setNm]=useState("");const[mode,setMode]=useState("login");const[role,setRole]=useState("");const[courses,setCourses]=useState([]);const[courseId,setCourseId]=useState("");const[facType,setFacType]=useState("");const[newLoc,setNewLoc]=useState(false);const[nName,setNName]=useState("");const[nCity,setNCity]=useState("");const[nState,setNState]=useState("");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);const[showPw,setShowPw]=useState(false);const[showPw2,setShowPw2]=useState(false);const{signIn,signUp,resetPw,signInGoogle}=useA();
+function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[pw2,setPw2]=useState("");const[nm,setNm]=useState("");const[mode,setMode]=useState("login");const[role,setRole]=useState("");const[courses,setCourses]=useState([]);const[courseId,setCourseId]=useState("");const[facType,setFacType]=useState("");const[newLoc,setNewLoc]=useState(false);const[nName,setNName]=useState("");const[nCity,setNCity]=useState("");const[nState,setNState]=useState("");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);const[showPw,setShowPw]=useState(false);const[showPw2,setShowPw2]=useState(false);const[termsType,setTermsType]=useState(null);const{signIn,signUp,resetPw,signInGoogle}=useA();
   const EyeBtn=({on,toggle})=><div onClick={toggle} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={on?C.acc:C.ts} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>{!on&&<line x1="1" y1="1" x2="23" y2="23"/>}</svg></div>;
   useEffect(()=>{sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").order("course_name").then(({data})=>setCourses(data||[]))},[]);
   const filteredCourses=courses.filter(c=>(c.facility_type||"campo")===facType);
@@ -169,6 +209,8 @@ function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[p
     {mode==="login"&&<p onClick={()=>{setMode("reset");setMsg("")}} style={{textAlign:"center",marginTop:14,fontSize:13,color:C.acc,cursor:"pointer",fontWeight:600}}>Olvidé mi contraseña</p>}
     {(mode==="role"||mode==="pickCourse"||mode==="pickFacType")&&<p onClick={prevMode} style={{textAlign:"center",marginTop:14,fontSize:13,color:C.ts,cursor:"pointer"}}>&#8592; Volver</p>}
     {(mode==="login"||mode==="register")&&<p style={{textAlign:"center",marginTop:16,fontSize:14,color:C.ts}}>{mode==="login"?"Sin cuenta? ":"Ya tienes? "}<span onClick={()=>{setMode(mode==="login"?"register":"login");setMsg("")}} style={{color:C.acc,fontWeight:600,cursor:"pointer"}}>{mode==="login"?"Registrate":"Login"}</span></p>}
+    {mode==="login"&&<p style={{textAlign:"center",marginTop:8,fontSize:10,color:C.tm}}>Al usar Partee aceptas nuestros <span onClick={()=>setTermsType("terms")} style={{color:C.ts,cursor:"pointer",textDecoration:"underline"}}>Términos</span> y <span onClick={()=>setTermsType("privacy")} style={{color:C.ts,cursor:"pointer",textDecoration:"underline"}}>Aviso de Privacidad</span></p>}
+    {termsType&&<TermsModal type={termsType} onClose={()=>setTermsType(null)}/>}
     {mode==="reset"&&<p onClick={()=>{setMode("login");setMsg("")}} style={{textAlign:"center",marginTop:14,fontSize:13,color:C.acc,cursor:"pointer"}}>Volver</p>}
   </div></div>;
 }
@@ -293,7 +335,8 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
   useEffect(()=>{sb.from("extras_catalog").select("*").eq("is_active",true).order("sort_order").then(({data})=>setExtras(data||[]))},[]);
   const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;const grand=Math.max(0,gT-discount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
-  const go=async()=>{if(!s)return;setBusy(true);const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();if(error){alert(error.message);setBusy(false);return}const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);if(ei.length>0)await sb.from("booking_extras").insert(ei);if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});if(grand>0){const sr=await stripeCheckout({type:"booking",booking_id:bk.id,course_name:c.course_name,amount:grand,date:sl.slot_date,time:sl.slot_time,party_size:n,promo_code:appliedPromo?.code||null,discount:discount||0,user_email:s.user.email});if(sr.error){alert("Reserva creada. Pago pendiente: "+sr.error);setBusy(false);onOk({bk,tot:grand});return}return}setBusy(false);onOk({bk,tot:grand})};
+  const go=async()=>{if(!s)return;setBusy(true);const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();if(error){alert(error.message);setBusy(false);return}const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);if(ei.length>0)await sb.from("booking_extras").insert(ei);if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada.",{course_name:c.course_name,booking_id:bk.id});
+      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Authorization":"Bearer "+(await sb.auth.getSession()).data.session?.access_token,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:s.user.email,data:{course_name:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),total:grand,party_size:n}})}).catch(()=>{});if(grand>0){const sr=await stripeCheckout({type:"booking",booking_id:bk.id,course_name:c.course_name,amount:grand,date:sl.slot_date,time:sl.slot_time,party_size:n,promo_code:appliedPromo?.code||null,discount:discount||0,user_email:s.user.email});if(sr.error){alert("Reserva creada. Pago pendiente: "+sr.error);setBusy(false);onOk({bk,tot:grand});return}return}setBusy(false);onOk({bk,tot:grand})};
   const cats=[{k:"equipo",l:"&#127948; Equipo"},{k:"pelotas",l:"&#9898; Pelotas"},{k:"caddie",l:"&#129489; Caddie"},{k:"alimentos",l:"&#127860; Alimentos"}];
   return<div className="fi" style={{padding:20}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt}}>&#8592;</button><h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>Confirmar</h2></div>
     <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}><h3 style={{color:C.txt,fontSize:15,fontWeight:700}}>{c.course_name}</h3><p style={{color:C.ts,fontSize:13,marginTop:4}}>{sl.slot_date} &#183; {sl.slot_time?.slice(0,5)}</p></div>
@@ -833,7 +876,7 @@ function RankingScreen({onBack}){
 }
 
 /* ═══ PROFILE (with avatar, age, tournaments played) ═══ */
-function Profile({onRanking,onScorecard}){const{p:pr,out,ref,s,setP}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[nm,setNm]=useState(pr?.full_name||"");const[nick,setNick]=useState(pr?.nickname||"");const[ph,setPh]=useState(pr?.phone||"");const[city,setCity]=useState(pr?.city||"");const[pst,setPst]=useState(pr?.state||"");const[hc,setHc]=useState(pr?.handicap?.toString()||"");const[hand,setHand]=useState(pr?.handedness||"diestro");const[brand,setBrand]=useState(pr?.fav_brand||"");const[bd,setBd]=useState(pr?.birth_date||"");const[tCount,setTCount]=useState(0);
+function Profile({onRanking,onScorecard}){const{p:pr,out,ref,s,setP}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[nm,setNm]=useState(pr?.full_name||"");const[nick,setNick]=useState(pr?.nickname||"");const[ph,setPh]=useState(pr?.phone||"");const[city,setCity]=useState(pr?.city||"");const[pst,setPst]=useState(pr?.state||"");const[hc,setHc]=useState(pr?.handicap?.toString()||"");const[hand,setHand]=useState(pr?.handedness||"diestro");const[brand,setBrand]=useState(pr?.fav_brand||"");const[bd,setBd]=useState(pr?.birth_date||"");const[tCount,setTCount]=useState(0);const[termsView,setTermsView]=useState(null);
   useEffect(()=>{if(s)sb.from("tournament_players").select("id",{count:"exact"}).eq("user_id",s.user.id).then(({count})=>setTCount(count||0))},[]);
   const calcAge=(d)=>{if(!d)return null;const b=new Date(d+"T00:00:00");const now=new Date();let a=now.getFullYear()-b.getFullYear();if(now.getMonth()<b.getMonth()||(now.getMonth()===b.getMonth()&&now.getDate()<b.getDate()))a--;return a};
   const age=calcAge(bd);
@@ -858,6 +901,7 @@ function Profile({onRanking,onScorecard}){const{p:pr,out,ref,s,setP}=useA();cons
       <PaymentCard userId={s.user.id} email={s.user.email} cardLast4={pr?.card_last4} cardBrand={pr?.card_brand}/>
     </div>
     <button onClick={()=>{if(confirm("Cerrar sesión?"))out()}} style={{width:"100%",padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:10}}>Cerrar Sesión</button>
+    <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:10}}><span onClick={()=>setTermsView("terms")} style={{fontSize:11,color:C.ts,cursor:"pointer",textDecoration:"underline"}}>Términos</span><span onClick={()=>setTermsView("privacy")} style={{fontSize:11,color:C.ts,cursor:"pointer",textDecoration:"underline"}}>Privacidad</span></div>{termsView&&<TermsModal type={termsView} onClose={()=>setTermsView(null)}/>}
     <button onClick={async()=>{if(!confirm("¿Estás seguro de eliminar tu cuenta?"))return;if(!confirm("Esta acción es permanente. ¿Confirmar eliminación?"))return;await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);out()}} style={{width:"100%",padding:12,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>Eliminar cuenta</button>
   </div>}
 
@@ -1489,7 +1533,15 @@ function PlayerOnboarding(){
 
 /* ═══ MAIN ═══ */
 function Main(){const{s,p,ld}=useA();const{theme}=useTheme();const[tab,setTab]=useState(0);const[scr,setScr]=useState("home");const[co,setCo]=useState(null);const[sl,setSl]=useState(null);const[okd,setOkd]=useState(null);
-  useEffect(()=>{try{const url=new URL(location.href);const pay=url.searchParams.get("payment");if(pay==="success")setTimeout(()=>alert("Pago completado. Tu reserva está confirmada."),500);if(pay==="premium_success")setTimeout(()=>alert("Premium activado."),500);if(pay==="cancelled")setTimeout(()=>alert("Pago cancelado."),500);if(pay){url.searchParams.delete("payment");url.searchParams.delete("booking_id");url.searchParams.delete("plan");history.replaceState(null,"",url.pathname)}}catch(e){}},[]);
+  const[payResult,setPayResult]=useState(null);
+  useEffect(()=>{try{const url=new URL(location.href);const pay=url.searchParams.get("payment");if(pay)setPayResult(pay);if(pay){url.searchParams.delete("payment");url.searchParams.delete("booking_id");url.searchParams.delete("plan");history.replaceState(null,"",url.pathname)}}catch(e){}},[]);
+  if(payResult)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}}>
+    <div style={{width:90,height:90,borderRadius:45,background:payResult==="cancelled"?"linear-gradient(135deg,#e74c3c,#c0392b)":`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24,fontSize:40}}>{payResult==="cancelled"?"✕":"✓"}</div>
+    <h2 style={{fontSize:24,fontWeight:800,color:C.txt,marginBottom:8}}>{payResult==="success"?"¡Pago Exitoso!":payResult==="premium_success"?"¡Premium Activado!":"Pago Cancelado"}</h2>
+    <p style={{fontSize:14,color:C.ts,marginBottom:24,maxWidth:300}}>{payResult==="success"?"Tu reserva está confirmada. Recibirás un correo de confirmación.":payResult==="premium_success"?"Ahora tienes acceso a todas las herramientas de inteligencia de mercado.":"El pago fue cancelado. Tu reserva queda pendiente."}</p>
+    {payResult==="success"&&<div style={{display:"flex",gap:8,marginBottom:16}}><span style={{fontSize:28}}>⛳</span><span style={{fontSize:28}}>📧</span><span style={{fontSize:28}}>📅</span></div>}
+    <button onClick={()=>setPayResult(null)} style={{padding:"14px 40px",background:`linear-gradient(135deg,${C.pri},#1a5276)`,color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer"}}>{payResult==="cancelled"?"Volver":"Continuar"}</button>
+  </div>;
   if(ld)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>&#9971; Cargando...</div></div>;
   if(!s)return<Login/>;
   if(p?.is_deleted)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Cuenta eliminada</h2><p style={{color:C.ts,fontSize:13,marginTop:8}}>Esta cuenta ha sido desactivada.</p><button onClick={()=>sb.auth.signOut().then(()=>location.reload())} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:12,color:"#fff",fontWeight:700,cursor:"pointer"}}>Salir</button></div></div>;
