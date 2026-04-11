@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="16.1.0">
+<meta name="version" content="16.1.1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -154,7 +154,7 @@ function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[sho
   </div>
   {show&&<div className="modal-bg" onClick={()=>setShow(false)}><div className="modal-box" onClick={e=>e.stopPropagation()}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><h3 style={{color:C.txt,fontSize:17,fontWeight:700,margin:0}}>Notificaciones</h3><button onClick={()=>setShow(false)} style={{background:"none",border:"none",color:C.ts,fontSize:20,cursor:"pointer"}}>&#10005;</button></div>
-    {ld?<div className="pl" style={{textAlign:"center",padding:30,color:C.tm}}>Cargando...</div>:notifs.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin notificaciones</div>:
+    {ld?<div style={{padding:16}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60}/><Skeleton w="80%" h={16}/></div>:notifs.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin notificaciones</div>:
     notifs.map(n=><div key={n.id} style={{display:"flex",gap:10,padding:"10px 0",borderBottom:"1px solid "+C.bd,opacity:n.is_read?.6:1}}>
       <div style={{width:32,height:32,borderRadius:16,background:C.pri+"30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{ico[n.type]||"🔔"}</div>
       <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:n.is_read?400:700,color:C.txt}}>{n.title}</div><div style={{fontSize:12,color:C.ts,marginTop:2}}>{n.message}</div></div>
@@ -267,7 +267,7 @@ function Home({onPick}){const{s}=useA();const[cs,setCs]=useState([]);const[ld,se
   useAS(fR,feat);useAS(oR,ofC);useAS(aR,all);
   const Card=({c,w,h})=>{const ft=c.facility_type||"campo";return<div onClick={()=>onPick(c)} style={{width:w,background:C.cd,borderRadius:14,overflow:"hidden",border:"1px solid "+C.bd,cursor:"pointer",position:"relative"}}><Img imgs={c.photo_urls} h={h}/><button onClick={ev=>tF(c.id,ev)} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,.5)",border:"none",borderRadius:16,width:28,height:28,cursor:"pointer",fontSize:13,color:favIds.has(c.id)?C.acc:"#fff",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}>{favIds.has(c.id)?"\u2764":"\u2661"}</button><div style={{position:"absolute",top:8,left:8,display:"flex",gap:4,zIndex:2}}><span style={{background:TC[c.course_type],color:"#fff",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6}}>{TL[c.course_type]}</span>{ft!=="campo"&&<span style={{background:"#6c5ce7",color:"#fff",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6}} dangerouslySetInnerHTML={{__html:FT[ft]+" "+FL[ft]}}/>}</div><div style={{padding:10}}><h4 style={{margin:0,fontSize:w>250?15:13,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.course_name}</h4><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:C.ts}}>{c.city}</span><span style={{fontSize:11,fontWeight:700,color:C.grn}}>${fm(c.green_fee_min)}</span></div>{c._avg>0&&<div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}><span style={{color:C.gld,fontSize:11}}>&#9733;</span><span style={{fontSize:11,fontWeight:700,color:C.gld}}>{c._avg}</span><span style={{fontSize:10,color:C.tm}}>({c._cnt})</span></div>}{ft==="plataforma"&&c.stations_count>0&&<div style={{fontSize:10,color:"#6c5ce7",marginTop:3}}>{c.stations_count} bahias</div>}{ft==="simulador"&&<div style={{fontSize:10,color:"#6c5ce7",marginTop:3}}>{c.cabins_count||0} cabinas{c.simulator_brand?" · "+c.simulator_brand:""}</div>}</div></div>};
   const chipS=(a)=>({padding:"6px 14px",borderRadius:20,border:a?"none":"1px solid "+C.bd,background:a?`linear-gradient(135deg,${C.acc},#ff6b6b)`:C.cd,color:a?"#fff":C.ts,fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"});
-  if(ld)return<div className="pl" style={{textAlign:"center",padding:80,color:C.ts}}>Cargando...</div>;
+  if(ld)return<div style={{display:"flex",flexDirection:"column",gap:16,padding:20}}><div style={{display:"flex",gap:14}}><CardSkeleton/><CardSkeleton/></div><Skeleton w="40%" h={20}/><div style={{display:"flex",gap:14}}><CardSkeleton/><CardSkeleton/><CardSkeleton/></div></div>;
   return<div style={{paddingTop:12,paddingBottom:8}}>
     <div style={{padding:"0 16px",marginBottom:10}}><div style={{display:"flex",alignItems:"center",background:C.cd,borderRadius:14,padding:"12px 16px",border:"1px solid "+C.bd,gap:10}}><span style={{opacity:.4}}>&#128269;</span><input value={q} onChange={x=>setQ(x.target.value)} placeholder="Buscar campo, plataforma o simulador..." style={{flex:1,border:"none",outline:"none",fontSize:15,color:C.txt,background:"transparent"}}/>{q&&<span onClick={()=>setQ("")} style={{cursor:"pointer",color:C.tm}}>&#10005;</span>}</div></div>
     <div style={{display:"flex",gap:6,padding:"0 16px",marginBottom:6,overflowX:"auto"}}>{[{k:"all",l:"Todos"},{k:"campo",l:"&#9971; Campo"},{k:"plataforma",l:"&#127919; Plataforma"},{k:"simulador",l:"&#128187; Simulador"}].map(x=><button key={x.k} onClick={()=>setFLoc(x.k)} style={chipS(fLoc===x.k)} dangerouslySetInnerHTML={{__html:x.l}}/>)}</div>
@@ -299,7 +299,7 @@ function Detail({c,onBack,onBook}){const{s}=useA();const[slots,setSlots]=useStat
     </div>)}</div>}
     <h3 style={{fontSize:16,fontWeight:700,color:C.txt,marginBottom:10}}>Tee Times</h3>
     <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:14}}>{n7().map(d=>{const day=new Date(d+"T12:00:00");const a=d===dt;return<button key={d} onClick={()=>setDt(d)} style={{minWidth:54,padding:"8px 10px",borderRadius:10,border:a?"none":"1px solid "+C.bd,background:a?`linear-gradient(135deg,${C.acc},#ff6b6b)`:C.cd,cursor:"pointer",textAlign:"center",flexShrink:0}}><div style={{fontSize:10,fontWeight:600,color:a?"rgba(255,255,255,.8)":C.tm}}>{DN[day.getDay()]}</div><div style={{fontSize:16,fontWeight:700,color:a?"#fff":C.txt}}>{day.getDate()}</div></button>})}</div>
-    {ld?<div className="pl" style={{textAlign:"center",padding:30,color:C.tm}}>Cargando...</div>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}>No hay tee times</div>:<div style={{display:"flex",flexWrap:"wrap",gap:8}}>{slots.slice(0,18).map(x=><button key={x.id} onClick={()=>onBook(c,x)} style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:"10px 14px",textAlign:"center",cursor:"pointer",minWidth:90}}><div style={{fontSize:15,fontWeight:700,color:C.txt}}>{x.slot_time?.slice(0,5)}</div><div style={{fontSize:12,fontWeight:600,color:x.is_offer?C.acc:C.grn,marginTop:2}}>${fm(x.price)}</div></button>)}</div>}
+    {ld?<div style={{padding:16}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60}/><Skeleton w="80%" h={16}/></div>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}>No hay tee times</div>:<div style={{display:"flex",flexWrap:"wrap",gap:8}}>{slots.slice(0,18).map(x=><button key={x.id} onClick={()=>onBook(c,x)} style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:"10px 14px",textAlign:"center",cursor:"pointer",minWidth:90}}><div style={{fontSize:15,fontWeight:700,color:C.txt}}>{x.slot_time?.slice(0,5)}</div><div style={{fontSize:12,fontWeight:600,color:x.is_offer?C.acc:C.grn,marginTop:2}}>${fm(x.price)}</div></button>)}</div>}
     <HoleLayout courseId={c.id}/>
     {/* REVIEWS */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:20,marginBottom:10}}><h3 style={{fontSize:16,fontWeight:700,color:C.txt}}>Reseñas</h3><button onClick={()=>setSr(!sr)} style={{background:C.acc+"25",border:"none",color:C.acc,fontSize:12,fontWeight:600,padding:"5px 12px",borderRadius:8,cursor:"pointer"}}>{sr?"Cancelar":"Escribir"}</button></div>
@@ -461,7 +461,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       {detail.status==="confirmed"&&<div style={{display:"flex",gap:8,marginBottom:14}}>
         {detail.party_size>=2?<button onClick={()=>{setShareModal(detail);setShareMode(null);setSelFr([]);setSplitItems([{name:"Green Fee",amount:detail.total_cost?.toString()||""}])}} style={{flex:1,padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>&#128101; Compartir</button>
         :<div style={{flex:1,padding:10,background:C.cd,borderRadius:10,textAlign:"center",opacity:.4}}><span style={{fontSize:12,color:C.tm}}>&#128101; Compartir disponible desde 2 jugadores</span></div>}
-        <button onClick={async()=>{if(confirm("Cancelar?")){await sb.from("bookings").update({status:"cancelled"}).eq("id",detail.id);setDetail(null);load()}}} style={{padding:"10px 14px",background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
+        <button onClick={()=>{const go=async()=>{await sb.from("bookings").update({status:"cancelled"}).eq("id",detail.id);window.__toast?.("Reserva cancelada","success");setDetail(null);load()};window.__confirm?.("¿Cancelar esta reserva?",go)}} style={{padding:"10px 14px",background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
       </div>}
       {/* REVIEW PROMPT */}
       {detail.status==="confirmed"&&new Date(detail.booking_date)<new Date()&&<ReviewPrompt bookingId={detail.id} courseId={detail.course_id} courseName={detail.course_name}/>}
@@ -506,7 +506,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       {r.share_mode==="simple"&&<div style={{fontSize:12,color:C.tm,marginBottom:8}}>Invitación sin split de gastos</div>}
       <div style={{display:"flex",gap:8}}><button onClick={()=>acceptReq(r)} style={{flex:1,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>Aceptar</button><button onClick={()=>rejectReq(r)} style={{flex:1,padding:10,background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontWeight:700,cursor:"pointer"}}>Rechazar</button></div>
     </div>})}</>}
-    {tab!=="requests"&&(ld?<div className="pl" style={{textAlign:"center",padding:60,color:C.tm}}>Cargando...</div>:bs.length===0?<div style={{textAlign:"center",padding:60,color:C.tm}}>Sin reservas</div>:bs.map(b=>{const st=stc[b.status]||{l:b.status,c:C.gld};const bReqs=getReqsForBooking(b.id);return<div key={b.id} onClick={()=>openDetail(b)} style={{background:C.cd,borderRadius:12,padding:14,marginBottom:10,border:"1px solid "+C.bd,cursor:"pointer"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:14,fontWeight:700,color:C.txt}}>{b.course_name}</h4><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"3px 8px",borderRadius:6}}>{st.l}</span></div><div style={{fontSize:12,color:C.ts}}>{b.booking_date} &#183; {b.booking_time?.slice(0,5)} &#183; {b.party_size} jug</div><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:14,fontWeight:700,color:C.grn}}>${fm(b.total_cost)} MXN</span><div style={{display:"flex",gap:4,alignItems:"center"}}>{bReqs.length>0&&<span style={{fontSize:10,color:C.gld}}>&#128101;{bReqs.length}</span>}<span style={{color:C.ts,fontSize:12}}>&#8250;</span></div></div></div>}))}
+    {tab!=="requests"&&(ld?<div style={{padding:16}}><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70}/></div>:bs.length===0?<div style={{textAlign:"center",padding:60,color:C.tm}}>Sin reservas</div>:bs.map(b=>{const st=stc[b.status]||{l:b.status,c:C.gld};const bReqs=getReqsForBooking(b.id);return<div key={b.id} onClick={()=>openDetail(b)} style={{background:C.cd,borderRadius:12,padding:14,marginBottom:10,border:"1px solid "+C.bd,cursor:"pointer"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:14,fontWeight:700,color:C.txt}}>{b.course_name}</h4><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"3px 8px",borderRadius:6}}>{st.l}</span></div><div style={{fontSize:12,color:C.ts}}>{b.booking_date} &#183; {b.booking_time?.slice(0,5)} &#183; {b.party_size} jug</div><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:14,fontWeight:700,color:C.grn}}>${fm(b.total_cost)} MXN</span><div style={{display:"flex",gap:4,alignItems:"center"}}>{bReqs.length>0&&<span style={{fontSize:10,color:C.gld}}>&#128101;{bReqs.length}</span>}<span style={{color:C.ts,fontSize:12}}>&#8250;</span></div></div></div>}))}
   </div>;
 }
 
@@ -528,7 +528,7 @@ function FriendsTab(){const{s}=useA();const[friends,setFriends]=useState([]);con
     const coursesPlayed=[...new Set((bks||[]).map(b=>b.course_name))];setVpStats({bookings:(bks||[]).length,tournaments:tCount||0,coursesPlayed,lastPlayed:(bks||[])[0]?.booking_date||null})};
   const calcAge=(d)=>{if(!d)return null;const b=new Date(d+"T00:00:00");const now=new Date();let a=now.getFullYear()-b.getFullYear();if(now.getMonth()<b.getMonth()||(now.getMonth()===b.getMonth()&&now.getDate()<b.getDate()))a--;return a};
   const displayName=(f)=>{const nm=f?.full_name||"";const nick=f?.nickname;return nick?<>{nm} <span style={{color:C.gld}}>"{nick}"</span></>:nm};
-  if(ld)return<div className="pl" style={{textAlign:"center",padding:60,color:C.tm}}>Cargando...</div>;
+  if(ld)return<div style={{padding:16}}><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70}/></div>;
   return<div style={{padding:16}}>
     <h3 style={{fontSize:16,fontWeight:700,color:C.txt,marginBottom:10}}>Agregar por Player ID</h3>
     <div style={{display:"flex",gap:8,marginBottom:14}}><input value={search} onChange={x=>setSearch(x.target.value)} onKeyDown={x=>x.key==="Enter"&&doSearch()} placeholder="PT-XXXXXXXX" style={{flex:1,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:"12px",fontSize:14,color:C.txt,outline:"none",fontFamily:"monospace"}}/><button onClick={doSearch} style={{padding:"0 14px",background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,border:"none",borderRadius:12,color:"#fff",fontWeight:600,cursor:"pointer"}}>Buscar</button></div>
@@ -605,7 +605,7 @@ function TourneoTab(){
   async function createTorneo(){
     const c=courses.find(x=>x.id===selCourse);
     const{data:t,error}=await sb.from("tournaments").insert({name:tName,created_by:s.user.id,course_id:selCourse,course_name:c?.course_name||"",status:"active",game_mode:gMode,game_format:gFmt}).select().single();
-    if(error)return alert(error.message);
+    if(error)return window.__toast?.(error.message,"error")||alert(error.message);
     // Add creator
     const myTeam=gMode==="teams"?"A":null;
     await sb.from("tournament_players").insert({tournament_id:t.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id,is_creator:true,team:myTeam});
@@ -729,7 +729,7 @@ function TourneoTab(){
   // ═══ LIST VIEW ═══
   return<div style={{padding:16}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}>&#127942; Torneos</h3><button onClick={startCreate} style={{padding:"8px 16px",background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Crear</button></div>
-    {ld?<div className="pl" style={{textAlign:"center",padding:60,color:C.tm}}>Cargando...</div>:torneos.length===0?<div style={{textAlign:"center",padding:60,color:C.tm}}><div style={{fontSize:40,marginBottom:8}}>&#127942;</div>Sin torneos aun</div>:
+    {ld?<div style={{padding:16}}><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70}/></div>:torneos.length===0?<div style={{textAlign:"center",padding:60,color:C.tm}}><div style={{fontSize:40,marginBottom:8}}>&#127942;</div>Sin torneos aun</div>:
     torneos.map(t=><div key={t.id} onClick={()=>openDetail(t)} style={{background:C.cd,borderRadius:14,padding:16,marginBottom:10,border:"1px solid "+C.bd,cursor:"pointer"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:15,fontWeight:700,color:C.txt}}>{t.name}</h4><span style={{fontSize:10,fontWeight:600,color:t.status==="active"?C.grn:C.tm,background:(t.status==="active"?C.grn:C.tm)+"20",padding:"3px 8px",borderRadius:6}}>{t.status==="active"?"Activo":"Fin"}</span></div>
       <p style={{fontSize:12,color:C.ts}}>&#9971; {t.course_name}</p>
@@ -837,7 +837,7 @@ function RankingScreen({onBack}){
   const myNatPos=national.findIndex(u=>u.id===s?.user?.id)+1;
   const myCityPos=cityRank.findIndex(u=>u.id===s?.user?.id)+1;
 
-  if(ld)return<div style={{padding:16}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt,marginBottom:12}}>&#8592;</button><div className="pl" style={{textAlign:"center",padding:60,color:C.tm}}>Cargando ranking...</div></div>;
+  if(ld)return<div style={{padding:16}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt,marginBottom:12}}>&#8592;</button><div style={{padding:16}}><Skeleton w="100%" h={40} mb={8}/><Skeleton w="100%" h={40} mb={8}/><Skeleton w="100%" h={40}/></div></div>;
 
   return<div className="fi" style={{padding:16,paddingBottom:30}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt}}>&#8592;</button><h2 style={{margin:0,fontSize:19,fontWeight:800,color:C.txt}}>&#127942; Mi Ranking</h2></div>
@@ -924,7 +924,7 @@ function Profile({onRanking,onScorecard}){const{p:pr,out,ref,s,setP}=useA();cons
   return<div style={{padding:16,paddingBottom:30}}>
     <div className="player-card" style={{marginBottom:20}}><div style={{display:"flex",alignItems:"center",gap:14,position:"relative",zIndex:1}}>
       <Avatar url={pr?.avatar_url} size={64} editable userId={s?.user?.id} onUpdate={u=>setP({...pr,avatar_url:u})}/>
-      <div style={{flex:1}}><h2 style={{fontSize:18,fontWeight:800,color:C.txt,margin:0}}>{pr?.nickname||pr?.full_name}</h2><p style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>{pr?.full_name}{age!=null?<span style={{marginLeft:6,color:C.gld}}>{age} años</span>:""}</p><div onClick={()=>{navigator.clipboard?.writeText(pr?.player_id||"");alert("Copiado!")}} style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,cursor:"pointer"}}><span style={{fontSize:11,color:C.gld,fontWeight:700,background:"rgba(253,203,110,.15)",padding:"3px 10px",borderRadius:6}}>{pr?.player_id}</span></div></div></div>
+      <div style={{flex:1}}><h2 style={{fontSize:18,fontWeight:800,color:C.txt,margin:0}}>{pr?.nickname||pr?.full_name}</h2><p style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>{pr?.full_name}{age!=null?<span style={{marginLeft:6,color:C.gld}}>{age} años</span>:""}</p><div onClick={()=>{navigator.clipboard?.writeText(pr?.player_id||"");window.__toast?.("ID copiado al portapapeles","success")||alert("Copiado!")}} style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,cursor:"pointer"}}><span style={{fontSize:11,color:C.gld,fontWeight:700,background:"rgba(253,203,110,.15)",padding:"3px 10px",borderRadius:6}}>{pr?.player_id}</span></div></div></div>
       <div onClick={onRanking} style={{display:"flex",gap:8,marginTop:16,position:"relative",zIndex:1,cursor:"pointer"}}>{[{v:"#"+(pr?.ranking_position||"--"),l:"Ranking",c:C.gld},{v:pr?.points||0,l:"Puntos",c:C.grn},{v:pr?.handicap||"--",l:"HCP",c:C.txt},{v:tCount,l:"Torneos",c:C.acc}].map((x,i)=><div key={i} style={{flex:1,background:"rgba(255,255,255,.08)",borderRadius:10,padding:8,textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:x.c}}>{x.v}</div><div style={{fontSize:9,color:"rgba(255,255,255,.5)",marginTop:2}}>{x.l}</div></div>)}<div style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:C.gld,fontSize:12}}>&#8250;</div></div>
     </div>
     <div style={{display:"flex",gap:8,marginBottom:14}}>
@@ -969,7 +969,7 @@ function PushToggle(){
 function PaymentCard({userId,email,cardLast4:initLast4,cardBrand:initBrand}){
   const[last4,setLast4]=useState(initLast4||"");const[brand,setBrand]=useState(initBrand||"");
   const hasCard=last4&&last4.length>=2;
-  const removeCard=async()=>{if(!confirm("¿Eliminar método de pago?"))return;await sb.from("user_profiles").update({card_last4:null,card_brand:null,stripe_customer_id:null}).eq("id",userId);setLast4("");setBrand("")};
+  const removeCard=()=>{const go=async()=>{await sb.from("user_profiles").update({card_last4:null,card_brand:null,stripe_customer_id:null}).eq("id",userId);setLast4("");setBrand("")};window.__confirm?.("¿Eliminar método de pago?",go)};
   return<div>
     {hasCard?<div style={{display:"flex",alignItems:"center",gap:12,padding:14,background:C.bg,borderRadius:12,border:"1px solid "+C.bd}}>
       <div style={{width:44,height:28,borderRadius:6,background:`linear-gradient(135deg,${C.pri},#1a5276)`,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:9,fontWeight:800}}>{(brand||"CARD").toUpperCase()}</span></div>
@@ -1039,7 +1039,7 @@ function AdminDash({course}){const[st,setSt]=useState(null);const[monthly,setMon
     const lastMo=months.find(m=>m.month===lm)||months[0];
     setSt({bks:allBk.length,rev,occ:cap?Math.round(booked/cap*100):0,avg,lastMoAvg:lastMo?.avgTicket||0,lastMoLabel:lastMo?.label||"--",lastMoPlayers:lastMo?.players||0,occBands,frequent,newC,returning,uniqueUsers:Object.keys(userBks).length});
     setLd(false)}).catch(()=>setLd(false))},[]);
-  if(ld||!st)return<div className="pl" style={{textAlign:"center",padding:40,color:C.tm}}>Cargando...</div>;
+  if(ld||!st)return<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50} mb={10}/><Skeleton w="90%" h={50}/></div>;
   const maxP=Math.max(...monthly.map(m=>m.players),1);
   return<div className="fi">
     <h3 style={{fontSize:17,fontWeight:700,color:C.txt,marginBottom:14}}>Resumen</h3>
@@ -1104,7 +1104,7 @@ function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=
       <div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{totalPax}</div><div className="l">Jugadores</div></div>
     </div>
     {/* Bookings list */}
-    {ld?<div className="pl" style={{textAlign:"center",padding:40,color:C.tm}}>Cargando...</div>:bks.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin reservas para {dayLabel(selDate)}</div>:bks.map(b=>{const st=stc[b.status]||stc.pending;return<div key={b.id} className="ar">
+    {ld?<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50} mb={10}/><Skeleton w="90%" h={50}/></div>:bks.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin reservas para {dayLabel(selDate)}</div>:bks.map(b=>{const st=stc[b.status]||stc.pending;return<div key={b.id} className="ar">
       <div style={{width:44,textAlign:"center",flexShrink:0}}><div style={{fontSize:15,fontWeight:800,color:C.txt}}>{b.booking_time?.slice(0,5)}</div><div style={{fontSize:10,color:C.tm}}>hrs</div></div>
       <div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,fontWeight:600,color:C.txt}}>{b.party_size} jugador{b.party_size>1?"es":""}</span><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"2px 8px",borderRadius:4}}>{st.l}</span></div><div style={{fontSize:13,fontWeight:700,color:C.grn,marginTop:3}}>${fm(b.total_cost)} MXN{Number(b.extras_total)>0?<span style={{color:C.gld,fontWeight:400,fontSize:11}}> +${fm(b.extras_total)} extras</span>:""}</div></div>
     </div>})}
@@ -1121,14 +1121,14 @@ function AdminProfile({course,onOut,onRefresh}){const{s}=useA();const[ed,setEd]=
   const saveCourse=async()=>{setSv(true);const upd={description:desc||null,phone_number:phone||null,green_fee_min:feeMin?parseFloat(feeMin):null,green_fee_max:feeMax?parseFloat(feeMax):null,has_food_service:hasFood,has_pro_shop:hasShop};
     if(ft==="plataforma")upd.stations_count=stCount?parseInt(stCount):null;
     if(ft==="simulador"){upd.cabins_count=cbCount?parseInt(cbCount):null;upd.simulator_brand=simBrand||null}
-    await sb.from("golf_courses").update(upd).eq("id",course.id);setSv(false);setEd(false);if(onRefresh)onRefresh()};
+    await sb.from("golf_courses").update(upd).eq("id",course.id);setSv(false);setEd(false);if(onRefresh)onRefresh()};window.__confirm?.("¿Eliminar esta foto?",go)};
   const saveHole=async()=>{if(!editHole)return;const payload={course_id:course.id,hole_number:editHole,par:parseInt(hPar),distance_yards:hDist?parseInt(hDist):null,hole_description:hDesc||null};const ex=holes.find(h=>h.hole_number===editHole);if(ex)await sb.from("course_holes").update(payload).eq("id",ex.id);else await sb.from("course_holes").insert(payload);const{data}=await sb.from("course_holes").select("*").eq("course_id",course.id).order("hole_number");setHoles(data||[]);setEditHole(null)};
   const openHole=n=>{const h=holes.find(x=>x.hole_number===n);setEditHole(n);setHPar(h?h.par.toString():"4");setHDist(h?h.distance_yards?.toString()||"":"");setHDesc(h?h.hole_description||"":"")};
-  const uploadPhoto=async(e)=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith("image/")){alert("Solo imágenes (JPG, PNG, WebP)");return}if(file.size>5*1024*1024){alert("Máximo 5MB por imagen");return}
-    setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){alert(ue.message);setUpPh(false);return}
+  const uploadPhoto=async(e)=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith("image/")){window.__toast?.("Solo imágenes (JPG, PNG, WebP)","error")||alert("Solo imágenes");return}if(file.size>5*1024*1024){window.__toast?.("Máximo 5MB por imagen","error")||alert("Máximo 5MB");return}
+    setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){window.__toast?.(ue.message,"error")||alert(ue.message);setUpPh(false);return}
     const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos,publicUrl];setPhotos(np);
     await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);setUpPh(false);if(onRefresh)onRefresh()};
-  const removePhoto=async(idx)=>{if(!confirm("¿Eliminar esta foto?"))return;const np=photos.filter((_,i)=>i!==idx);setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);if(onRefresh)onRefresh()};
+  const removePhoto=(idx)=>{const go=async()=>{const np=photos.filter((_,i)=>i!==idx);setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);if(onRefresh)onRefresh()};
   const replacePhoto=async(e,idx)=>{const file=e.target.files?.[0];if(!file||!file.type.startsWith("image/")||file.size>5*1024*1024)return;
     setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){setUpPh(false);return}
     const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos];np[idx]=publicUrl;setPhotos(np);
@@ -1212,7 +1212,7 @@ function AdminProfile({course,onOut,onRefresh}){const{s}=useA();const[ed,setEd]=
 
     {/* 8. LOGOUT — Same for all types */}
     <ThemeToggle/><button onClick={onOut} style={{width:"100%",padding:12,marginTop:16,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar Sesión</button>
-    <button onClick={async()=>{if(!confirm("¿Eliminar tu cuenta de administrador?"))return;if(!confirm("Acción permanente. ¿Confirmar?"))return;await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);onOut()}} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>Eliminar cuenta</button>
+    <button onClick={()=>{const go=async()=>{await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);onOut()};window.__confirm?.("¿Eliminar tu cuenta? Esta acción es permanente.",go)}} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>Eliminar cuenta</button>
   </div>}
 
 /* ═══ SCORECARD DIGITAL & HANDICAP TRACKER ═══ */
@@ -1260,7 +1260,7 @@ function ScorecardScreen({onBack}){
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt}}>&#8592;</button><h2 style={{margin:0,fontSize:18,fontWeight:800,color:C.txt}}>&#128203; Scorecard Digital</h2></div>
     {handicap&&<div className="sc" style={{marginBottom:14,border:"1px solid "+C.grn+"30"}}><div className="n" style={{color:C.grn}}>{handicap}</div><div className="l">Handicap WHS</div></div>}
     <button onClick={startCreate} style={{width:"100%",padding:14,marginBottom:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,border:"none",borderRadius:12,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Nueva Scorecard</button>
-    {ld?<div className="pl" style={{textAlign:"center",padding:30,color:C.tm}}>Cargando...</div>:cards.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}>Sin scorecards registradas</div>:
+    {ld?<div style={{padding:16}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60}/><Skeleton w="80%" h={16}/></div>:cards.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}>Sin scorecards registradas</div>:
     cards.map(c=><div key={c.id} className="ar"><div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:C.txt}}>{c.course_name}</div><div style={{fontSize:12,color:C.ts,marginTop:2}}>{c.round_date}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800,color:C.txt}}>{c.total_strokes}</div><div style={{fontSize:11,color:c.vs_par>0?C.acc:c.vs_par<0?C.grn:C.ts}}>{c.vs_par>0?"+":""}{c.vs_par} ({c.score_differential!=null?"Diff "+c.score_differential:"<14 hoyos"})</div></div></div>)}
   </div>}
 
@@ -1271,15 +1271,15 @@ function MatchScreen({onBack,embedded}){
   useEffect(()=>{loadReqs()},[]);
   async function loadReqs(){setLd(true);const{data}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id)").in("status",["open","full"]).order("play_date").order("play_time");setReqs(data||[]);setLd(false)}
   async function startCreate(){const{data}=await sb.from("golf_courses").select("id,course_name,city").eq("status","active").order("course_name");setCourses(data||[]);setCreate(true)}
-  async function createReq(){if(!selCourse||!playDate||!playTime)return alert("Completa todos los campos");
+  async function createReq(){if(!selCourse||!playDate||!playTime)return window.__toast?.("Completa todos los campos","warn")||alert("Completa todos los campos");
     const c=courses.find(x=>x.id===selCourse);
     const{data:mr,error}=await sb.from("match_requests").insert({creator_id:s.user.id,course_id:selCourse,course_name:c?.course_name||"",play_date:playDate,play_time:playTime,max_players:maxP,current_players:1,notes:notes||null}).select().single();
-    if(error){alert(error.message);return}
+    if(error){window.__toast?.(error.message,"error")||alert(error.message);return}
     await sb.from("match_members").insert({match_id:mr.id,user_id:s.user.id});
     setCreate(false);loadReqs()}
   async function joinReq(req){if(req.creator_id===s.user.id)return;
     const{error}=await sb.from("match_members").insert({match_id:req.id,user_id:s.user.id});
-    if(error){if(error.code==="23505")alert("Ya estás en este grupo");else alert(error.message);return}
+    if(error){if(error.code==="23505")window.__toast?.("Ya estás en este grupo","warn");else window.__toast?.(error.message,"error");return}
     const newCount=req.current_players+1;const newStatus=newCount>=req.max_players?"full":"open";
     await sb.from("match_requests").update({current_players:newCount,status:newStatus}).eq("id",req.id);
     if(newStatus==="full"){const{data:members}=await sb.from("match_members").select("user_id").eq("match_id",req.id);
@@ -1299,7 +1299,7 @@ function MatchScreen({onBack,embedded}){
   return<div className="fi" style={{padding:16}}>
     {!embedded&&<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}><button onClick={onBack} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.txt}}>&#8592;</button><h2 style={{margin:0,fontSize:18,fontWeight:800,color:C.txt}}>&#129309; Busca Grupo</h2></div>}
     <button onClick={startCreate} style={{width:"100%",padding:14,marginBottom:14,background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,border:"none",borderRadius:12,color:"#fff",fontWeight:700,cursor:"pointer"}}>+ Buscar Grupo</button>
-    {ld?<div className="pl" style={{textAlign:"center",padding:30,color:C.tm}}>Cargando...</div>:reqs.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin grupos abiertos</div>:
+    {ld?<div style={{padding:16}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60}/><Skeleton w="80%" h={16}/></div>:reqs.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin grupos abiertos</div>:
     reqs.map(r=>{const isMe=r.creator_id===s.user.id;const isFull=r.status==="full";return<div key={r.id} style={{background:C.cd,borderRadius:14,padding:14,marginBottom:10,border:"1px solid "+(isFull?C.grn:C.gld)+"40"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:14,fontWeight:700,color:C.txt}}>{r.course_name}</h4><span style={{fontSize:10,color:isFull?C.grn:C.gld,background:(isFull?C.grn:C.gld)+"20",padding:"3px 8px",borderRadius:6,fontWeight:600}}>{isFull?"Completo":r.current_players+"/"+r.max_players}</span></div>
       <div style={{fontSize:12,color:C.ts}}>{r.play_date} · {r.play_time?.slice(0,5)} · {r.creator?.nickname||r.creator?.full_name}</div>
@@ -1388,7 +1388,7 @@ function PremiumInsights({course}){const{s,p}=useA();const{sub,isPremium}=usePre
       if(promo)await redeemPromo(promo.id,s.user.id,"premium",null,PLANS[plan].price);setShowPricing(false);location.reload();return}
     const sr=await stripeCheckout({type:"premium",plan,user_email:s.user.email});if(sr.error)if(window.__toast)window.__toast(sr.error,"error");else alert("Error: "+sr.error);setShowPricing(false)}
 
-  if(ld)return<div className="pl" style={{textAlign:"center",padding:40,color:C.tm}}>Cargando...</div>;
+  if(ld)return<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50} mb={10}/><Skeleton w="90%" h={50}/></div>;
   const m=mySt;const b=bench;
   const mktOcc=b&&(b.booked_slots_7d+b.available_slots_7d)>0?Math.round(b.booked_slots_7d/(b.booked_slots_7d+b.available_slots_7d)*100):0;
 
@@ -1480,7 +1480,7 @@ function AdminPromos({course}){
   const[pType,setPType]=useState("percent");const[pVal,setPVal]=useState("");const[pFrom,setPFrom]=useState("");const[pUntil,setPUntil]=useState("");const[pTStart,setPTStart]=useState("");const[pTEnd,setPTEnd]=useState("");const[pDesc,setPDesc]=useState("");const[pMin,setPMin]=useState("1");
   useEffect(()=>{load()},[]);
   async function load(){setLd(true);const{data}=await sb.from("promotions").select("*").eq("course_id",course.id).order("created_at",{ascending:false});setPromos(data||[]);setLd(false)}
-  async function createPromo(){if(!pVal||!pFrom||!pUntil)return alert("Completa campos obligatorios");
+  async function createPromo(){if(!pVal||!pFrom||!pUntil)return window.__toast?.("Completa campos obligatorios","warn")||alert("Completa campos obligatorios");
     const PL2={percent:"Descuento %","2x1":"2x1",early_bird:"Early Bird",fixed:"Descuento Fijo"};
     await sb.from("promotions").insert({course_id:course.id,course_name:course.course_name,title:PL2[pType]||pType,promo_type:pType,discount_value:parseFloat(pVal),valid_from:pFrom,valid_until:pUntil,start_date:pFrom,end_date:pUntil,time_start:pTStart||null,time_end:pTEnd||null,min_players:parseInt(pMin)||1,description:pDesc||null,is_active:true});
     setCreate(false);setPVal("");setPDesc("");load()}
@@ -1504,7 +1504,7 @@ function AdminPromos({course}){
 
   return<div className="fi">
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><h3 style={{fontSize:17,fontWeight:700,color:C.txt}}>&#127915; Promociones</h3><button onClick={()=>setCreate(true)} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.acc},#ff6b6b)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Crear</button></div>
-    {ld?<div className="pl" style={{textAlign:"center",padding:30,color:C.tm}}>Cargando...</div>:promos.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin promociones</div>:
+    {ld?<div style={{padding:16}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60}/><Skeleton w="80%" h={16}/></div>:promos.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin promociones</div>:
     promos.map(p=><div key={p.id} className="ar" style={{borderColor:p.is_active?C.grn+"40":C.bd}}>
       <div style={{flex:1}}><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:13,fontWeight:700,color:C.txt}}>{PL[p.promo_type]}: {p.promo_type==="2x1"?"":p.promo_type==="percent"?p.discount_value+"%":"$"+fm(p.discount_value)}</span><span style={{fontSize:9,color:p.is_active?C.grn:C.tm,background:(p.is_active?C.grn:C.tm)+"20",padding:"2px 6px",borderRadius:4}}>{p.is_active?"Activa":"Inactiva"}</span></div>
         <div style={{fontSize:11,color:C.ts,marginTop:2}}>{p.valid_from} → {p.valid_until}{p.time_start?" · "+p.time_start+"-"+p.time_end:""}</div>
