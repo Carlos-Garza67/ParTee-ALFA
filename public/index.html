@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="16.10.1">
+<meta name="version" content="16.10.2">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 <meta name="theme-color" content="#1a1a2e">
@@ -1067,7 +1067,7 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
   useEffect(()=>{loadC()},[p]);const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};
   if(ld)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>Cerrar Sesión</button></div></div>;
-  const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20),l:"Dashboard"},{i:ic("calendar",20),l:"Reservas"},{i:ic("clock",20),l:"Slots"},{i:ic("tag",20),l:"Promos"},{i:ic("gem",20),l:"Insights"},{i:ic("user",20),l:"Perfil"}];
+  const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,"#fff"),l:"Dashboard"},{i:ic("calendar",20,"#fff"),l:"Reservas"},{i:ic("clock",20,"#fff"),l:"Slots"},{i:ic("tag",20,"#fff"),l:"Promos"},{i:ic("gem",20,"#fff"),l:"Insights"},{i:ic("user",20,"#fff"),l:"Perfil"}];
   return<div style={{maxWidth:430,margin:"0 auto",background:C.bg,minHeight:"100vh"}}>
     <div style={{background:theme==="light"?"#ffffff":`linear-gradient(135deg,${C.bg},${C.pri})`,padding:"14px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:20}} dangerouslySetInnerHTML={{__html:FI[ft]}}/><span style={{fontSize:18,fontWeight:800,color:theme==="light"?C.pri:"#fff"}}>Partee Admin</span>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}><p style={{fontSize:12,color:C.ts,margin:0}}>{course.course_name}</p><NotifBell/></div></div>
     <div style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<PremiumInsights course={course}/>}{tab===5&&<AdminProfile course={course} onOut={out} onRefresh={loadC}/>}</div>
@@ -1111,7 +1111,7 @@ function Main(){const{s,p,ld}=useA();const{theme}=useTheme();const[tab,setTab]=u
   const home=()=>{setScr("home");setCo(null);setSl(null);setTab(0)};
   const sc=theme==="dark"?"#fff":"#111827";
   const vsIcon="<svg width='20' height='20' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><line x1='17' y1='3' x2='7' y2='18' stroke='"+sc+"' stroke-width='2' stroke-linecap='round'/><line x1='7' y1='18' x2='4' y2='16.5' stroke='"+sc+"' stroke-width='2.8' stroke-linecap='round'/><line x1='7' y1='3' x2='17' y2='18' stroke='"+sc+"' stroke-width='2' stroke-linecap='round'/><line x1='17' y1='18' x2='20' y2='16.5' stroke='"+sc+"' stroke-width='2.8' stroke-linecap='round'/><circle cx='17' cy='3' r='1.2' fill='"+sc+"'/><circle cx='7' cy='3' r='1.2' fill='"+sc+"'/></svg>";
-  const ptabs=[{i:ic("compass",20),l:"Explorar"},{i:ic("calendar",20),l:"Reservas"},{i:ic("swords",20),l:"Versus"},{i:ic("users",20),l:"Amigos"},{i:ic("user",20),l:"Perfil"}];
+  const ptabs=[{i:ic("compass",20,"#fff"),l:"Explorar"},{i:ic("calendar",20,"#fff"),l:"Reservas"},{i:ic("swords",20,"#fff"),l:"Versus"},{i:ic("users",20,"#fff"),l:"Amigos"},{i:ic("user",20,"#fff"),l:"Perfil"}];
   return<div style={{maxWidth:430,margin:"0 auto",background:C.bg,minHeight:"100vh"}}>
     <div style={{background:theme==="light"?"#ffffff":`linear-gradient(135deg,${C.bg},${C.pri})`,padding:"13px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd}}><div onClick={home} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:22}}>&#9971;</span><div><span style={{fontSize:20,fontWeight:800,color:theme==="light"?C.pri:"#fff"}}>Partee</span>{p&&tab===0&&scr==="home"&&<div style={{fontSize:10,color:C.ts,marginTop:-2}}>Hola, {p.nickname||p.full_name?.split(" ")[0]||""}  &#128075;</div>}</div></div><div style={{display:"flex",alignItems:"center",gap:10}}><NotifBell/><span style={{width:7,height:7,borderRadius:6,background:C.grn,boxShadow:"0 0 6px "+C.grn}}/></div></div>
     <div style={{paddingBottom:scr==="home"?60:0}}>
