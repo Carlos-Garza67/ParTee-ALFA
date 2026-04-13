@@ -7,11 +7,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf</title>
-<meta name="version" content="16.14.0">
+<meta name="version" content="16.15.0">
+<meta name="description" content="Reserva tee times en los mejores campos de golf de México. Torneos, amigos, scorecards y más.">
+<meta property="og:title" content="Partee Golf">
+<meta property="og:description" content="Reserva tee times, juega torneos y conecta con golfistas en México">
+<meta property="og:image" content="https://www.partee.com.mx/icon-512.png">
+<meta property="og:url" content="https://www.partee.com.mx">
+<meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#0a0a1a">
 <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
@@ -83,12 +90,12 @@
 </head>
 <body>
 <a href="#root" class="skip-link" style="position:absolute;top:-100px;left:0;background:#e94560;color:#fff;padding:8px 16px;z-index:9999;font-size:14px;transition:top .2s" onfocus="this.style.top='0'" onblur="this.style.top='-100px'">Saltar al contenido</a>
-<div id="root"><div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;flex-direction:column"><div style="font-size:48px;margin-bottom:16px">⛳</div><div style="color:#a0aec0;font-size:16px;font-family:-apple-system,system-ui,sans-serif">Cargando Partee...</div></div></div>
+<div id="root"><div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;flex-direction:column"><img src="/icon-192.png" width="64" height="64" alt="Partee" style="margin-bottom:16px;border-radius:14px"><div style="color:#a0aec0;font-size:16px;font-family:-apple-system,system-ui,sans-serif">Cargando Partee...</div></div></div>
 <noscript><div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;padding:24px;text-align:center"><div><h1>Partee Golf</h1><p style="margin-top:12px;color:#a0aec0">Activa JavaScript para usar Partee</p></div></div></noscript>
 <script>
 window.onerror=function(m,s,l,c,e){
   var r=document.getElementById("root");
-  if(r)r.innerHTML='<div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;padding:24px"><div style="text-align:center;color:#fff;font-family:-apple-system,sans-serif;max-width:320px"><div style="font-size:48px;margin-bottom:16px">⛳</div><h2>Partee Golf</h2><p style="color:#a0aec0;margin-top:12px;font-size:14px">Error: '+String(m).slice(0,100)+'</p><button onclick="location.reload()" style="margin-top:20px;padding:12px 32px;background:#e94560;color:#fff;border:none;border-radius:12px;font-size:16px;cursor:pointer">Recargar</button></div></div>';
+  if(r)r.innerHTML='<div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;padding:24px"><div style="text-align:center;color:#fff;font-family:-apple-system,sans-serif;max-width:320px"><div style="border-radius:10px;margin-bottom:16px"><img src="/icon-192.png" width="48" height="48" style="border-radius:10px"><h2>Partee Golf</h2><p style="color:#a0aec0;margin-top:12px;font-size:14px">Error: '+String(m).slice(0,100)+'</p><button onclick="location.reload()" style="margin-top:20px;padding:12px 32px;background:#e94560;color:#fff;border:none;border-radius:12px;font-size:16px;cursor:pointer">Recargar</button></div></div>';
 };
 </script>
 <script type="text/plain" id="jsx-source">
@@ -1182,7 +1189,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 <script>
 (function(){
   var root=document.getElementById("root");
-  var errHTML=function(msg){return'<div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;padding:24px"><div style="text-align:center;color:#fff;font-family:-apple-system,sans-serif;max-width:320px"><div style="font-size:48px;margin-bottom:16px">⛳</div><h2>Partee Golf</h2><p style="color:#a0aec0;margin-top:12px;font-size:14px">'+msg+'</p><button onclick="location.reload()" style="margin-top:20px;padding:12px 32px;background:#e94560;color:#fff;border:none;border-radius:12px;font-size:16px;cursor:pointer">Recargar</button></div></div>'};
+  var errHTML=function(msg){return'<div style="min-height:100vh;background:#0a0a1a;display:flex;align-items:center;justify-content:center;padding:24px"><div style="text-align:center;color:#fff;font-family:-apple-system,sans-serif;max-width:320px"><div style="border-radius:10px;margin-bottom:16px"><img src="/icon-192.png" width="48" height="48" style="border-radius:10px"><h2>Partee Golf</h2><p style="color:#a0aec0;margin-top:12px;font-size:14px">'+msg+'</p><button onclick="location.reload()" style="margin-top:20px;padding:12px 32px;background:#e94560;color:#fff;border:none;border-radius:12px;font-size:16px;cursor:pointer">Recargar</button></div></div>'};
   var missing=[];
   if(typeof React==="undefined")missing.push("React");
   if(typeof ReactDOM==="undefined")missing.push("ReactDOM");
