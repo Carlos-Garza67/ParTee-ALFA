@@ -1,1 +1,8 @@
-{"buildCommand":"","outputDirectory":"public","rewrites":[{"source":"/(.*)", "destination":"/index.html"}]}
+{
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "rewrites": [
+    {"source": "/photos/:path*", "destination": "/:path*"},
+    {"source": "/((?!.*\\.(?:jpg|jpeg|png|webp|gif|svg|ico|js|css)$).*)", "destination": "/public/index.html"}
+  ]
+}
