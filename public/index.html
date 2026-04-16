@@ -102,6 +102,63 @@
 .ax-section{background:#fff;margin-left:-16px;margin-right:-16px;padding:14px 16px}
 .badge-sm{padding:2px 7px;border-radius:5px;font-size:9px;font-weight:700}
 *{-webkit-tap-highlight-color:transparent}html,body{background:var(--app-bg,#080810);overflow-x:hidden}
+
+/* ========== RESPONSIVE DESIGN SYSTEM ========== */
+:root{--app-max:430px;--app-pad:16px}
+.app-container{max-width:var(--app-max);margin:0 auto;background:var(--app-bg,#080810);min-height:100dvh;position:relative;width:100%}
+
+/* Auth screens (Login, Reset) - transparent to show body bg on tablet+ */
+.auth-wrap{position:relative;z-index:1}
+.auth-card{position:relative}
+
+/* Tablet: 768px+ */
+@media (min-width:768px){
+  :root{--app-max:600px;--app-pad:20px}
+  body{background:radial-gradient(circle at 30% 20%,rgba(0,184,148,.08),transparent 50%),radial-gradient(circle at 70% 80%,rgba(233,69,96,.08),transparent 50%),var(--app-bg,#080810) !important}
+  .app-container{box-shadow:0 0 80px rgba(0,0,0,.5);border-left:1px solid rgba(255,255,255,.05);border-right:1px solid rgba(255,255,255,.05)}
+  .bnav{max-width:600px !important;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
+  .modal-box{max-width:560px !important;border-radius:24px !important;margin-bottom:20px;max-height:calc(100vh - 80px) !important}
+  .modal-bg{align-items:center !important;padding-top:0 !important}
+  .bsheet{max-width:600px !important;left:50% !important;transform:translateX(-50%);right:auto !important;border-radius:24px 24px 0 0}
+  /* Auth cards get visible frame on tablet+ */
+  .auth-card{padding:40px 36px;background:var(--card-bg,rgba(18,18,31,.6));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:24px;border:1px solid rgba(255,255,255,.08);box-shadow:0 20px 60px rgba(0,0,0,.4)}
+}
+
+/* Desktop: 1024px+ */
+@media (min-width:1024px){
+  :root{--app-max:520px;--app-pad:20px}
+  body{background:radial-gradient(circle at 25% 20%,rgba(0,184,148,.10),transparent 45%),radial-gradient(circle at 75% 80%,rgba(233,69,96,.10),transparent 45%),radial-gradient(circle at 50% 50%,rgba(15,52,96,.08),transparent 70%),var(--app-bg,#080810) !important;min-height:100vh}
+  .app-container{box-shadow:0 0 100px rgba(0,0,0,.6),0 30px 80px rgba(0,0,0,.4);border-left:1px solid rgba(255,255,255,.08);border-right:1px solid rgba(255,255,255,.08)}
+  .bnav{max-width:520px !important;box-shadow:0 -4px 24px rgba(0,0,0,.4)}
+  .modal-box{max-width:520px !important;max-height:calc(100vh - 100px) !important}
+  .bsheet{max-width:520px !important}
+}
+
+/* Desktop XL: 1280px+ */
+@media (min-width:1280px){
+  :root{--app-max:560px}
+  .bnav{max-width:560px !important}
+  .modal-box{max-width:540px !important}
+  .bsheet{max-width:560px !important}
+}
+
+/* Prevent horizontal overflow */
+img,video,iframe{max-width:100%;height:auto}
+input,textarea,select{max-width:100%;box-sizing:border-box}
+
+/* Tables responsive */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;scrollbar-width:thin}
+.scorecard-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:0 -16px;padding:0 16px}
+
+/* Touch targets */
+@media (hover:none) and (pointer:coarse){
+  button,[role="button"]{min-height:40px}
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
 </style>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-0BQWH11JPN"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-0BQWH11JPN")</script>
@@ -313,7 +370,7 @@ function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[sho
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.txt} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     {count>0&&<div style={{position:"absolute",top:0,right:0,width:16,height:16,borderRadius:10,background:C.acc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff"}}>{count>9?"9+":count}</div>}
   </div>
-  {show&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingTop:40}} onClick={()=>setShow(false)}><div onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:430,maxHeight:"calc(100vh - 40px)",overflowY:"auto",WebkitOverflowScrolling:"touch",padding:24,paddingBottom:"max(24px,env(safe-area-inset-bottom,24px))",border:"1px solid "+C.bd,boxShadow:"0 -4px 24px rgba(0,0,0,.1)"}}>
+  {show&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingTop:40}} onClick={()=>setShow(false)}><div onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:"min(100%, var(--app-max, 430px))",maxHeight:"calc(100vh - 40px)",overflowY:"auto",WebkitOverflowScrolling:"touch",padding:24,paddingBottom:"max(24px,env(safe-area-inset-bottom,24px))",border:"1px solid "+C.bd,boxShadow:"0 -4px 24px rgba(0,0,0,.1)"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
       <h3 style={{color:C.txt,fontSize:18,fontWeight:800,margin:0,letterSpacing:"-0.02em"}}>{t("Notificaciones")}</h3>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -397,7 +454,7 @@ function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[p
   async function doReg(overrideCid){setBusy(true);setMsg("");const cid=overrideCid||courseId;const{error}=await signUp(e,pw,nm,role,role==="course_admin"?cid:null);if(!error){const updates={admin_facility_type:facType||null};if(role==="course_admin"){updates.user_role="course_admin";if(cid)updates.managed_course_id=cid}await sb.from("user_profiles").update(updates).eq("email",e)}if(error)setMsg(error.message);else setMsg("OK:Confirma tu email");setBusy(false)}
   const prevMode=()=>{if(mode==="pickCourse"){setMode("pickFacType");setNewLoc(false)}else if(mode==="pickFacType")setMode("role");else setMode("register");setMsg("")};
   const inp={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"14px 16px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12};
-  return<div style={{height:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,overflow:"auto"}}><div className="fi" style={{width:"100%",maxWidth:400}}>
+  return<div className="auth-wrap" style={{minHeight:"100dvh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,overflow:"auto"}}><div className="fi auth-card" style={{width:"100%",maxWidth:420}}>
     <div style={{textAlign:"center",marginBottom:36,position:"relative"}}><div style={{position:"absolute",top:"-30%",left:"50%",transform:"translate(-50%,-50%)",width:200,height:200,borderRadius:"50%",background:`radial-gradient(circle,${C.acc}08,transparent 70%)`,pointerEvents:"none"}}/><ParteeLogo h={120} mc={C.acc} tc={C.txt} bg={C.bg}/><p style={{fontSize:11,color:C.ts,marginTop:12,letterSpacing:".18em",fontWeight:500}}>FIND · CONNECT · PLAY</p></div>
     {mode==="login"&&<><input placeholder={t("Email")} type="email" value={e} onChange={x=>setE(x.target.value)} style={inp}/><div style={{position:"relative",marginBottom:12}}><input placeholder={t("Contraseña")} type={showPw?"text":"password"} value={pw} onChange={x=>setPw(x.target.value)} onKeyDown={x=>x.key==="Enter"&&go()} style={{...inp,marginBottom:0,paddingRight:48}}/><EyeBtn on={showPw} toggle={()=>setShowPw(!showPw)}/></div></>}
     {mode==="register"&&<><input placeholder={t("Nombre")} value={nm} onChange={x=>setNm(x.target.value)} style={inp}/><input placeholder={t("Email")} type="email" value={e} onChange={x=>setE(x.target.value)} style={inp}/><div style={{position:"relative",marginBottom:12}}><input placeholder={t("Contraseña")+" (mín 6)"} type={showPw?"text":"password"} value={pw} onChange={x=>setPw(x.target.value)} style={{...inp,marginBottom:0,paddingRight:48}}/><EyeBtn on={showPw} toggle={()=>setShowPw(!showPw)}/></div><div style={{position:"relative",marginBottom:12}}><input placeholder={t("Confirmar contraseña")} type={showPw2?"text":"password"} value={pw2} onChange={x=>setPw2(x.target.value)} style={{...inp,marginBottom:0,paddingRight:48}}/><EyeBtn on={showPw2} toggle={()=>setShowPw2(!showPw2)}/></div></>}
@@ -1264,7 +1321,7 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Cerrar Sesión")}</button></div></div>;
   const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Dashboard"},{i:ic("calendar",20,C.txt),l:"Reservas"},{i:ic("clock",20,C.txt),l:"Slots"},{i:ic("tag",20,C.txt),l:"Promos"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Perfil"}];
-  return<div style={{maxWidth:430,margin:"0 auto",background:C.bg,minHeight:"100dvh"}}>
+  return<div className="app-container" style={{background:C.bg}}>
     <div style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{padding:"3px 9px",borderRadius:7,background:C.grn+"15",border:"1px solid "+C.grn+"25"}}><span style={{fontSize:9,fontWeight:700,color:C.grn}}>ADMIN</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
     <div style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<PremiumInsights course={course}/>}{tab===5&&<AdminProfile course={course} onOut={out} onRefresh={loadC}/>}</div>
     <div className="bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
@@ -1295,8 +1352,8 @@ function PlayerOnboarding(){const{s,p,ref}=useA();const[nm,setNm]=useState(p?.fu
 function ResetPasswordForm(){const{setRecovery,out}=useA();const[pw,setPw]=useState("");const[pw2,setPw2]=useState("");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);const[done,setDone]=useState(false);const[showPw,setShowPw]=useState(false);
   const submit=async()=>{if(!pw||!pw2)return setMsg(t("Completa campos"));if(pw!==pw2)return setMsg(t("Las contraseñas no coinciden"));if(pw.length<6)return setMsg(t("Contraseña mínimo 6 caracteres"));setBusy(true);const{error}=await sb.auth.updateUser({password:pw});setBusy(false);if(error){setMsg(error.message);return}try{localStorage.removeItem("partee_recovery");sessionStorage.removeItem("partee_recovery")}catch(e){}setDone(true)};
   const inp={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"14px 16px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12};
-  if(done)return<div style={{height:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div className="fi" style={{width:"100%",maxWidth:400,textAlign:"center"}}><div style={{width:80,height:80,borderRadius:40,background:`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg></div><h2 style={{color:C.txt,fontSize:22,fontWeight:800,marginBottom:8}}>Contraseña actualizada</h2><p style={{color:C.ts,fontSize:13,marginBottom:24}}>Tu contraseña ha sido cambiada exitosamente.</p><button onClick={()=>{try{localStorage.removeItem("partee_recovery");sessionStorage.removeItem("partee_recovery")}catch(e){}setRecovery(false);window.location.href=window.location.origin}} style={{padding:"14px 40px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}}>Continuar a Partee</button></div></div>;
-  return<div style={{height:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div className="fi" style={{width:"100%",maxWidth:400}}><div style={{textAlign:"center",marginBottom:30}}><ParteeLogo h={80} mc={C.acc} tc={C.txt} bg={C.bg}/><h2 style={{color:C.txt,fontSize:20,fontWeight:800,marginTop:16}}>Nueva contraseña</h2><p style={{color:C.ts,fontSize:13,marginTop:6}}>Ingresa tu nueva contraseña para restablecer el acceso</p></div><div style={{position:"relative",marginBottom:12}}><input placeholder="Nueva contraseña (mín 6)" type={showPw?"text":"password"} value={pw} onChange={x=>setPw(x.target.value)} style={{...inp,marginBottom:0,paddingRight:48}}/><EyeBtn on={showPw} toggle={()=>setShowPw(!showPw)}/></div><div style={{position:"relative",marginBottom:12}}><input placeholder="Confirmar contraseña" type={showPw?"text":"password"} value={pw2} onChange={x=>setPw2(x.target.value)} onKeyDown={x=>x.key==="Enter"&&submit()} style={{...inp,marginBottom:0,paddingRight:48}}/></div>{msg&&<p style={{color:C.acc,fontSize:13,marginBottom:10,textAlign:"center"}}>{msg}</p>}<button onClick={submit} disabled={busy} style={{width:"100%",padding:16,background:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1}}>Cambiar contraseña</button><p onClick={()=>{try{localStorage.removeItem("partee_recovery");sessionStorage.removeItem("partee_recovery")}catch(e){}setRecovery(false);out()}} style={{textAlign:"center",marginTop:16,fontSize:13,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</p></div></div>}
+  if(done)return<div className="auth-wrap" style={{minHeight:"100dvh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div className="fi auth-card" style={{width:"100%",maxWidth:420,textAlign:"center"}}><div style={{width:80,height:80,borderRadius:40,background:`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg></div><h2 style={{color:C.txt,fontSize:22,fontWeight:800,marginBottom:8}}>Contraseña actualizada</h2><p style={{color:C.ts,fontSize:13,marginBottom:24}}>Tu contraseña ha sido cambiada exitosamente.</p><button onClick={()=>{try{localStorage.removeItem("partee_recovery");sessionStorage.removeItem("partee_recovery")}catch(e){}setRecovery(false);window.location.href=window.location.origin}} style={{padding:"14px 40px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}}>Continuar a Partee</button></div></div>;
+  return<div className="auth-wrap" style={{minHeight:"100dvh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div className="fi auth-card" style={{width:"100%",maxWidth:420}}><div style={{textAlign:"center",marginBottom:30}}><ParteeLogo h={80} mc={C.acc} tc={C.txt} bg={C.bg}/><h2 style={{color:C.txt,fontSize:20,fontWeight:800,marginTop:16}}>Nueva contraseña</h2><p style={{color:C.ts,fontSize:13,marginTop:6}}>Ingresa tu nueva contraseña para restablecer el acceso</p></div><div style={{position:"relative",marginBottom:12}}><input placeholder="Nueva contraseña (mín 6)" type={showPw?"text":"password"} value={pw} onChange={x=>setPw(x.target.value)} style={{...inp,marginBottom:0,paddingRight:48}}/><EyeBtn on={showPw} toggle={()=>setShowPw(!showPw)}/></div><div style={{position:"relative",marginBottom:12}}><input placeholder="Confirmar contraseña" type={showPw?"text":"password"} value={pw2} onChange={x=>setPw2(x.target.value)} onKeyDown={x=>x.key==="Enter"&&submit()} style={{...inp,marginBottom:0,paddingRight:48}}/></div>{msg&&<p style={{color:C.acc,fontSize:13,marginBottom:10,textAlign:"center"}}>{msg}</p>}<button onClick={submit} disabled={busy} style={{width:"100%",padding:16,background:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1}}>Cambiar contraseña</button><p onClick={()=>{try{localStorage.removeItem("partee_recovery");sessionStorage.removeItem("partee_recovery")}catch(e){}setRecovery(false);out()}} style={{textAlign:"center",marginTop:16,fontSize:13,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</p></div></div>}
 
 function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,setTab]=useState(0);const[scr,setScr]=useState("home");const[co,setCo]=useState(null);const[sl,setSl]=useState(null);const[okd,setOkd]=useState(null);const[payResult,setPayResult]=useState(null);const[skipped,setSkipped]=useState(false);const[installEvt,setInstallEvt]=useState(null);const[showInstall,setShowInstall]=useState(true);
   const needsOnboarding=p?.user_role==="player"&&!p?.onboarding_complete;
@@ -1315,7 +1372,7 @@ function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,
   const sc=theme==="dark"?"#fff":"#111827";
   const vsIcon="<svg width='20' height='20' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><line x1='17' y1='3' x2='7' y2='18' stroke='"+sc+"' stroke-width='2' stroke-linecap='round'/><line x1='7' y1='18' x2='4' y2='16.5' stroke='"+sc+"' stroke-width='2.8' stroke-linecap='round'/><line x1='7' y1='3' x2='17' y2='18' stroke='"+sc+"' stroke-width='2' stroke-linecap='round'/><line x1='17' y1='18' x2='20' y2='16.5' stroke='"+sc+"' stroke-width='2.8' stroke-linecap='round'/><circle cx='17' cy='3' r='1.2' fill='"+sc+"'/><circle cx='7' cy='3' r='1.2' fill='"+sc+"'/></svg>";
   const ptabs=[{i:ic("compass",20,C.txt),l:t("Explorar")},{i:ic("calendar",20,C.txt),l:t("Reservas")},{i:ic("swords",20,C.txt),l:"Versus"},{i:ic("users",20,C.txt),l:t("Amigos")},{i:ic("user",20,C.txt),l:t("Perfil")}];
-  return<div style={{maxWidth:430,margin:"0 auto",background:C.bg,minHeight:"100dvh"}}>
+  return<div className="app-container" style={{background:C.bg}}>
     {tab!==0&&<div style={{background:C.bg,padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd}}><div style={{display:"flex",alignItems:"center",gap:6}}><ParteeMark size={22} color={C.txt}/><span style={{fontSize:18,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>{ptabs[tab]?.l||""}</span></div><div style={{display:"flex",alignItems:"center",gap:8}}><NotifBell/></div></div>}
     <div style={{paddingBottom:scr==="home"?60:0}}>
       {needsOnboarding&&skipped&&scr==="home"&&tab===0&&<div onClick={()=>setSkipped(false)} style={{margin:"0 16px 8px",padding:"10px 14px",background:`linear-gradient(135deg,${C.pri}20,${C.acc}15)`,borderRadius:12,border:"1px solid "+C.pri+"30",cursor:"pointer",display:"flex",alignItems:"center",gap:10}}><span dangerouslySetInnerHTML={{__html:ic("user",18,C.txt)}}/><div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:C.txt}}>{t("Completa tu perfil")}</div><div style={{fontSize:11,color:C.ts}}>{t("Para reservar tee times y más")}</div></div><span style={{color:C.acc,fontSize:12,fontWeight:700}}>{t("Completar")} →</span></div>}
