@@ -107,6 +107,9 @@
 :root{--app-max:430px;--app-pad:16px}
 .app-container{max-width:var(--app-max);margin:0 auto;background:var(--app-bg,#080810);min-height:100dvh;position:relative;width:100%}
 
+/* Admin uses wider layout - optimized for desktop dashboard usage */
+.admin-container{max-width:430px;margin:0 auto;background:var(--app-bg,#080810);min-height:100dvh;position:relative;width:100%}
+
 /* Auth screens (Login, Reset) - transparent to show body bg on tablet+ */
 .auth-wrap{position:relative;z-index:1}
 .auth-card{position:relative}
@@ -120,8 +123,11 @@
   .modal-box{max-width:560px !important;border-radius:24px !important;margin-bottom:20px;max-height:calc(100vh - 80px) !important}
   .modal-bg{align-items:center !important;padding-top:0 !important}
   .bsheet{max-width:600px !important;left:50% !important;transform:translateX(-50%);right:auto !important;border-radius:24px 24px 0 0}
-  /* Auth cards get visible frame on tablet+ */
   .auth-card{padding:40px 36px;background:var(--card-bg,rgba(18,18,31,.6));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:24px;border:1px solid rgba(255,255,255,.08);box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  /* Admin gets more width on tablet */
+  .admin-container{max-width:768px;box-shadow:0 0 60px rgba(0,0,0,.3)}
+  .admin-bnav{max-width:768px !important}
+  .admin-content{padding:20px 24px 70px !important}
 }
 
 /* Desktop: 1024px+ */
@@ -132,6 +138,33 @@
   .bnav{max-width:520px !important;box-shadow:0 -4px 24px rgba(0,0,0,.4)}
   .modal-box{max-width:520px !important;max-height:calc(100vh - 100px) !important}
   .bsheet{max-width:520px !important}
+  /* Admin: CSS Grid full-width layout - naturally responsive */
+  .admin-container{
+    max-width:100% !important;width:100% !important;margin:0 !important;padding:0 !important;
+    display:grid !important;
+    grid-template-columns:240px minmax(0, 1fr);
+    grid-template-rows:auto 1fr;
+    grid-template-areas:"sidebar header" "sidebar content";
+    min-height:100vh;
+    box-shadow:none !important;border:none !important
+  }
+  .admin-header{grid-area:header;padding:14px 28px !important;border-radius:0 !important;position:sticky;top:0}
+  .admin-content{grid-area:content;padding:28px 32px !important;max-width:1400px;width:100%;margin:0 auto;box-sizing:border-box}
+  .admin-bnav{
+    grid-area:sidebar !important;
+    position:static !important;top:auto !important;left:auto !important;bottom:auto !important;right:auto !important;
+    width:100% !important;max-width:100% !important;height:auto !important;max-height:none !important;
+    transform:none !important;
+    flex-direction:column !important;align-items:stretch !important;justify-content:flex-start !important;
+    padding:20px 12px !important;gap:4px !important;
+    border-top:none !important;border-right:1px solid var(--bd,rgba(255,255,255,.06)) !important;
+    box-shadow:none !important;
+    background:var(--nav-bg,rgba(8,8,16,.97))
+  }
+  .admin-bnav>div{flex:0 0 auto !important;padding:12px 14px !important;border-radius:10px !important;text-align:left !important;display:flex !important;align-items:center !important;gap:12px}
+  .admin-bnav>div>div:first-child{padding:0 !important}
+  .admin-bnav>div>div:nth-child(2){font-size:14px !important;margin-top:0 !important}
+  .admin-content .stat-grid{display:grid !important;grid-template-columns:repeat(4, 1fr) !important;gap:14px !important}
 }
 
 /* Desktop XL: 1280px+ */
@@ -140,6 +173,8 @@
   .bnav{max-width:560px !important}
   .modal-box{max-width:540px !important}
   .bsheet{max-width:560px !important}
+  .admin-container{grid-template-columns:260px minmax(0, 1fr) !important}
+  .admin-content{max-width:1600px !important;padding:32px 40px !important}
 }
 
 /* Prevent horizontal overflow */
@@ -1077,7 +1112,7 @@ function AdminDash({course}){const[st,setSt]=useState(null);const[monthly,setMon
   const maxP=Math.max(...monthly.map(m=>m.players),1);
   return<div className="fi">
     <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14,letterSpacing:"-0.02em"}}>{t("Resumen")}</h3>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}><div className="sc"><div className="n" style={{color:C.grn}}>${fm(st.rev)}</div><div className="l">{t("Ingresos")}</div></div><div className="sc"><div className="n" style={{color:C.acc}}>{st.bks}</div><div className="l">{t("Reservas")}</div></div><div className="sc"><div className="n" style={{color:C.gld}}>{st.occ}%</div><div className="l">{t("Ocupación")}</div></div><div className="sc"><div className="n" style={{color:C.txt}}><span dangerouslySetInnerHTML={{__html:ic("star",14,C.gld)}}/>{st.avg}</div><div className="l">Rating</div></div></div>
+    <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}><div className="sc"><div className="n" style={{color:C.grn}}>${fm(st.rev)}</div><div className="l">{t("Ingresos")}</div></div><div className="sc"><div className="n" style={{color:C.acc}}>{st.bks}</div><div className="l">{t("Reservas")}</div></div><div className="sc"><div className="n" style={{color:C.gld}}>{st.occ}%</div><div className="l">{t("Ocupación")}</div></div><div className="sc"><div className="n" style={{color:C.txt}}><span dangerouslySetInnerHTML={{__html:ic("star",14,C.gld)}}/>{st.avg}</div><div className="l">Rating</div></div></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}><div className="sc" style={{border:"1px solid "+C.grn+"30"}}><div className="n" style={{color:C.grn}}>${fm(st.settledAmt||0)}</div><div className="l">Liquidado</div></div><div className="sc" style={{border:"1px solid "+C.gld+"30"}}><div className="n" style={{color:C.gld}}>${fm(st.pendSettle||0)}</div><div className="l">Por liquidar</div></div></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}><div className="sc" style={{border:"1px solid #6c5ce730"}}><div className="n" style={{color:"#6c5ce7"}}>{capCount}</div><div className="l">{capLabel}</div></div><div className="sc" style={{border:"1px solid "+C.grn+"30"}}><div className="n" style={{color:C.grn}}>{course.has_food_service?"Sí":"No"} / {course.has_pro_shop?"Sí":"No"}</div><div className="l">Comida / Shop</div></div></div>
     <h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10,letterSpacing:"-0.02em"}}>Último Periodo ({st.lastMoLabel})</h4>
@@ -1098,7 +1133,7 @@ function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=
   const confirmed=bks.filter(b=>b.status==="confirmed");const totalRev=confirmed.reduce((s,b)=>s+Number(b.total_cost||0),0);const totalPax=confirmed.reduce((s,b)=>s+(b.party_size||0),0);
   return<div className="fi">
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><button onClick={()=>navDay(-1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/><div style={{textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>{selDate===today&&<div style={{fontSize:10,color:C.acc,fontWeight:600}}>HOY</div>}<input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} style={{marginTop:4,background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"center"}}/></div><button onClick={()=>navDay(1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{bks.length}</div><div className="l">{t("Reservas")}</div></div><div className="sc"><div className="n" style={{color:C.grn,fontSize:15}}>${fm(totalRev)}</div><div className="l">{t("Ingresos")}</div></div><div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{totalPax}</div><div className="l">{t("Jugadores")}</div></div></div>
+    <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{bks.length}</div><div className="l">{t("Reservas")}</div></div><div className="sc"><div className="n" style={{color:C.grn,fontSize:15}}>${fm(totalRev)}</div><div className="l">{t("Ingresos")}</div></div><div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{totalPax}</div><div className="l">{t("Jugadores")}</div></div></div>
     {ld?<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>:bks.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin reservas para {dayLabel(selDate)}</div>:bks.map(b=>{const st=stc[b.status]||stc.pending;const up=b.user_profiles;return<div key={b.id} className="ar" style={{flexDirection:"column",gap:6}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%"}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:16,fontWeight:800,color:C.txt}}>{b.booking_time?.slice(0,5)}</div><div style={{width:4,height:4,borderRadius:2,background:C.tm}}/><span style={{fontSize:13,fontWeight:600,color:C.txt}}>{b.party_size} jug</span></div><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"2px 8px",borderRadius:6}}>{st.l}</span></div>
       {b.booking_code&&<div style={{fontSize:11,fontFamily:"'JetBrains Mono',monospace",color:C.gld,letterSpacing:1,fontWeight:700}}>{b.booking_code}</div>}
@@ -1321,10 +1356,10 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Cerrar Sesión")}</button></div></div>;
   const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Dashboard"},{i:ic("calendar",20,C.txt),l:"Reservas"},{i:ic("clock",20,C.txt),l:"Slots"},{i:ic("tag",20,C.txt),l:"Promos"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Perfil"}];
-  return<div className="app-container" style={{background:C.bg}}>
-    <div style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{padding:"3px 9px",borderRadius:7,background:C.grn+"15",border:"1px solid "+C.grn+"25"}}><span style={{fontSize:9,fontWeight:700,color:C.grn}}>ADMIN</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
-    <div style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<PremiumInsights course={course}/>}{tab===5&&<AdminProfile course={course} onOut={out} onRefresh={loadC}/>}</div>
-    <div className="bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
+  return<div className="admin-container" style={{background:C.bg}}>
+    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{padding:"3px 9px",borderRadius:7,background:C.grn+"15",border:"1px solid "+C.grn+"25"}}><span style={{fontSize:9,fontWeight:700,color:C.grn}}>ADMIN</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
+    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<PremiumInsights course={course}/>}{tab===5&&<AdminProfile course={course} onOut={out} onRefresh={loadC}/>}</div>
+    <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
   </div>}
 
 function PlayerOnboarding(){const{s,p,ref}=useA();const[nm,setNm]=useState(p?.full_name||"");const[city,setCity]=useState(p?.city||"");const[st,setSt]=useState(p?.state||"");const[ph,setPh]=useState(p?.phone||"");const[bd,setBd]=useState(p?.birth_date||"");const[hand,setHand]=useState(p?.handedness||"diestro");const[nick,setNick]=useState(p?.nickname||"");const[hc,setHc]=useState(p?.handicap?.toString()||"");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);
