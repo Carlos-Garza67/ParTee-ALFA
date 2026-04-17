@@ -405,9 +405,13 @@ function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[sho
   const ago=(d)=>{const ms=Date.now()-new Date(d).getTime();const m=Math.floor(ms/60000);if(m<1)return"ahora";if(m<60)return m+"m";const h=Math.floor(m/60);if(h<24)return h+"h";return Math.floor(h/24)+"d"};
   const ico={booking:ic("calendar",16,C.grn),payment:ic("creditcard",16,C.txt),alert:ic("bell",16,C.acc),friend_request:ic("users",16,C.grn),share_request:ic("handshake",16,C.gld),match_update:ic("swords",16,C.acc),booking_reminder:ic("clock",16,C.gld)};
   if(!s)return null;
+  const panelRef=useRef(null);const touchRef=useRef({y:0,dy:0});
+  const onTS=e=>{touchRef.current.y=e.touches[0].clientY;touchRef.current.dy=0};
+  const onTM=e=>{const dy=e.touches[0].clientY-touchRef.current.y;if(dy<0)return;touchRef.current.dy=dy;if(panelRef.current)panelRef.current.style.transform=`translateY(${dy}px)`};
+  const onTE=()=>{if(touchRef.current.dy>80){setShow(false)}else if(panelRef.current){panelRef.current.style.transform="translateY(0)";panelRef.current.style.transition="transform .25s ease"}setTimeout(()=>{if(panelRef.current){panelRef.current.style.transition=""}},250)};
   const panel=show&&ReactDOM.createPortal(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShow(false)}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"80vh",minHeight:"45vh",display:"flex",flexDirection:"column",borderTop:"1px solid "+C.bd,boxShadow:"0 -8px 40px rgba(0,0,0,.5)"}}>
-      <div style={{padding:"12px 0 0",flexShrink:0}}>
+    <div ref={panelRef} onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"80vh",minHeight:"45vh",display:"flex",flexDirection:"column",borderTop:"1px solid "+C.bd,boxShadow:"0 -8px 40px rgba(0,0,0,.5)",willChange:"transform"}}>
+      <div onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE} style={{padding:"12px 0 0",flexShrink:0,cursor:"grab",touchAction:"none"}}>
         <div style={{width:36,height:4,borderRadius:2,background:C.w20||"rgba(255,255,255,.2)",margin:"0 auto 12px"}}/>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 20px 14px",borderBottom:"1px solid "+C.bd}}>
           <h3 style={{color:C.txt,fontSize:18,fontWeight:800,margin:0,letterSpacing:"-0.02em"}}>{t("Notificaciones")}</h3>
