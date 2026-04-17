@@ -405,25 +405,27 @@ function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[sho
   const ago=(d)=>{const ms=Date.now()-new Date(d).getTime();const m=Math.floor(ms/60000);if(m<1)return"ahora";if(m<60)return m+"m";const h=Math.floor(m/60);if(h<24)return h+"h";return Math.floor(h/24)+"d"};
   const ico={booking:ic("calendar",16,C.grn),payment:ic("creditcard",16,C.txt),alert:ic("bell",16,C.acc),friend_request:ic("users",16,C.grn),share_request:ic("handshake",16,C.gld),match_update:ic("swords",16,C.acc),booking_reminder:ic("clock",16,C.gld)};
   if(!s)return null;
-  const panel=show&&ReactDOM.createPortal(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setShow(false)}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:430,maxHeight:"85vh",display:"flex",flexDirection:"column",border:"1px solid "+C.bd,borderBottom:"none",boxShadow:"0 -4px 24px rgba(0,0,0,.3)"}}>
-      <div style={{padding:"20px 20px 14px",flexShrink:0,borderBottom:"1px solid "+C.bd}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+  const panel=show&&ReactDOM.createPortal(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:9999,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={()=>setShow(false)}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"80vh",minHeight:"45vh",display:"flex",flexDirection:"column",borderTop:"1px solid "+C.bd,boxShadow:"0 -8px 40px rgba(0,0,0,.5)"}}>
+      <div style={{padding:"12px 0 0",flexShrink:0}}>
+        <div style={{width:36,height:4,borderRadius:2,background:C.w20||"rgba(255,255,255,.2)",margin:"0 auto 12px"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 20px 14px",borderBottom:"1px solid "+C.bd}}>
           <h3 style={{color:C.txt,fontSize:18,fontWeight:800,margin:0,letterSpacing:"-0.02em"}}>{t("Notificaciones")}</h3>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {notifs.length>0&&<button onClick={clearAll} style={{background:"none",border:"none",color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t("Borrar todo")}</button>}
-            <button onClick={()=>setShow(false)} style={{background:"none",border:"none",cursor:"pointer",padding:0}} dangerouslySetInnerHTML={{__html:ic("x",18,C.tm)}}/>
+            <button onClick={()=>setShow(false)} style={{background:"none",border:"none",cursor:"pointer",padding:4}} dangerouslySetInnerHTML={{__html:ic("x",20,C.tm)}}/>
           </div>
         </div>
       </div>
-      <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:"0 20px",paddingBottom:"max(20px,env(safe-area-inset-bottom,20px))"}}>
-        {ld?<div style={{padding:"16px 0"}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60} mb={10}/><Skeleton w="80%" h={16}/></div>:notifs.length===0?<div style={{textAlign:"center",padding:"60px 0",color:C.tm}}><div style={{marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("bell",36,C.bd)}}/><div style={{fontSize:14,fontWeight:600}}>{t("Sin notificaciones")}</div><div style={{fontSize:12,color:C.tm,marginTop:6}}>Aquí aparecerán tus alertas</div></div>:
+      <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:"0 20px",minHeight:0}}>
+        {ld?<div style={{padding:"20px 0"}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60} mb={10}/><Skeleton w="80%" h={16}/></div>:notifs.length===0?<div style={{textAlign:"center",padding:"50px 0",color:C.tm}}><div style={{marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("bell",40,C.bd)}}/><div style={{fontSize:15,fontWeight:600}}>{t("Sin notificaciones")}</div><div style={{fontSize:12,color:C.tm,marginTop:6}}>Aquí aparecerán tus alertas</div></div>:
         notifs.map(n=>{const routeMap={booking:"tab:1",share_request:"tab:1:requests",friend_request:"tab:3",match_update:"tab:2",booking_reminder:"tab:1"};const route=n.action_route||routeMap[n.type]||null;const label=n.action_label||(route?{booking:t("Ver reserva"),share_request:t("Ver solicitud"),friend_request:t("Ver amigos"),match_update:t("Ver grupo"),booking_reminder:t("Ver reserva")}[n.type]||t("Ver"):null);const hasAction=!!route;return<div key={n.id} onClick={()=>{if(hasAction){setShow(false);window.__navigate?.(route)}}} style={{display:"flex",gap:10,padding:"12px 0",borderBottom:"1px solid "+C.bd,alignItems:"flex-start",cursor:hasAction?"pointer":"default"}}>
           <div style={{width:34,height:34,borderRadius:10,background:n.is_read?(C.glass||C.w04):(C.acc+"10"),border:"1px solid "+(n.is_read?(C.glassBd||C.bd):C.acc+"20"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ico[n.type]||ic("bell",16,C.txt)}}/>
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:n.is_read?500:700,color:C.txt}}>{n.title}</div><div style={{fontSize:12,color:C.ts,marginTop:2,lineHeight:1.4}}>{n.message}</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}><span style={{fontSize:10,color:C.tm}}>{ago(n.created_at)}</span>{hasAction&&<span style={{fontSize:10,fontWeight:700,color:C.grn,display:"flex",alignItems:"center",gap:3}}>{label} <span dangerouslySetInnerHTML={{__html:ic("right",10,C.grn)}}/></span>}</div></div>
           <button onClick={e=>{e.stopPropagation();deleteOne(n.id)}} style={{background:"none",border:"none",cursor:"pointer",padding:4,flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",14,C.tm)}}/>
         </div>})}
       </div>
+      <div style={{flexShrink:0,height:"max(16px,env(safe-area-inset-bottom,16px))"}}/>
     </div>
   </div>,document.body);
   return<><div onClick={openPanel} style={{position:"relative",cursor:"pointer",padding:4}}>
