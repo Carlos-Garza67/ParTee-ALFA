@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.0.0">
+<meta name="version" content="17.10.0">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -381,6 +381,9 @@ const greet=()=>{const h=new Date().getHours();return h<12?t("Buenos días"):h<1
 const fmtNames={stroke_play:"Stroke Play",stableford:"Stableford",match_play:"Match Play",scramble:"Scramble",four_ball:"Four-Ball"};
 const n7=()=>Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toISOString().split("T")[0]});
 
+const LISTING_STATUS={draft:{l:"Borrador",c:"#a0aec0",d:"Completa los pasos para enviarla a revisión"},pending_review:{l:"En Revisión",c:"#fdcb6e",d:"Nuestro equipo está revisando tu locación"},active:{l:"Publicada",c:"#00d18f",d:"Visible para jugadores"},suspended:{l:"Suspendida",c:"#e94560",d:"Contacta a soporte para reactivar"}};
+function getCourseReadiness(course,slotsCount,holesCount){const ft=course?.facility_type||"campo";const photos=(course?.photo_urls||[]).length;const desc=(course?.description||"").trim();const checks=[{k:"photos",l:"Al menos 3 fotos",done:photos>=3,hint:photos+"/3"},{k:"description",l:"Descripción (mín 100 caracteres)",done:desc.length>=100,hint:desc.length+"/100"},{k:"fees",l:"Green fees (mín y máx)",done:!!(course?.green_fee_min&&course?.green_fee_max&&Number(course.green_fee_min)>0),hint:""},{k:"address",l:"Dirección completa",done:!!(course?.full_address||course?.address),hint:""},{k:"phone",l:"Teléfono de contacto",done:!!course?.phone_number,hint:""},{k:"hours",l:"Horario y días de operación",done:!!(course?.operating_hours&&course?.operating_days),hint:""},{k:"timezone",l:"Zona horaria",done:!!course?.timezone,hint:""},{k:"slots",l:"Al menos 3 slots publicados",done:(slotsCount||0)>=3,hint:(slotsCount||0)+"/3"}];if(ft==="campo")checks.push({k:"holes",l:"18 hoyos configurados",done:(holesCount||0)>=18,hint:(holesCount||0)+"/18"});if(ft==="plataforma")checks.push({k:"stations",l:"Número de bahías",done:!!(course?.stations_count&&Number(course.stations_count)>0),hint:""});if(ft==="simulador")checks.push({k:"cabins",l:"Cabinas y tecnología",done:!!(course?.cabins_count&&Number(course.cabins_count)>0&&course?.simulator_brand),hint:""});const doneCount=checks.filter(c=>c.done).length;return{checks,doneCount,total:checks.length,pct:Math.round(doneCount/checks.length*100),complete:doneCount===checks.length}}
+
 const ToastCtx=createContext({});
 function ToastProvider({children}){const[toasts,setToasts]=useState([]);const[cDialog,setCDialog]=useState(null);
   const toast=(msg,type="info")=>{const id=Date.now();setToasts(p=>[...p,{id,msg,type}]);setTimeout(()=>setToasts(p=>p.map(t=>t.id===id?{...t,out:true}:t)),2800);setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3200)};
@@ -624,11 +627,11 @@ function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[p
     if(mode==="locOnboarding"){if(!locName)return setMsg(t("Nombre obligatorio"));if(!locAddress)return setMsg(t("Dirección obligatoria"));if(!locCity)return setMsg(t("Ciudad obligatoria"));if(!locState)return setMsg("Estado obligatorio");if(!contactName)return setMsg(t("Nombre obligatorio"));doRegLoc();return}}
   async function doReg(){setBusy(true);setMsg("");const{error}=await signUp(e,pw,nm,"player",null);if(error)setMsg(error.message);else{setMsg("OK:"+t("Confirma tu email"));fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"welcome",to:e,data:{name:nm}})}).catch(()=>{})}setBusy(false)}
   async function doRegLoc(){setBusy(true);setMsg("");
-    const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:e,course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",facility_type:facType}).select().single();
+    const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:e,course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().single();
     if(ne){setMsg(ne.message);setBusy(false);return}
     const{error}=await signUp(e,pw,nm,"course_admin",nc.id);
     if(!error){await sb.from("user_profiles").update({user_role:"course_admin",managed_course_id:nc.id,admin_facility_type:facType}).eq("email",e)}
-    if(error)setMsg(error.message);else{setMsg("OK:"+t("Confirma tu email"));fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"welcome",to:e,data:{name:nm}})}).catch(()=>{})}setBusy(false)}
+    if(error)setMsg(error.message);else{setMsg("OK:"+t("Confirma tu email"));fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_welcome",to:e,data:{name:nm,course_name:locName,facility_type:facType,city:locCity,state:locState}})}).catch(()=>{})}setBusy(false)}
   const prevMode=()=>{if(mode==="locOnboarding")setMode("pickFacType");else if(mode==="pickFacType")setMode("role");else setMode("register");setMsg("")};
   const inp={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"14px 16px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12};
   const inpSm={...inp,fontSize:13,padding:"12px 14px",marginBottom:10};
@@ -678,7 +681,7 @@ function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[p
 
 
 function Home({onPick}){const{s,p}=useA();const[cs,setCs]=useState([]);const[ld,setLd]=useState(true);const[friendActivity,setFriendActivity]=useState([]);const[favIds,setFavIds]=useState(new Set());const[offers,setOffers]=useState([]);const[rebook,setRebook]=useState([]);const[q,setQ]=useState("");const[fLoc,setFLoc]=useState("all");const[fAcc,setFAcc]=useState("all");const[fDeal,setFDeal]=useState(false);const fR=useRef(null);const oR=useRef(null);const aR=useRef(null);
-  useEffect(()=>{cachedQuery("courses",()=>sb.from("golf_courses").select("*").eq("status","active").order("course_name"),60000).then(({data})=>{setCs(data||[]);setLd(false)});if(s){cachedQuery("favs_"+s.user.id,()=>sb.from("course_favorites").select("course_id").eq("user_id",s.user.id),30000).then(({data})=>setFavIds(new Set((data||[]).map(x=>x.course_id))));sb.from("bookings").select("course_id").eq("user_id",s.user.id).order("booking_date",{ascending:false}).then(({data})=>{const seen=new Set();setRebook((data||[]).filter(b=>b.course_id&&!seen.has(b.course_id)&&seen.add(b.course_id)).map(b=>b.course_id))});
+  useEffect(()=>{cachedQuery("courses",()=>sb.from("golf_courses").select("*").eq("status","active").eq("listing_status","active").order("course_name"),60000).then(({data})=>{setCs(data||[]);setLd(false)});if(s){cachedQuery("favs_"+s.user.id,()=>sb.from("course_favorites").select("course_id").eq("user_id",s.user.id),30000).then(({data})=>setFavIds(new Set((data||[]).map(x=>x.course_id))));sb.from("bookings").select("course_id").eq("user_id",s.user.id).order("booking_date",{ascending:false}).then(({data})=>{const seen=new Set();setRebook((data||[]).filter(b=>b.course_id&&!seen.has(b.course_id)&&seen.add(b.course_id)).map(b=>b.course_id))});
     sb.from("friends").select("friend_id").eq("user_id",s.user.id).eq("status","accepted").then(async({data:fr})=>{
       if(!fr||fr.length===0)return;const fids=fr.map(f=>f.friend_id);
       const[{data:bks},{data:matches},{data:profiles}]=await Promise.all([
@@ -1130,7 +1133,7 @@ function TourneoTab(){
   const[bkRef,setBkRef]=useState(null);
   useEffect(()=>{if(window.__createMatchFromGroup){const grp=window.__createMatchFromGroup;delete window.__createMatchFromGroup;setBkRef({id:null,course_id:grp.course_id,course_name:grp.course_name,date:grp.date});setTName(grp.course_name);setSelCourse(grp.course_id);const memberIds=(grp.members||[]).map(m=>m.id).filter(id=>id!==s.user.id);setSelFr(memberIds);setStep(1);setGMode("");setGFmt("");startCreate({course_id:grp.course_id,course_name:grp.course_name})}
     if(window.__createMatchFromBooking){const bk=window.__createMatchFromBooking;delete window.__createMatchFromBooking;setBkRef(bk);setTName(bk.course_name);setSelCourse(bk.course_id);setStep(1);setGMode("");setGFmt("");setSelFr([]);setTeamAssign({});startCreate(bk)}},[]);
-  async function startCreate(bk){setStep(1);if(!bk){setGMode("");setGFmt("");setTName("");setSelCourse(null)}setSelFr([]);setTeamAssign({});const[{data:c},{data:f}]=await Promise.all([sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("facility_type","campo").order("course_name"),cachedQuery("friends_simple_"+s.user.id,()=>sb.from("friends").select("*,friend:friend_id(id,full_name,player_id,nickname)").eq("user_id",s.user.id).eq("status","accepted"),30000)]);setCourses(c||[]);setFriends(f||[]);if(bk){setSelCourse(bk.course_id);setTName(bk.course_name)}setView("create")}
+  async function startCreate(bk){setStep(1);if(!bk){setGMode("");setGFmt("");setTName("");setSelCourse(null)}setSelFr([]);setTeamAssign({});const[{data:c},{data:f}]=await Promise.all([sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("listing_status","active").eq("facility_type","campo").order("course_name"),cachedQuery("friends_simple_"+s.user.id,()=>sb.from("friends").select("*,friend:friend_id(id,full_name,player_id,nickname)").eq("user_id",s.user.id).eq("status","accepted"),30000)]);setCourses(c||[]);setFriends(f||[]);if(bk){setSelCourse(bk.course_id);setTName(bk.course_name)}setView("create")}
   const maxP=4;
   const canNext=()=>{if(step===1)return!!gMode;if(step===2)return!!gFmt;if(step===3)return!!tName&&!!selCourse;if(step===4){if(gMode==="teams")return selFr.length>=1;return selFr.length>=1}if(step===5){const v=Object.values(teamAssign);return v.filter(x=>x==="A").length>0&&v.filter(x=>x==="B").length>0}return false};
   const nextStep=()=>{if(!canNext())return;if(step===4&&gMode==="individual"){createTorneo();return}if(step===4&&gMode==="teams"){setTeamAssign({});setStep(5);return}if(step===5){createTorneo();return}setStep(step+1)};
@@ -1440,7 +1443,79 @@ function ReviewPrompt({bookingId,courseId,courseName}){const{s}=useA();const[don
     <button onClick={()=>setOpen(false)} style={{width:"100%",padding:8,marginTop:6,background:"transparent",border:"none",color:C.ts,fontSize:12,cursor:"pointer"}}>{t("Ahora no")}</button>
   </div>}
 
-function AdminDash({course}){const[st,setSt]=useState(null);const[monthly,setMonthly]=useState([]);const[ld,setLd]=useState(true);
+function getCourseCompleteness(course,counts){
+  const items=[
+    {k:"photos",l:"Mínimo 3 fotos",p:(counts.photos||0)>=3},
+    {k:"desc",l:"Descripción (100+ caracteres)",p:(course.description||"").length>=100},
+    {k:"fees",l:"Green fees (mín y máx)",p:Number(course.green_fee_min||0)>0&&Number(course.green_fee_max||0)>0},
+    {k:"phone",l:"Teléfono de contacto",p:!!(course.phone_number&&String(course.phone_number).replace(/\D/g,"").length>=8)},
+    {k:"hours",l:"Horario de operación",p:!!course.operating_hours},
+    {k:"days",l:"Días de operación",p:!!course.operating_days},
+    {k:"addr",l:"Dirección completa",p:!!(course.full_address||course.address)},
+    {k:"slots",l:"3+ slots publicados (futuros)",p:(counts.slots||0)>=3}
+  ];
+  if(course.facility_type==="campo")items.push({k:"holes",l:"9+ hoyos configurados",p:(counts.holes||0)>=9});
+  const pass=items.filter(i=>i.p).length;
+  return{items,pass,total:items.length,pct:Math.round(pass/items.length*100),allDone:pass===items.length}
+}
+
+function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=useState({photos:(course.photo_urls||[]).length,slots:0,holes:0});const[submitting,setSubmitting]=useState(false);
+  useEffect(()=>{const today=new Date().toISOString().slice(0,10);
+    const p1=sb.from("time_slots").select("id",{count:"exact",head:true}).eq("course_name",course.course_name).gte("slot_date",today);
+    const p2=course.facility_type==="campo"?sb.from("course_holes").select("id",{count:"exact",head:true}).eq("course_id",course.id):Promise.resolve({count:0});
+    Promise.all([p1,p2]).then(([s,h])=>setCounts({photos:(course.photo_urls||[]).length,slots:s.count||0,holes:h.count||0})).catch(()=>{})
+  },[course.id,course.course_name,course.facility_type,(course.photo_urls||[]).length]);
+  const status=course.listing_status||"draft";
+  const comp=getCourseCompleteness(course,counts);
+  // Map each requirement to {tab, autoEdit, focusField}. Most live in Perfil tab (5); slots live in Slots tab (2).
+  const REQ_NAV={photos:{tab:5,edit:false,field:"photos"},desc:{tab:5,edit:true,field:"desc"},fees:{tab:5,edit:true,field:"fees"},phone:{tab:5,edit:true,field:"phone"},hours:{tab:5,edit:true,field:"hours"},days:{tab:5,edit:true,field:"days"},addr:{tab:5,edit:true,field:"addr"},holes:{tab:5,edit:false,field:"holes"},slots:{tab:2,edit:false,field:null}};
+  const goToReq=(k)=>{const n=REQ_NAV[k];if(!n||!navTo)return;navTo(n.tab,{autoEdit:n.edit,focusField:n.field})};
+  async function submitReview(){if(!comp.allDone||submitting)return;setSubmitting(true);
+    const{error}=await sb.from("golf_courses").update({listing_status:"pending_review",submitted_at:new Date().toISOString()}).eq("id",course.id);
+    if(error){window.__toast?.(error.message,"error");setSubmitting(false);return}
+    fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_review_submitted",data:{course_name:course.course_name,city:course.city,state:course.state,facility_type:course.facility_type}})}).catch(()=>{});
+    window.__toast?.("Enviado a revisión","success");setSubmitting(false);if(onRefresh)onRefresh()
+  }
+  if(status==="active"){return<div style={{background:C.grn+"12",border:"1px solid "+C.grn+"30",borderRadius:14,padding:12,marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+    <div style={{width:32,height:32,borderRadius:"50%",background:C.grn+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("check",18,C.grn)}}/>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontSize:13,fontWeight:800,color:C.grn,letterSpacing:"-0.01em"}}>Publicado</div>
+      <div style={{fontSize:11,color:C.ts,marginTop:2}}>Tu locación es visible para jugadores</div>
+    </div>
+  </div>}
+  if(status==="suspended"){return<div style={{background:C.acc+"12",border:"1px solid "+C.acc+"30",borderRadius:14,padding:14,marginBottom:16}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+      <div dangerouslySetInnerHTML={{__html:ic("alert",18,C.acc)}}/>
+      <div style={{fontSize:13,fontWeight:800,color:C.acc}}>Locación suspendida</div>
+    </div>
+    <div style={{fontSize:11,color:C.ts,lineHeight:1.4}}>{course.suspension_reason||"No visible para jugadores. Contacta soporte para más información."}</div>
+  </div>}
+  const isPending=status==="pending_review";const barColor=isPending?C.gld:C.acc;const barBg=isPending?C.gld+"12":C.acc+"10";const barBd=isPending?C.gld+"30":C.acc+"25";
+  const firstPending=comp.items.find(i=>!i.p);
+  return<div style={{background:barBg,border:"1px solid "+barBd,borderRadius:14,padding:14,marginBottom:16}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+      <div style={{width:32,height:32,borderRadius:"50%",background:barColor+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(isPending?"clock":"edit",16,barColor)}}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:barColor,letterSpacing:"-0.01em"}}>{isPending?"En revisión":"Borrador — No visible"}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{isPending?"Te notificaremos cuando sea aprobada":"Completa los requisitos para enviar a revisión"}</div>
+      </div>
+      <div style={{fontSize:20,fontWeight:900,color:barColor,..._s.mono}}>{comp.pct}%</div>
+    </div>
+    <div style={{height:6,background:C.cd,borderRadius:6,overflow:"hidden",marginBottom:12}}>
+      <div style={{width:comp.pct+"%",height:"100%",background:barColor,borderRadius:6,transition:"width .3s"}}/>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:7}}>
+      {comp.items.map(it=>{const clickable=!it.p&&status==="draft"&&navTo;return<div key={it.k} onClick={clickable?()=>goToReq(it.k):undefined} style={{display:"flex",alignItems:"center",gap:10,fontSize:12,cursor:clickable?"pointer":"default",padding:clickable?"2px 6px":0,margin:clickable?"-2px -6px":0,borderRadius:8,transition:"background .15s"}} onMouseEnter={clickable?e=>{e.currentTarget.style.background=barColor+"12"}:undefined} onMouseLeave={clickable?e=>{e.currentTarget.style.background="transparent"}:undefined}>
+        <div style={{width:18,height:18,borderRadius:"50%",background:it.p?C.grn+"20":C.cd,border:"1px solid "+(it.p?C.grn+"40":C.bd),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(it.p?"check":"x",10,it.p?C.grn:C.tm)}}/>
+        <span style={{flex:1,color:it.p?C.ts:C.txt,textDecoration:it.p?"line-through":"none",fontWeight:it.p?400:600}}>{it.l}</span>
+        {clickable&&<span style={{opacity:.5}} dangerouslySetInnerHTML={{__html:ic("right",12,barColor)}}/>}
+      </div>})}
+    </div>
+    {status==="draft"&&<button onClick={comp.allDone?submitReview:()=>firstPending&&goToReq(firstPending.k)} disabled={submitting||(!comp.allDone&&!navTo)} style={{width:"100%",marginTop:14,padding:12,background:comp.allDone?`linear-gradient(135deg,${C.grn},#00cec9)`:barColor+"15",border:comp.allDone?"none":"1px solid "+barColor+"35",borderRadius:12,color:comp.allDone?"#fff":barColor,fontSize:13,fontWeight:700,cursor:submitting?"wait":"pointer",opacity:submitting?.6:1,boxShadow:comp.allDone?"0 6px 20px rgba(0,184,148,.25)":"none",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{submitting?"Enviando...":comp.allDone?"Enviar a revisión":"Completar: "+(firstPending?.l||"siguiente requisito")}{!comp.allDone&&!submitting&&<span dangerouslySetInnerHTML={{__html:ic("right",14,barColor)}}/>}</button>}
+  </div>
+}
+
+function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);const[monthly,setMonthly]=useState([]);const[ld,setLd]=useState(true);
   const ft=course.facility_type||"campo";const unitLabel=ft==="campo"?"Jugadores":ft==="plataforma"?"Visitantes":"Sesiones";const unitIcon=ft==="campo"?ic("golf",14,C.txt):ft==="plataforma"?ic("target",14,C.txt):ic("smartphone",14,C.txt);const capLabel=ft==="campo"?"Hoyos":ft==="plataforma"?"Bahías":"Cabinas";const capCount=ft==="campo"?(course.hole_count||18):ft==="plataforma"?(course.stations_count||0):(course.cabins_count||0);
   useEffect(()=>{Promise.all([sb.from("bookings").select("id,user_id,total_cost,booking_date,party_size,settlement_status,settlement_amount,settlement_date").eq("course_id",course.id).eq("status","confirmed"),sb.from("time_slots").select("id,booked_count,capacity,slot_time").eq("course_name",course.course_name),sb.from("reviews").select("id,rating").eq("course_id",course.id),sb.from("tournaments").select("id,status,game_format").eq("course_id",course.id),sb.from("player_badges").select("id,badge_key,tournament_id")]).then(([bk,sl,rv,tn,bg])=>{
     const allBk=bk.data||[];const rev=allBk.reduce((s,b)=>s+Number(b.total_cost||0),0);const pendSettle=allBk.filter(b=>b.settlement_status==="scheduled").reduce((s,b)=>s+Number(b.settlement_amount||0),0);const settledAmt=allBk.filter(b=>b.settlement_status==="settled").reduce((s,b)=>s+Number(b.settlement_amount||0),0);const cap=(sl.data||[]).reduce((s,x)=>s+(x.capacity||0),0);const booked=(sl.data||[]).reduce((s,x)=>s+(x.booked_count||0),0);const avg=(rv.data||[]).length?(rv.data.reduce((s,r)=>s+r.rating,0)/rv.data.length).toFixed(1):0;
@@ -1449,9 +1524,10 @@ function AdminDash({course}){const[st,setSt]=useState(null);const[monthly,setMon
     const byMonth={};allBk.forEach(b=>{const m=b.booking_date?.slice(0,7);if(m){if(!byMonth[m])byMonth[m]={players:0,revenue:0,bookings:0};byMonth[m].players+=b.party_size||1;byMonth[m].revenue+=Number(b.total_cost||0);byMonth[m].bookings+=1}});const months=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,d])=>({month:m,label:new Date(m+"-15").toLocaleDateString("es-MX",{month:"short",year:"numeric"}),...d,avgTicket:d.bookings>0?Math.round(d.revenue/d.bookings):0}));setMonthly(months);
     const now=new Date();const lm=new Date(now.getFullYear(),now.getMonth()-1,1).toISOString().slice(0,7);const lastMo=months.find(m=>m.month===lm)||months[0];
     const tdStr=new Date().toISOString().split("T")[0];const todayBks=allBk.filter(b=>b.booking_date===tdStr);setSt({bks:allBk.length,todayCount:todayBks.length,todayPax:todayBks.reduce((s2,b)=>s2+(b.party_size||0),0),todayRev:todayBks.reduce((s2,b)=>s2+Number(b.total_cost||0),0),rev,occ:cap?Math.round(booked/cap*100):0,avg,lastMoAvg:lastMo?.avgTicket||0,lastMoLabel:lastMo?.label||"--",lastMoPlayers:lastMo?.players||0,occBands,frequent,newC,returning,uniqueUsers:Object.keys(userBks).length,pendSettle,settledAmt,totalMatches:(tn.data||[]).length,activeMatches:(tn.data||[]).filter(t=>t.status==="in_progress"||t.status==="setup").length,completedMatches:(tn.data||[]).filter(t=>t.status==="completed").length,totalBadges:(bg.data||[]).length,fmtBreakdown:(()=>{const f={};(tn.data||[]).forEach(t=>{f[t.game_format]=(f[t.game_format]||0)+1});return f})()});setLd(false)}).catch(()=>setLd(false))},[]);
-  if(ld||!st)return<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>;
+  if(ld||!st)return<div className="fi" style={{padding:16}}><CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>;
   const maxP=Math.max(...monthly.map(m=>m.players),1);
   return<div className="fi">
+    <CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/>
     <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14,letterSpacing:"-0.02em"}}>{t("Resumen")}</h3>
     {st.todayCount>0&&<div style={{background:`linear-gradient(135deg,${C.grn}15,${C.grn}08)`,border:"1px solid "+C.grn+"30",borderRadius:16,padding:14,marginBottom:16}}><div style={{fontSize:11,fontWeight:700,color:C.grn,marginBottom:6}}>📅 HOY</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.txt,..._s.mono}}>{st.todayCount}</div><div style={{fontSize:9,color:C.ts}}>Reservas</div></div><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.grn,..._s.mono}}>{st.todayPax}</div><div style={{fontSize:9,color:C.ts}}>Jugadores</div></div><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.gld,..._s.mono}}>${fm(st.todayRev)}</div><div style={{fontSize:9,color:C.ts}}>Ingresos</div></div></div></div>}
     <div className="stat-grid" style={{..._s.grid2lg,marginBottom:16}}><div className="sc"><div className="n" style={{color:C.grn}}>${fm(st.rev)}</div><div className="l">{t("Ingresos")}</div></div><div className="sc"><div className="n" style={{color:C.acc}}>{st.bks}</div><div className="l">{t("Reservas")}</div></div><div className="sc"><div className="n" style={{color:C.gld}}>{st.occ}%</div><div className="l">{t("Ocupación")}</div></div><div className="sc"><div className="n" style={{color:C.txt}}><span dangerouslySetInnerHTML={{__html:ic("star",14,C.gld)}}/>{st.avg}</div><div className="l">Rating</div></div></div>
@@ -1501,13 +1577,15 @@ function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=
     {selDate!==today&&<button onClick={()=>setSelDate(today)} style={{width:"100%",padding:10,marginTop:10,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Ir a hoy</button>}
   </div>}
 
-function AdminProfile({course,onOut,onRefresh}){const{s}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[desc,setDesc]=useState(course.description||"");const[phone,setPhone]=useState(course.phone_number||"");const[feeMin,setFeeMin]=useState(course.green_fee_min?.toString()||"");const[feeMax,setFeeMax]=useState(course.green_fee_max?.toString()||"");const[cancelHrs,setCancelHrs]=useState(course.cancellation_hours?.toString()||"24");const[cancelPct,setCancelPct]=useState(course.cancellation_refund_pct?.toString()||"100");const[opHours,setOpHours]=useState(course.operating_hours||"");const[opDays,setOpDays]=useState(course.operating_days||"");const[addr,setAddr]=useState(course.full_address||course.address||"");const[website,setWebsite]=useState(course.website||"");const[courseTz,setCourseTz]=useState(course.timezone||"America/Mexico_City");
+function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed}){const{s}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[desc,setDesc]=useState(course.description||"");const[phone,setPhone]=useState(course.phone_number||"");const[feeMin,setFeeMin]=useState(course.green_fee_min?.toString()||"");const[feeMax,setFeeMax]=useState(course.green_fee_max?.toString()||"");const[cancelHrs,setCancelHrs]=useState(course.cancellation_hours?.toString()||"24");const[cancelPct,setCancelPct]=useState(course.cancellation_refund_pct?.toString()||"100");const[opHours,setOpHours]=useState(course.operating_hours||"");const[opDays,setOpDays]=useState(course.operating_days||"");const[addr,setAddr]=useState(course.full_address||course.address||"");const[website,setWebsite]=useState(course.website||"");const[courseTz,setCourseTz]=useState(course.timezone||"America/Mexico_City");
   const[stCount,setStCount]=useState(course.stations_count?.toString()||"");const[cbCount,setCbCount]=useState(course.cabins_count?.toString()||"");const[simBrand,setSimBrand]=useState(course.simulator_brand||"");const[hasFood,setHasFood]=useState(course.has_food_service||false);const[hasShop,setHasShop]=useState(course.has_pro_shop||false);
   const[holes,setHoles]=useState([]);const[editHole,setEditHole]=useState(null);const[hPar,setHPar]=useState("4");const[hDist,setHDist]=useState("");const[hDesc,setHDesc]=useState("");
   const[photos,setPhotos]=useState(course.photo_urls||[]);const[upPh,setUpPh]=useState(false);
+  const[highlight,setHighlight]=useState(null);
   const ft=course.facility_type||"campo";
   const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};const FN={campo:t("Campo de Golf"),plataforma:t("Plataforma de Tiro"),simulador:t("Simulador de Golf")};
   useEffect(()=>{if(ft==="campo")sb.from("course_holes").select("*").eq("course_id",course.id).order("hole_number").then(({data})=>setHoles(data||[])).catch(()=>{})},[]);
+  useEffect(()=>{if(autoEdit)setEd(true);if(focusField){setTimeout(()=>{const el=document.getElementById("field-"+focusField);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});setHighlight(focusField);setTimeout(()=>setHighlight(null),2000)}},150)}if((autoEdit||focusField)&&onAutoEditConsumed)onAutoEditConsumed()},[autoEdit,focusField]);
   const saveCourse=async()=>{setSv(true);const upd={description:desc||null,phone_number:phone||null,green_fee_min:feeMin?parseFloat(feeMin):null,green_fee_max:feeMax?parseFloat(feeMax):null,cancellation_hours:parseInt(cancelHrs)||24,cancellation_refund_pct:parseInt(cancelPct)||100,has_food_service:hasFood,has_pro_shop:hasShop,operating_hours:opHours||null,operating_days:opDays||null,full_address:addr||null,website:website||null,timezone:courseTz||"America/Mexico_City"};if(ft==="plataforma")upd.stations_count=stCount?parseInt(stCount):null;if(ft==="simulador"){upd.cabins_count=cbCount?parseInt(cbCount):null;upd.simulator_brand=simBrand||null}await sb.from("golf_courses").update(upd).eq("id",course.id);setSv(false);setEd(false);if(onRefresh)onRefresh()};
   const removePhoto=(idx)=>{const go=async()=>{const np=photos.filter((_,i)=>i!==idx);setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);if(onRefresh)onRefresh()};if(window.__confirm)window.__confirm("¿Eliminar esta foto?",go);else if(confirm("¿Eliminar esta foto?"))go()};
   const replacePhoto=async(e,idx)=>{const file=e.target.files?.[0];if(!file||!file.type.startsWith("image/")||file.size>5*1024*1024)return;setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){setUpPh(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos];np[idx]=publicUrl;setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);setUpPh(false);if(onRefresh)onRefresh()};
@@ -1517,19 +1595,19 @@ function AdminProfile({course,onOut,onRefresh}){const{s}=useA();const[ed,setEd]=
   return<div className="fi">
     <div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt,margin:0}} dangerouslySetInnerHTML={{__html:FI[ft]+" Perfil"}}/><button onClick={()=>ed?saveCourse():setEd(true)} style={{background:C.acc,border:"none",color:"#fff",fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:10,cursor:"pointer",boxShadow:"0 4px 12px rgba(233,69,96,.25)"}}>{sv?"...":ed?"Guardar":"Editar"}</button></div>
     <div className="ar" style={{marginBottom:14}}><div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:C.txt}}>{course.course_name}</div><div style={{fontSize:12,color:C.ts,marginTop:2}}>{course.city}, {course.state}</div></div></div>
-    <div style={{..._s.grid2lg,marginBottom:14}}>{[{l:"TELÉFONO",v:phone,set:setPhone},{l:"PRECIO MÍN",v:feeMin,set:setFeeMin},{l:"PRECIO MÁX",v:feeMax,set:setFeeMax}].map((f,i)=><div key={i}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{f.l}</label><input value={f.v} onChange={x=>f.set(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div>)}
+    <div style={{..._s.grid2lg,marginBottom:14}}>{[{l:"TELÉFONO",v:phone,set:setPhone,k:"phone"},{l:"PRECIO MÍN",v:feeMin,set:setFeeMin,k:"fees"},{l:"PRECIO MÁX",v:feeMax,set:setFeeMax,k:null}].map((f,i)=><div key={i} id={f.k?"field-"+f.k:undefined} style={{transition:"box-shadow .3s",boxShadow:f.k&&highlight===f.k?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{f.l}</label><input value={f.v} onChange={x=>f.set(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div>)}
     {ft==="plataforma"&&<div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("BAHÍAS")}</label><input value={stCount} onChange={x=>setStCount(x.target.value)} disabled={!ed} type="number" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div>}
     {ft==="simulador"&&<><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>CABINAS</label><input value={cbCount} onChange={x=>setCbCount(x.target.value)} disabled={!ed} type="number" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>TECH</label><input value={simBrand} onChange={x=>setSimBrand(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div></>}</div>
     <div style={{display:"flex",gap:10,marginBottom:14}}>{[{l:"Comida/Bar",v:hasFood,set:setHasFood},{l:"Pro Shop",v:hasShop,set:setHasShop}].map((tb,i)=><button key={i} onClick={()=>{if(ed)tb.set(!tb.v)}} style={{flex:1,padding:10,borderRadius:10,border:"1px solid "+(tb.v?C.grn:C.bd),background:tb.v?C.grn+"12":C.cd,cursor:ed?"pointer":"default",fontSize:12,fontWeight:600,color:tb.v?C.grn:C.tm}}>{tb.l}{tb.v?" ✓":""}</button>)}</div>
-    <div style={{marginBottom:14}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("DESCRIPCIÓN")}</label><textarea value={desc} onChange={x=>setDesc(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,minHeight:60,resize:"vertical",fontFamily:"inherit",background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div>
+    <div id="field-desc" style={{marginBottom:14,transition:"box-shadow .3s",boxShadow:highlight==="desc"?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("DESCRIPCIÓN")}</label><textarea value={desc} onChange={x=>setDesc(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,minHeight:60,resize:"vertical",fontFamily:"inherit",background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div>
     <div style={{..._s.grid2lg,marginBottom:14}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("CANCEL. HORAS ANTES")}</label><input value={cancelHrs} onChange={x=>setCancelHrs(x.target.value)} disabled={!ed} type="number" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>REEMBOLSO %</label><input value={cancelPct} onChange={x=>setCancelPct(x.target.value)} disabled={!ed} type="number" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div></div>
-    <div style={{..._s.grid2lg,marginBottom:14}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>HORARIO</label><input value={opHours} onChange={x=>setOpHours(x.target.value)} disabled={!ed} placeholder="7:00-18:00" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>DÍAS</label><input value={opDays} onChange={x=>setOpDays(x.target.value)} disabled={!ed} placeholder="Lun-Dom" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div></div>
+    <div style={{..._s.grid2lg,marginBottom:14}}><div id="field-hours" style={{transition:"box-shadow .3s",boxShadow:highlight==="hours"?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>HORARIO</label><input value={opHours} onChange={x=>setOpHours(x.target.value)} disabled={!ed} placeholder="7:00-18:00" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div id="field-days" style={{transition:"box-shadow .3s",boxShadow:highlight==="days"?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>DÍAS</label><input value={opDays} onChange={x=>setOpDays(x.target.value)} disabled={!ed} placeholder="Lun-Dom" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div></div>
     <div style={{marginBottom:14}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>ZONA HORARIA</label><select value={courseTz} onChange={x=>setCourseTz(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd,appearance:"auto",width:"100%"}}>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select></div>
-    <div style={{marginBottom:14}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>DIRECCIÓN</label><input value={addr} onChange={x=>setAddr(x.target.value)} disabled={!ed} placeholder="Dirección completa" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div>
+    <div id="field-addr" style={{marginBottom:14,transition:"box-shadow .3s",boxShadow:highlight==="addr"?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>DIRECCIÓN</label><input value={addr} onChange={x=>setAddr(x.target.value)} disabled={!ed} placeholder="Dirección completa" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div>
     <div style={{marginBottom:14}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>SITIO WEB</label><input value={website} onChange={x=>setWebsite(x.target.value)} disabled={!ed} placeholder="https://..." style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div>
-    <h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("camera",14,C.txt)+" Fotos ("+photos.length+")"}}></h3>
-    <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:10}}>{photos.map((url,i)=><div key={i} style={{position:"relative",width:120,height:80,borderRadius:10,overflow:"hidden",border:"1px solid "+C.bd,flexShrink:0}}><img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>{e.target.style.display="none"}}/><div style={{position:"absolute",top:0,right:0,display:"flex",gap:2,padding:3}}><label style={{width:22,height:22,borderRadius:10,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,color:"#fff"}}><span dangerouslySetInnerHTML={{__html:ic("edit",10,"#fff")}}/><input type="file" accept="image/*" onChange={e=>replacePhoto(e,i)} style={{display:"none"}}/></label><button onClick={()=>removePhoto(i)} style={{width:22,height:22,borderRadius:10,background:"rgba(0,0,0,.7)",border:"none",color:C.acc,cursor:"pointer",fontSize:11}} dangerouslySetInnerHTML={{__html:ic("x",14,C.tm)}}/></div></div>)}<label style={{width:80,height:80,borderRadius:10,border:"2px dashed "+C.bd,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:upPh?"wait":"pointer",flexShrink:0,background:C.cd}}><span style={{fontSize:20,color:C.tm}}>{upPh?"...":"+"}</span><input type="file" accept="image/*" onChange={uploadPhoto} disabled={upPh} style={{display:"none"}}/></label></div>
-    {ft==="campo"&&<><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}} >Hoyos ({holes.length}/18)</h3><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{Array.from({length:18},(_,i)=>i+1).map(n=>{const h=holes.find(x=>x.hole_number===n);return<button key={n} onClick={()=>openHole(n)} style={{width:46,height:46,borderRadius:14,border:"1px solid "+(h?C.grn:C.bd),background:h?C.grn+"15":C.cd,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:13,fontWeight:800,color:h?C.grn:C.tm}}>{n}</span>{h&&<span style={{fontSize:9,color:C.ts}}>P{h.par}</span>}</button>})}</div></>}
+    <div id="field-photos" style={{transition:"box-shadow .3s",boxShadow:highlight==="photos"?"0 0 0 2px "+C.acc:"none",borderRadius:10,padding:highlight==="photos"?4:0,margin:highlight==="photos"?-4:0}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("camera",14,C.txt)+" Fotos ("+photos.length+")"}}></h3>
+    <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:10}}>{photos.map((url,i)=><div key={i} style={{position:"relative",width:120,height:80,borderRadius:10,overflow:"hidden",border:"1px solid "+C.bd,flexShrink:0}}><img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>{e.target.style.display="none"}}/><div style={{position:"absolute",top:0,right:0,display:"flex",gap:2,padding:3}}><label style={{width:22,height:22,borderRadius:10,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,color:"#fff"}}><span dangerouslySetInnerHTML={{__html:ic("edit",10,"#fff")}}/><input type="file" accept="image/*" onChange={e=>replacePhoto(e,i)} style={{display:"none"}}/></label><button onClick={()=>removePhoto(i)} style={{width:22,height:22,borderRadius:10,background:"rgba(0,0,0,.7)",border:"none",color:C.acc,cursor:"pointer",fontSize:11}} dangerouslySetInnerHTML={{__html:ic("x",14,C.tm)}}/></div></div>)}<label style={{width:80,height:80,borderRadius:10,border:"2px dashed "+C.bd,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:upPh?"wait":"pointer",flexShrink:0,background:C.cd}}><span style={{fontSize:20,color:C.tm}}>{upPh?"...":"+"}</span><input type="file" accept="image/*" onChange={uploadPhoto} disabled={upPh} style={{display:"none"}}/></label></div></div>
+    {ft==="campo"&&<div id="field-holes" style={{transition:"box-shadow .3s",boxShadow:highlight==="holes"?"0 0 0 2px "+C.acc:"none",borderRadius:10,padding:highlight==="holes"?4:0,margin:highlight==="holes"?-4:0}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}} >Hoyos ({holes.length}/18)</h3><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{Array.from({length:18},(_,i)=>i+1).map(n=>{const h=holes.find(x=>x.hole_number===n);return<button key={n} onClick={()=>openHole(n)} style={{width:46,height:46,borderRadius:14,border:"1px solid "+(h?C.grn:C.bd),background:h?C.grn+"15":C.cd,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:13,fontWeight:800,color:h?C.grn:C.tm}}>{n}</span>{h&&<span style={{fontSize:9,color:C.ts}}>P{h.par}</span>}</button>})}</div></div>}
     {ft==="plataforma"&&<><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}}>Bahías ({parseInt(stCount||course.stations_count)||0})</h3><div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:14}}>{Array.from({length:Math.min(parseInt(stCount||course.stations_count)||0,72)},(_,i)=>i+1).map(n=><div key={n} style={{width:42,height:42,borderRadius:10,background:"#6c5ce712",border:"1px solid #6c5ce730",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#6c5ce7"}}>{n}</div>)}</div></>}
     {ft==="simulador"&&<><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}}>Cabinas ({parseInt(cbCount||course.cabins_count)||0})</h3><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{Array.from({length:Math.min(parseInt(cbCount||course.cabins_count)||0,20)},(_,i)=>i+1).map(n=><div key={n} style={{width:56,height:56,borderRadius:14,background:"#6c5ce710",border:"1px solid #6c5ce730",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:"#6c5ce7"}}>{n}</div>)}</div></>}
     {editHole&&<div className="modal-bg" onClick={()=>setEditHole(null)}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:14}}>Hoyo {editHole}</h3><div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>PAR</label><select value={hPar} onChange={x=>setHPar(x.target.value)} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="3">Par 3</option><option value="4">Par 4</option><option value="5">Par 5</option></select></div><div><label style={{fontSize:10,color:C.tm}}>DISTANCIA</label><input value={hDist} onChange={x=>setHDist(x.target.value)} type="number" placeholder="yds" style={{...inp0,marginTop:4}}/></div></div><textarea value={hDesc} onChange={x=>setHDesc(x.target.value)} placeholder={t("Descripción...")} style={{...inp0,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/><div style={{display:"flex",gap:8,marginTop:14}}><button onClick={saveHole} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button><button onClick={()=>setEditHole(null)} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
@@ -1600,7 +1678,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
     const[{data:bks},{data:validC},{data:campos},{data:myTp}]=await Promise.all([
       sb.from("bookings").select("*").eq("user_id",s.user.id).eq("status","confirmed").lte("booking_date",td).not("course_id","is",null).order("booking_date",{ascending:false}).limit(40),
       sb.from("golf_courses").select("id,facility_type").in("facility_type",["campo","simulador"]),
-      sb.from("golf_courses").select("id,course_name,city,hole_count,total_par").eq("status","active").eq("facility_type","campo").order("course_name"),
+      sb.from("golf_courses").select("id,course_name,city,hole_count,total_par").eq("status","active").eq("listing_status","active").eq("facility_type","campo").order("course_name"),
       sb.from("tournament_players").select("*,tournaments(id,name,course_name,course_id,game_format,status,created_at)").eq("user_id",s.user.id)
     ]);
     const validIds=new Set((validC||[]).map(c=>c.id));
@@ -1731,7 +1809,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
 
 function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=useState("browse");const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);const[ld,setLd]=useState(true);const[courses,setCourses]=useState([]);const[selCourse,setSelCourse]=useState("");const[playDate,setPlayDate]=useState("");const[maxP,setMaxP]=useState(2);const[gameMode,setGameMode]=useState("");const[gameFmt,setGameFmt]=useState("");const[fDate,setFDate]=useState("");const[fCourse,setFCourse]=useState("");const[detail,setDetail]=useState(null);const[members,setMembers]=useState([]);const[pending,setPending]=useState([]);
   useEffect(()=>{load();loadCourses()},[]);
-  async function loadCourses(){const{data}=await sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").in("facility_type",["campo","simulador"]).order("course_name");setCourses(data||[])}
+  async function loadCourses(){const{data}=await sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("listing_status","active").in("facility_type",["campo","simulador"]).order("course_name");setCourses(data||[])}
   async function load(){setLd(true);const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").in("status",["open","full"]).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");setGroups(all||[]);const{data:mine}=await sb.from("match_requests").select("*").eq("creator_id",s.user.id).order("created_at",{ascending:false}).limit(10);setMyGroups(mine||[]);setLd(false)}
   async function createGroup(){if(!selCourse||!playDate)return window.__toast?.("Selecciona campo y fecha","warn");const c2=courses.find(x=>x.id===selCourse);const autoMode=maxP===3?"teams":"individual";const{error}=await sb.from("match_requests").insert({creator_id:s.user.id,course_id:selCourse,course_name:c2?.course_name||"",city:c2?.city||"",play_date:playDate,play_time:"flexible",max_players:maxP+1,current_players:1,game_mode:autoMode,game_format:gameFmt||null,status:"open"});if(error){window.__toast?.(error.message,"error");return}const{data:mr}=await sb.from("match_requests").select("id").eq("creator_id",s.user.id).order("created_at",{ascending:false}).limit(1).single();if(mr)await sb.from("match_members").insert({match_id:mr.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id||"",status:"accepted"});window.__toast?.("¡Grupo creado!","success");setView("browse");load()}
   async function requestJoin(grp){if(grp.creator_id===s.user.id)return window.__toast?.("Es tu grupo","info");const{error}=await sb.from("match_members").insert({match_id:grp.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id||"",status:"pending"});if(error){window.__toast?.(error.code==="23505"?"Ya solicitaste unirte":"Error: "+error.message,"warn");return}createNotif(grp.creator_id,"match_update","Solicitud de grupo",(p?.nickname||p?.full_name)+" quiere unirse a tu grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});window.__toast?.("¡Solicitud enviada!","success")}
@@ -1859,17 +1937,166 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
     {selDate!==today&&<button onClick={()=>setSelDate(today)} style={{width:"100%",padding:10,marginTop:10,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Ir a hoy</button>}
   </div>}
 
-function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);
+function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);
   const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).single().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
   useEffect(()=>{loadC()},[p]);const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};
+  const navTo=(t,opts={})=>{setTab(t);setAutoEdit(!!opts.autoEdit);setFocusField(opts.focusField||null)};
+  const clearAutoEdit=()=>{setAutoEdit(false);setFocusField(null)};
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Cerrar Sesión")}</button></div></div>;
   const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Dashboard"},{i:ic("calendar",20,C.txt),l:"Reservas"},{i:ic("clock",20,C.txt),l:"Slots"},{i:ic("tag",20,C.txt),l:"Promos"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Perfil"}];
+  const lst=course.listing_status||"draft";const LST={draft:{l:"BORRADOR",c:C.acc},pending_review:{l:"EN REVISIÓN",c:C.gld},active:{l:"PUBLICADO",c:C.grn},suspended:{l:"SUSPENDIDO",c:C.acc}}[lst]||{l:"BORRADOR",c:C.acc};
   return<div className="admin-container" style={{background:C.bg}}>
-    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{padding:"3px 9px",borderRadius:7,background:C.grn+"15",border:"1px solid "+C.grn+"25"}}><span style={{fontSize:9,fontWeight:700,color:C.grn}}>ADMIN</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
-    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<PremiumInsights course={course}/>}{tab===5&&<AdminProfile course={course} onOut={out} onRefresh={loadC}/>}</div>
+    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div onClick={()=>setTab(0)} style={{padding:"3px 9px",borderRadius:7,background:LST.c+"15",border:"1px solid "+LST.c+"35",cursor:lst==="active"?"default":"pointer"}} title={lst==="active"?"":"Ver detalles en Dashboard"}><span style={{fontSize:9,fontWeight:700,color:LST.c,letterSpacing:".05em"}}>{LST.l}</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
+    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<PremiumInsights course={course}/>}{tab===5&&<AdminProfile course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit}/>}</div>
     <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
   </div>}
+
+function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);const[ld,setLd]=useState(true);const[stats,setStats]=useState(null);const[courses,setCourses]=useState([]);const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");const[sel,setSel]=useState(null);
+  const loadAll=async()=>{setLd(true);const today=new Date().toISOString().slice(0,10);const d30=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+    const[{data:cs},{data:bks},{data:us},{data:sl}]=await Promise.all([
+      sb.from("golf_courses").select("*").order("created_at",{ascending:false}),
+      sb.from("bookings").select("course_id,total_cost,booking_date,platform_fee_pct,settlement_amount,status").eq("status","confirmed"),
+      sb.from("user_profiles").select("id,user_role,is_deleted"),
+      sb.from("time_slots").select("course_name,slot_date").gte("slot_date",today)
+    ]);
+    const allC=cs||[];const allB=bks||[];const allU=us||[];const allS=sl||[];
+    const byStatus={draft:0,pending_review:0,active:0,suspended:0};allC.forEach(c=>{byStatus[c.listing_status||"draft"]=(byStatus[c.listing_status||"draft"]||0)+1});
+    const revByCourse={};const rev30ByCourse={};let platformRev=0;let platformFee=0;
+    allB.forEach(b=>{const tc=Number(b.total_cost||0);platformRev+=tc;platformFee+=tc*Number(b.platform_fee_pct||10)/100;if(b.course_id){revByCourse[b.course_id]=(revByCourse[b.course_id]||0)+tc;if(b.booking_date>=d30)rev30ByCourse[b.course_id]=(rev30ByCourse[b.course_id]||0)+tc}});
+    const slotsByCourse={};allS.forEach(s=>{slotsByCourse[s.course_name]=(slotsByCourse[s.course_name]||0)+1});
+    const enriched=allC.map(c=>({...c,_rev:revByCourse[c.id]||0,_rev30:rev30ByCourse[c.id]||0,_slots:slotsByCourse[c.course_name]||0}));
+    const topRev=enriched.filter(c=>c._rev30>0).sort((a,b)=>b._rev30-a._rev30).slice(0,5);
+    const inactive=enriched.filter(c=>(c.listing_status||"draft")==="active"&&c._rev30===0&&c._slots===0);
+    const pendingN=byStatus.pending_review;
+    const activePlayers=allU.filter(u=>!u.is_deleted&&u.user_role==="player").length;
+    const activeAdmins=allU.filter(u=>!u.is_deleted&&u.user_role==="course_admin").length;
+    setStats({byStatus,platformRev,platformFee,topRev,inactive,pendingN,activePlayers,activeAdmins,totalCourses:allC.length});
+    setCourses(enriched);setLd(false)
+  };
+  useEffect(()=>{loadAll()},[]);
+  const filtered=courses.filter(c=>{if(filter!=="all"&&(c.listing_status||"draft")!==filter)return false;if(search){const q=search.toLowerCase();if(!c.course_name?.toLowerCase().includes(q)&&!c.city?.toLowerCase().includes(q))return false}return true});
+  const STAT_CFG={draft:{l:"Borrador",c:C.acc},pending_review:{l:"Pendiente",c:C.gld},active:{l:"Activo",c:C.grn},suspended:{l:"Suspendido",c:C.acc}};
+  const tabs=[{i:ic("chart",20,C.txt),l:"Overview"},{i:ic("golf",20,C.txt),l:"Campos"},{i:ic("user",20,C.txt),l:"Perfil"}];
+  if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
+  return<div className="admin-container" style={{background:C.bg}}>
+    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.acc}/><div><div style={{fontSize:12,color:C.ts,fontWeight:700}}>Partee Platform</div></div></div>
+      <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{padding:"3px 9px",borderRadius:7,background:C.acc+"15",border:"1px solid "+C.acc+"35"}}><span style={{fontSize:9,fontWeight:700,color:C.acc,letterSpacing:".05em"}}>PLATFORM</span></div><NotifBell/></div>
+    </div>
+    <div className="admin-content" style={{padding:16,paddingBottom:70}}>
+      {tab===0&&<div className="fi">
+        <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14,letterSpacing:"-0.02em"}}>Overview de Plataforma</h3>
+        {stats.pendingN>0&&<div onClick={()=>{setFilter("pending_review");setTab(1)}} style={{background:C.gld+"15",border:"1px solid "+C.gld+"35",borderRadius:14,padding:14,marginBottom:16,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:"50%",background:C.gld+"25",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("clock",18,C.gld)}}/>
+          <div style={{flex:1}}><div style={{fontSize:13,fontWeight:800,color:C.gld}}>{stats.pendingN} campo{stats.pendingN===1?"":"s"} esperando revisión</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>Toca para revisar y aprobar</div></div>
+          <span dangerouslySetInnerHTML={{__html:ic("right",16,C.gld)}}/>
+        </div>}
+        <div style={{..._s.grid2lg,marginBottom:16}}>
+          <div className="sc"><div className="n" style={{color:C.grn}}>${fm(stats.platformRev)}</div><div className="l">GMV total</div></div>
+          <div className="sc"><div className="n" style={{color:C.gld}}>${fm(Math.round(stats.platformFee))}</div><div className="l">Fee plataforma</div></div>
+        </div>
+        <h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10}}>Campos por estado</h4>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+          {Object.entries(stats.byStatus).map(([k,v])=>{const cfg=STAT_CFG[k];return<div key={k} onClick={()=>{setFilter(k);setTab(1)}} className="sc" style={{cursor:"pointer",border:"1px solid "+cfg.c+"30"}}><div className="n" style={{color:cfg.c}}>{v}</div><div className="l">{cfg.l}</div></div>})}
+        </div>
+        <div style={{..._s.grid2lg,marginBottom:16}}>
+          <div className="sc"><div className="n" style={{color:C.grn}}>{stats.activePlayers}</div><div className="l">Jugadores</div></div>
+          <div className="sc"><div className="n" style={{color:C.acc}}>{stats.activeAdmins}</div><div className="l">Admins de campo</div></div>
+        </div>
+        {stats.topRev.length>0&&<><h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10}}>Top 5 — últimos 30 días</h4>
+        <div style={{marginBottom:16}}>{stats.topRev.map((c,i)=><div key={c.id} onClick={()=>setSel(c)} className="ar" style={{cursor:"pointer",marginBottom:6}}><div style={{width:28,height:28,borderRadius:10,background:C.grn+"15",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:C.grn,fontSize:13}}>{i+1}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.course_name}</div><div style={{fontSize:11,color:C.ts}}>{c.city}, {c.state}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:13,fontWeight:800,color:C.grn,..._s.mono}}>${fm(c._rev30)}</div></div></div>)}</div></>}
+        {stats.inactive.length>0&&<><h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10}}>Activos sin movimiento ({stats.inactive.length})</h4>
+        <div style={{fontSize:11,color:C.ts,marginBottom:10}}>Publicados pero sin reservas ni slots futuros</div>
+        <div style={{marginBottom:16}}>{stats.inactive.slice(0,10).map(c=><div key={c.id} onClick={()=>setSel(c)} className="ar" style={{cursor:"pointer",marginBottom:6,border:"1px solid "+C.acc+"20"}}><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.course_name}</div><div style={{fontSize:11,color:C.ts}}>{c.city}, {c.state}</div></div><span dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>)}</div></>}
+      </div>}
+      {tab===1&&<div className="fi">
+        <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:12}}>Campos ({filtered.length})</h3>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nombre o ciudad..." style={{...inp0,marginBottom:10}}/>
+        <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto"}}>
+          {[["all","Todos"],["pending_review","Pendientes"],["draft","Borrador"],["active","Activos"],["suspended","Suspendidos"]].map(([k,l])=><button key={k} onClick={()=>setFilter(k)} style={{padding:"7px 14px",borderRadius:10,border:"1px solid "+(filter===k?C.acc:C.bd),background:filter===k?C.acc+"15":"transparent",color:filter===k?C.acc:C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{l}</button>)}
+        </div>
+        {filtered.length===0?<div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>Sin resultados</div>:
+        filtered.map(c=>{const cfg=STAT_CFG[c.listing_status||"draft"];const photo=(c.photo_urls||[])[0];return<div key={c.id} onClick={()=>setSel(c)} className="ar" style={{cursor:"pointer",marginBottom:8}}>
+          {photo?<img src={photo} style={{width:48,height:48,borderRadius:12,objectFit:"cover",flexShrink:0}}/>:<div style={{width:48,height:48,borderRadius:12,background:C.cd,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("golf",22,C.tm)}}/>}
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}><div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.course_name}</div></div>
+            <div style={{fontSize:11,color:C.ts}}>{c.city}, {c.state} · {c._slots} slots</div>
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{padding:"2px 8px",borderRadius:6,background:cfg.c+"15",fontSize:9,fontWeight:700,color:cfg.c,letterSpacing:".04em",marginBottom:2}}>{cfg.l.toUpperCase()}</div>
+            {c._rev30>0&&<div style={{fontSize:11,color:C.grn,..._s.mono}}>${fm(c._rev30)}</div>}
+          </div>
+        </div>})}
+      </div>}
+      {tab===2&&<div className="fi">
+        <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14}}>Perfil Plataforma</h3>
+        <div className="sc" style={{marginBottom:10}}><div style={{fontSize:12,color:C.ts}}>Administrador</div><div style={{fontSize:15,fontWeight:700,color:C.txt,marginTop:4}}>{p?.full_name||p?.email}</div></div>
+        <ThemeToggle/><LangToggle/>
+        <button onClick={out} style={{width:"100%",padding:12,marginTop:16,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
+      </div>}
+    </div>
+    <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.acc+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.acc+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.acc:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.acc,boxShadow:"0 0 8px "+C.acc+"60"}}/>}</div>)}</div>
+    {sel&&<PlatformCourseDetail course={sel} onClose={()=>setSel(null)} onRefresh={()=>{loadAll();setSel(null)}} adminId={p?.id}/>}
+  </div>
+}
+
+function PlatformCourseDetail({course,onClose,onRefresh,adminId}){const[counts,setCounts]=useState({photos:(course.photo_urls||[]).length,slots:0,holes:0});const[action,setAction]=useState(null);const[reason,setReason]=useState("");const[busy,setBusy]=useState(false);const[owner,setOwner]=useState(null);
+  useEffect(()=>{const today=new Date().toISOString().slice(0,10);
+    Promise.all([
+      sb.from("time_slots").select("id",{count:"exact",head:true}).eq("course_name",course.course_name).gte("slot_date",today),
+      course.facility_type==="campo"?sb.from("course_holes").select("id",{count:"exact",head:true}).eq("course_id",course.id):Promise.resolve({count:0}),
+      sb.from("user_profiles").select("full_name,email,phone").eq("managed_course_id",course.id).eq("user_role","course_admin").maybeSingle()
+    ]).then(([s,h,o])=>{setCounts({photos:(course.photo_urls||[]).length,slots:s.count||0,holes:h.count||0});setOwner(o.data)}).catch(()=>{})
+  },[course.id]);
+  const comp=getCourseCompleteness(course,counts);const lst=course.listing_status||"draft";
+  const STAT_CFG={draft:{l:"Borrador",c:C.acc},pending_review:{l:"Pendiente",c:C.gld},active:{l:"Activo",c:C.grn},suspended:{l:"Suspendido",c:C.acc}};const cfg=STAT_CFG[lst];
+  async function doAction(){setBusy(true);const upd={};let emailType=null;
+    if(action==="approve"){upd.listing_status="active";upd.approved_at=new Date().toISOString();upd.approved_by=adminId||null;upd.suspension_reason=null;emailType="course_approved"}
+    else if(action==="reject"){upd.listing_status="draft";upd.suspension_reason=reason||"Requiere mejoras adicionales";emailType="course_rejected"}
+    else if(action==="suspend"){if(!reason)return window.__toast?.("Razón requerida","warn")||setBusy(false);upd.listing_status="suspended";upd.suspension_reason=reason;emailType="course_suspended"}
+    else if(action==="reactivate"){upd.listing_status="active";upd.suspension_reason=null;emailType="course_reactivated"}
+    const{error}=await sb.from("golf_courses").update(upd).eq("id",course.id);
+    if(error){window.__toast?.(error.message,"error");setBusy(false);return}
+    if(owner?.email&&emailType)fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:emailType,to:owner.email,data:{name:owner.full_name,course_name:course.course_name,reason:reason||null}})}).catch(()=>{});
+    window.__toast?.("Aplicado","success");setBusy(false);onRefresh()
+  }
+  return<div className="modal-bg" onClick={onClose}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:480,maxHeight:"85vh",overflowY:"auto"}}>
+    <div style={{..._s.flexB,marginBottom:14}}>
+      <h3 style={{color:C.txt,fontSize:16,fontWeight:800,margin:0}}>{course.course_name}</h3>
+      <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:C.tm}} dangerouslySetInnerHTML={{__html:ic("x",20,C.tm)}}/>
+    </div>
+    <div style={{fontSize:12,color:C.ts,marginBottom:10}}>{course.city}, {course.state} · {{campo:"Campo",plataforma:"Plataforma",simulador:"Simulador"}[course.facility_type||"campo"]}</div>
+    <div style={{padding:"8px 12px",background:cfg.c+"15",border:"1px solid "+cfg.c+"30",borderRadius:10,marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+      <div style={{fontSize:11,fontWeight:800,color:cfg.c,letterSpacing:".05em"}}>{cfg.l.toUpperCase()}</div>
+      {course.suspension_reason&&<div style={{fontSize:11,color:C.ts,marginLeft:"auto"}}>· {course.suspension_reason.slice(0,40)}</div>}
+    </div>
+    {owner&&<div className="sc" style={{marginBottom:12}}><div style={{fontSize:10,color:C.tm,fontWeight:600,marginBottom:4}}>PROPIETARIO</div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{owner.full_name}</div><div style={{fontSize:12,color:C.ts,marginTop:2}}>{owner.email}{owner.phone?" · "+owner.phone:""}</div></div>}
+    <div style={{..._s.grid2lg,marginBottom:12}}>
+      <div className="sc"><div className="n" style={{color:C.grn}}>${fm(course._rev30||0)}</div><div className="l">Revenue 30d</div></div>
+      <div className="sc"><div className="n" style={{color:C.acc}}>{counts.slots}</div><div className="l">Slots futuros</div></div>
+    </div>
+    <h4 style={{fontSize:12,fontWeight:800,color:C.txt,marginBottom:8,marginTop:10}}>Completeness {comp.pct}%</h4>
+    <div style={{height:6,background:C.bg,borderRadius:6,overflow:"hidden",marginBottom:10}}><div style={{width:comp.pct+"%",height:"100%",background:comp.allDone?C.grn:C.gld,borderRadius:6}}/></div>
+    <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:14}}>{comp.items.map(it=><div key={it.k} style={{display:"flex",alignItems:"center",gap:8,fontSize:11}}><div style={{width:14,height:14,borderRadius:"50%",background:it.p?C.grn+"20":C.bd,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(it.p?"check":"x",8,it.p?C.grn:C.tm)}}/><span style={{color:it.p?C.ts:C.txt}}>{it.l}</span></div>)}</div>
+    {action?<div style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:12,padding:12,marginBottom:12}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.txt,marginBottom:8}}>{{approve:"Aprobar campo",reject:"Rechazar — regresa a borrador",suspend:"Suspender campo",reactivate:"Reactivar campo"}[action]}</div>
+      {(action==="reject"||action==="suspend")&&<textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder={action==="reject"?"Razones para rechazar (el admin la verá)":"Razón de suspensión"} rows={3} style={{...inp0,marginBottom:8,resize:"vertical",fontFamily:"inherit"}}/>}
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={doAction} disabled={busy||((action==="reject"||action==="suspend")&&!reason.trim())} style={{flex:1,padding:10,background:action==="approve"||action==="reactivate"?C.grn:C.acc,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:12,cursor:busy?"wait":"pointer",opacity:busy?.6:1}}>{busy?"...":"Confirmar"}</button>
+        <button onClick={()=>{setAction(null);setReason("")}} style={{padding:"10px 16px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontSize:12,cursor:"pointer"}}>Cancelar</button>
+      </div>
+    </div>:<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      {lst==="pending_review"&&<>
+        <button onClick={()=>setAction("approve")} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Aprobar</button>
+        <button onClick={()=>setAction("reject")} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontWeight:700,fontSize:13,cursor:"pointer"}}>Rechazar</button>
+      </>}
+      {lst==="active"&&<button onClick={()=>setAction("suspend")} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontWeight:700,fontSize:13,cursor:"pointer"}}>Suspender</button>}
+      {lst==="suspended"&&<button onClick={()=>setAction("reactivate")} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Reactivar</button>}
+      {lst==="draft"&&<div style={{flex:1,padding:12,textAlign:"center",color:C.tm,fontSize:12}}>Sin acción — admin no ha enviado a revisión</div>}
+    </div>}
+  </div></div>
+}
 
 function GoogleRoleSelector(){const{s,p,ref,out}=useA();const[step,setStep]=useState("role");const[role,setRole]=useState("");const[facType,setFacType]=useState("");
   const[locName,setLocName]=useState("");const[bizName,setBizName]=useState("");const[locAddress,setLocAddress]=useState("");const[locCity,setLocCity]=useState("");const[locState,setLocState]=useState("");const[locDays,setLocDays]=useState("");const[locHours,setLocHours]=useState("");const[contactName,setContactName]=useState(p?.full_name||"");const[contactRole,setContactRole]=useState("");
@@ -1884,9 +2111,10 @@ function GoogleRoleSelector(){const{s,p,ref,out}=useA();const[step,setStep]=useS
     if(step==="pickFacType"){if(!facType)return setMsg(t("Selecciona tipo"));setStep("locOnboarding");setMsg("");return}
     if(step==="locOnboarding"){if(!locName)return setMsg(t("Nombre obligatorio"));if(!locAddress)return setMsg(t("Dirección obligatoria"));if(!locCity)return setMsg(t("Ciudad obligatoria"));if(!locState)return setMsg("Estado obligatorio");if(!contactName)return setMsg(t("Nombre obligatorio"));
       setBusy(true);setMsg("");
-      const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:s.user.email||"",course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",facility_type:facType}).select().single();
+      const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:s.user.email||"",course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().single();
       if(ne){setMsg(ne.message);setBusy(false);return}
       await sb.from("user_profiles").update({user_role:"course_admin",managed_course_id:nc.id,admin_facility_type:facType}).eq("id",s.user.id);
+      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_welcome",to:s.user.email,data:{name:s.user.user_metadata?.full_name||contactName,course_name:locName,facility_type:facType,city:locCity,state:locState}})}).catch(()=>{});
       await ref();setBusy(false);return}}
   const prevStep=()=>{if(step==="locOnboarding")setStep("pickFacType");else if(step==="pickFacType")setStep("role");setMsg("")};
   const stepNum=step==="role"?1:step==="pickFacType"?2:3;
@@ -1964,6 +2192,7 @@ function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,
   if(p?.is_deleted)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>{t("Cuenta eliminada")}</h2><button onClick={()=>sb.auth.signOut().then(()=>location.reload())} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Salir")}</button></div></div>;
   if(s&&p&&(p.user_role==="pending"||!p.user_role))return<GoogleRoleSelector/>;
   if(needsOnboarding)return<PlayerOnboarding/>;
+  if(p?.user_role==="platform_admin")return<PlatformAdminApp/>;
   if(p?.user_role==="course_admin")return<AdminApp/>;
   const home=()=>{setScr("home");setCo(null);setSl(null);setTab(0)};
   const sc=theme==="dark"?"#fff":"#111827";
