@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.10.0">
+<meta name="version" content="17.11.0">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1515,36 +1515,207 @@ function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=us
   </div>
 }
 
-function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);const[monthly,setMonthly]=useState([]);const[ld,setLd]=useState(true);
+function HealthScoreRing({score,size=72}){const r=size/2-6;const c=2*Math.PI*r;const off=c-(score/100)*c;const col=score>=70?C.grn:score>=40?C.gld:C.acc;
+  return<div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+    <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.cd} strokeWidth="5"/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth="5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} style={{transition:"stroke-dashoffset .6s ease-out"}}/>
+    </svg>
+    <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+      <div style={{fontSize:size*.28,fontWeight:900,color:col,..._s.mono,lineHeight:1}}>{score}</div>
+      <div style={{fontSize:8,color:C.tm,fontWeight:600,marginTop:1}}>HEALTH</div>
+    </div>
+  </div>
+}
+
+function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);const[monthly,setMonthly]=useState([]);const[ld,setLd]=useState(true);const[csvRange,setCsvRange]=useState(false);const[csvFrom,setCsvFrom]=useState("");const[csvTo,setCsvTo]=useState(new Date().toISOString().slice(0,10));const[atRiskOpen,setAtRiskOpen]=useState(false);
   const ft=course.facility_type||"campo";const unitLabel=ft==="campo"?"Jugadores":ft==="plataforma"?"Visitantes":"Sesiones";const unitIcon=ft==="campo"?ic("golf",14,C.txt):ft==="plataforma"?ic("target",14,C.txt):ic("smartphone",14,C.txt);const capLabel=ft==="campo"?"Hoyos":ft==="plataforma"?"Bahías":"Cabinas";const capCount=ft==="campo"?(course.hole_count||18):ft==="plataforma"?(course.stations_count||0):(course.cabins_count||0);
-  useEffect(()=>{Promise.all([sb.from("bookings").select("id,user_id,total_cost,booking_date,party_size,settlement_status,settlement_amount,settlement_date").eq("course_id",course.id).eq("status","confirmed"),sb.from("time_slots").select("id,booked_count,capacity,slot_time").eq("course_name",course.course_name),sb.from("reviews").select("id,rating").eq("course_id",course.id),sb.from("tournaments").select("id,status,game_format").eq("course_id",course.id),sb.from("player_badges").select("id,badge_key,tournament_id")]).then(([bk,sl,rv,tn,bg])=>{
-    const allBk=bk.data||[];const rev=allBk.reduce((s,b)=>s+Number(b.total_cost||0),0);const pendSettle=allBk.filter(b=>b.settlement_status==="scheduled").reduce((s,b)=>s+Number(b.settlement_amount||0),0);const settledAmt=allBk.filter(b=>b.settlement_status==="settled").reduce((s,b)=>s+Number(b.settlement_amount||0),0);const cap=(sl.data||[]).reduce((s,x)=>s+(x.capacity||0),0);const booked=(sl.data||[]).reduce((s,x)=>s+(x.booked_count||0),0);const avg=(rv.data||[]).length?(rv.data.reduce((s,r)=>s+r.rating,0)/rv.data.length).toFixed(1):0;
-    const bands={early:{l:"Early Bird (6-9h)",t:0,b:0},prime:{l:"Prime (9-12h)",t:0,b:0},mid:{l:t("Mediodía (12-15h)"),t:0,b:0},twi:{l:t("Twilight (15-18h)"),t:0,b:0}};(sl.data||[]).forEach(s=>{const h=parseInt(s.slot_time?.split(":")[0]||"0");const k=h<9?"early":h<12?"prime":h<15?"mid":"twi";bands[k].t+=s.capacity||0;bands[k].b+=s.booked_count||0});const occBands=Object.values(bands).map(b=>({l:b.l,v:b.t>0?Math.round(b.b/b.t*100):0}));
-    const userBks={};allBk.forEach(b=>{userBks[b.user_id]=(userBks[b.user_id]||0)+1});const frequent=Object.values(userBks).filter(v=>v>=3).length;const newC=Object.values(userBks).filter(v=>v===1).length;const returning=Object.values(userBks).filter(v=>v===2).length;
-    const byMonth={};allBk.forEach(b=>{const m=b.booking_date?.slice(0,7);if(m){if(!byMonth[m])byMonth[m]={players:0,revenue:0,bookings:0};byMonth[m].players+=b.party_size||1;byMonth[m].revenue+=Number(b.total_cost||0);byMonth[m].bookings+=1}});const months=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,d])=>({month:m,label:new Date(m+"-15").toLocaleDateString("es-MX",{month:"short",year:"numeric"}),...d,avgTicket:d.bookings>0?Math.round(d.revenue/d.bookings):0}));setMonthly(months);
-    const now=new Date();const lm=new Date(now.getFullYear(),now.getMonth()-1,1).toISOString().slice(0,7);const lastMo=months.find(m=>m.month===lm)||months[0];
-    const tdStr=new Date().toISOString().split("T")[0];const todayBks=allBk.filter(b=>b.booking_date===tdStr);setSt({bks:allBk.length,todayCount:todayBks.length,todayPax:todayBks.reduce((s2,b)=>s2+(b.party_size||0),0),todayRev:todayBks.reduce((s2,b)=>s2+Number(b.total_cost||0),0),rev,occ:cap?Math.round(booked/cap*100):0,avg,lastMoAvg:lastMo?.avgTicket||0,lastMoLabel:lastMo?.label||"--",lastMoPlayers:lastMo?.players||0,occBands,frequent,newC,returning,uniqueUsers:Object.keys(userBks).length,pendSettle,settledAmt,totalMatches:(tn.data||[]).length,activeMatches:(tn.data||[]).filter(t=>t.status==="in_progress"||t.status==="setup").length,completedMatches:(tn.data||[]).filter(t=>t.status==="completed").length,totalBadges:(bg.data||[]).length,fmtBreakdown:(()=>{const f={};(tn.data||[]).forEach(t=>{f[t.game_format]=(f[t.game_format]||0)+1});return f})()});setLd(false)}).catch(()=>setLd(false))},[]);
+  useEffect(()=>{Promise.all([
+    sb.from("bookings").select("id,user_id,total_cost,booking_date,party_size,settlement_status,settlement_amount,settlement_date,user_profiles(full_name,nickname,email)").eq("course_id",course.id).eq("status","confirmed"),
+    sb.from("time_slots").select("id,booked_count,capacity,slot_time,slot_date").eq("course_name",course.course_name),
+    sb.from("reviews").select("id,rating").eq("course_id",course.id),
+    sb.from("tournaments").select("id,status,game_format").eq("course_id",course.id),
+    sb.from("player_badges").select("id,badge_key,tournament_id")
+  ]).then(([bk,sl,rv,tn,bg])=>{
+    const allBk=bk.data||[];const allSl=sl.data||[];
+    const rev=allBk.reduce((s,b)=>s+Number(b.total_cost||0),0);
+    const pendSettle=allBk.filter(b=>b.settlement_status==="scheduled").reduce((s,b)=>s+Number(b.settlement_amount||0),0);
+    const settledAmt=allBk.filter(b=>b.settlement_status==="settled").reduce((s,b)=>s+Number(b.settlement_amount||0),0);
+    const cap=allSl.reduce((s,x)=>s+(x.capacity||0),0);
+    const booked=allSl.reduce((s,x)=>s+(x.booked_count||0),0);
+    const avg=(rv.data||[]).length?(rv.data.reduce((s,r)=>s+r.rating,0)/rv.data.length).toFixed(1):0;
+    const today=new Date();const tdStr=today.toISOString().slice(0,10);
+    // ===== Period comparisons (WoW + MoM) =====
+    const dStr=(d)=>d.toISOString().slice(0,10);
+    const day=86400000;const ws=new Date(today.getTime()-7*day);const wp=new Date(today.getTime()-14*day);
+    const ms=new Date(today.getTime()-30*day);const mp=new Date(today.getTime()-60*day);
+    const sumIn=(from,to)=>{const f=dStr(from);const t=dStr(to);const list=allBk.filter(b=>b.booking_date>=f&&b.booking_date<t);return{revenue:list.reduce((s,b)=>s+Number(b.total_cost||0),0),bookings:list.length,players:list.reduce((s,b)=>s+(b.party_size||0),0)}};
+    const w0=sumIn(ws,today);const w1=sumIn(wp,ws);const m0=sumIn(ms,today);const m1=sumIn(mp,ms);
+    const pctChg=(cur,prev)=>prev>0?Math.round((cur-prev)/prev*100):cur>0?100:0;
+    const wow={cur:w0,prev:w1,revPct:pctChg(w0.revenue,w1.revenue),bksPct:pctChg(w0.bookings,w1.bookings)};
+    const mom={cur:m0,prev:m1,revPct:pctChg(m0.revenue,m1.revenue),bksPct:pctChg(m0.bookings,m1.bookings)};
+    // ===== Day-of-week heatmap (last 90d) =====
+    const d90=new Date(today.getTime()-90*day);const d90s=dStr(d90);
+    const dowTot=[0,0,0,0,0,0,0];const dowCap=[0,0,0,0,0,0,0];
+    allSl.filter(s=>s.slot_date&&s.slot_date>=d90s&&s.slot_date<=tdStr).forEach(s=>{const d=new Date(s.slot_date+"T12:00:00").getDay();dowTot[d]+=s.booked_count||0;dowCap[d]+=s.capacity||0});
+    const dowOcc=dowTot.map((b,i)=>dowCap[i]>0?Math.round(b/dowCap[i]*100):0);
+    // ===== Time-of-day occupancy bands =====
+    const bands={early:{l:"Early Bird (6-9h)",t:0,b:0},prime:{l:"Prime (9-12h)",t:0,b:0},mid:{l:t("Mediodía (12-15h)"),t:0,b:0},twi:{l:t("Twilight (15-18h)"),t:0,b:0}};
+    allSl.forEach(s=>{const h=parseInt(s.slot_time?.split(":")[0]||"0");const k=h<9?"early":h<12?"prime":h<15?"mid":"twi";bands[k].t+=s.capacity||0;bands[k].b+=s.booked_count||0});
+    const occBands=Object.values(bands).map(b=>({l:b.l,v:b.t>0?Math.round(b.b/b.t*100):0}));
+    // ===== Customers + at-risk =====
+    const userBks={};const userLast={};const userInfo={};
+    allBk.forEach(b=>{userBks[b.user_id]=(userBks[b.user_id]||0)+1;if(!userLast[b.user_id]||b.booking_date>userLast[b.user_id])userLast[b.user_id]=b.booking_date;if(b.user_profiles)userInfo[b.user_id]=b.user_profiles});
+    const frequent=Object.values(userBks).filter(v=>v>=3).length;
+    const newC=Object.values(userBks).filter(v=>v===1).length;
+    const returning=Object.values(userBks).filter(v=>v===2).length;
+    const d60=new Date(today.getTime()-60*day);const d60s=dStr(d60);
+    const atRisk=Object.entries(userBks).filter(([uid,cnt])=>cnt>=3&&userLast[uid]<d60s).map(([uid,cnt])=>({uid,cnt,last:userLast[uid],profile:userInfo[uid]||{},daysSince:Math.floor((today-new Date(userLast[uid]+"T12:00:00"))/day)})).sort((a,b)=>a.last.localeCompare(b.last));
+    // ===== Monthly aggregates =====
+    const byMonth={};allBk.forEach(b=>{const m=b.booking_date?.slice(0,7);if(m){if(!byMonth[m])byMonth[m]={players:0,revenue:0,bookings:0};byMonth[m].players+=b.party_size||1;byMonth[m].revenue+=Number(b.total_cost||0);byMonth[m].bookings+=1}});
+    const months=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,d])=>({month:m,label:new Date(m+"-15").toLocaleDateString("es-MX",{month:"short",year:"numeric"}),...d,avgTicket:d.bookings>0?Math.round(d.revenue/d.bookings):0}));setMonthly(months);
+    const lm=new Date(today.getFullYear(),today.getMonth()-1,1).toISOString().slice(0,7);const lastMo=months.find(m=>m.month===lm)||months[0];
+    const todayBks=allBk.filter(b=>b.booking_date===tdStr);
+    // ===== HEALTH SCORE (0-100) =====
+    // Components: occupancy (30) + rating (25) + slots published (20) + booking momentum (15) + activity (10)
+    const occRaw=cap?booked/cap:0;
+    const occPts=Math.round(Math.min(occRaw*1.5,1)*30); // 67%+ occupancy = full points
+    const ratingPts=avg>0?Math.round(Math.min(Number(avg)/5,1)*25):0;
+    const futureSlots=allSl.filter(s=>s.slot_date>=tdStr).length;
+    const slotsPts=Math.round(Math.min(futureSlots/30,1)*20); // 30+ future slots = full
+    const momentumPts=Math.round((wow.revPct>=0?Math.min((100+wow.revPct)/200,1)*15:Math.max(15+wow.revPct*0.1,0)));
+    const recentBks=allBk.filter(b=>b.booking_date>=dStr(new Date(today.getTime()-14*day))).length;
+    const actPts=Math.round(Math.min(recentBks/10,1)*10); // 10+ bookings last 14d = full
+    const health=Math.max(0,Math.min(100,occPts+ratingPts+slotsPts+momentumPts+actPts));
+    const healthBreakdown=[
+      {l:"Ocupación",v:occPts,max:30,hint:occPts<15?"Promueve horarios prime":"Buena ocupación"},
+      {l:"Rating",v:ratingPts,max:25,hint:ratingPts<15?(avg>0?"Pide más reseñas":"Sin reseñas aún"):"Excelente rating"},
+      {l:"Slots futuros",v:slotsPts,max:20,hint:slotsPts<15?"Publica más slots ("+futureSlots+" futuros)":"Catálogo sano"},
+      {l:"Momentum",v:momentumPts,max:15,hint:momentumPts<8?"Tu revenue bajó vs semana pasada":"Tendencia positiva"},
+      {l:"Actividad reciente",v:actPts,max:10,hint:actPts<5?"Pocas reservas últimos 14d":"Actividad sana"}
+    ];
+    setSt({
+      bks:allBk.length,allBk,todayCount:todayBks.length,todayPax:todayBks.reduce((s2,b)=>s2+(b.party_size||0),0),todayRev:todayBks.reduce((s2,b)=>s2+Number(b.total_cost||0),0),
+      rev,occ:cap?Math.round(booked/cap*100):0,avg,
+      lastMoAvg:lastMo?.avgTicket||0,lastMoLabel:lastMo?.label||"--",lastMoPlayers:lastMo?.players||0,
+      occBands,dowOcc,frequent,newC,returning,uniqueUsers:Object.keys(userBks).length,
+      pendSettle,settledAmt,
+      totalMatches:(tn.data||[]).length,activeMatches:(tn.data||[]).filter(t=>t.status==="in_progress"||t.status==="setup").length,completedMatches:(tn.data||[]).filter(t=>t.status==="completed").length,
+      totalBadges:(bg.data||[]).length,
+      fmtBreakdown:(()=>{const f={};(tn.data||[]).forEach(t=>{f[t.game_format]=(f[t.game_format]||0)+1});return f})(),
+      wow,mom,atRisk,health,healthBreakdown,futureSlots
+    });setLd(false)
+  }).catch(()=>setLd(false))},[]);
   if(ld||!st)return<div className="fi" style={{padding:16}}><CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>;
   const maxP=Math.max(...monthly.map(m=>m.players),1);
+  const maxDow=Math.max(...st.dowOcc,1);
+  const DOW_LABELS=["D","L","M","M","J","V","S"];
+  const renderDelta=(pct,label)=>{const up=pct>=0;const col=up?C.grn:C.acc;return<span style={{fontSize:10,color:col,marginLeft:6,fontWeight:700,..._s.mono}}>{up?"▲":"▼"} {Math.abs(pct)}%{label?" "+label:""}</span>};
+  const exportCsvRange=()=>{
+    if(!csvFrom||!csvTo)return window.__toast?.("Selecciona fechas","warn");
+    const list=st.allBk.filter(b=>b.booking_date>=csvFrom&&b.booking_date<=csvTo).sort((a,b)=>a.booking_date.localeCompare(b.booking_date));
+    if(list.length===0)return window.__toast?.("Sin reservas en ese rango","info");
+    const header="Fecha,Reservas,Jugadores,Ingresos,Ticket Promedio\n";
+    const byDate={};list.forEach(b=>{if(!byDate[b.booking_date])byDate[b.booking_date]={bookings:0,players:0,revenue:0};byDate[b.booking_date].bookings+=1;byDate[b.booking_date].players+=b.party_size||0;byDate[b.booking_date].revenue+=Number(b.total_cost||0)});
+    const rows=Object.entries(byDate).map(([d,v])=>d+","+v.bookings+","+v.players+","+v.revenue+","+(v.bookings>0?Math.round(v.revenue/v.bookings):0));
+    const csv=header+rows.join("\n");const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=course.course_name.replace(/\s/g,"_")+"_"+csvFrom+"_"+csvTo+".csv";a.click();
+    window.__toast?.("CSV exportado","success");setCsvRange(false)
+  };
   return<div className="fi">
     <CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/>
     <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14,letterSpacing:"-0.02em"}}>{t("Resumen")}</h3>
     {st.todayCount>0&&<div style={{background:`linear-gradient(135deg,${C.grn}15,${C.grn}08)`,border:"1px solid "+C.grn+"30",borderRadius:16,padding:14,marginBottom:16}}><div style={{fontSize:11,fontWeight:700,color:C.grn,marginBottom:6}}>📅 HOY</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.txt,..._s.mono}}>{st.todayCount}</div><div style={{fontSize:9,color:C.ts}}>Reservas</div></div><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.grn,..._s.mono}}>{st.todayPax}</div><div style={{fontSize:9,color:C.ts}}>Jugadores</div></div><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.gld,..._s.mono}}>${fm(st.todayRev)}</div><div style={{fontSize:9,color:C.ts}}>Ingresos</div></div></div></div>}
-    <div className="stat-grid" style={{..._s.grid2lg,marginBottom:16}}><div className="sc"><div className="n" style={{color:C.grn}}>${fm(st.rev)}</div><div className="l">{t("Ingresos")}</div></div><div className="sc"><div className="n" style={{color:C.acc}}>{st.bks}</div><div className="l">{t("Reservas")}</div></div><div className="sc"><div className="n" style={{color:C.gld}}>{st.occ}%</div><div className="l">{t("Ocupación")}</div></div><div className="sc"><div className="n" style={{color:C.txt}}><span dangerouslySetInnerHTML={{__html:ic("star",14,C.gld)}}/>{st.avg}</div><div className="l">Rating</div></div></div>
+
+    {/* HEALTH SCORE CARD */}
+    <div style={{background:`linear-gradient(135deg,${C.cd},${C.bg})`,border:"1px solid "+C.bd,borderRadius:16,padding:14,marginBottom:16,display:"flex",alignItems:"center",gap:14}}>
+      <HealthScoreRing score={st.health}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:6,letterSpacing:"-0.01em"}}>Health Score</div>
+        <div style={{display:"flex",flexDirection:"column",gap:3}}>
+          {st.healthBreakdown.slice(0,3).map(b=><div key={b.l} style={{display:"flex",alignItems:"center",gap:6,fontSize:10}}>
+            <span style={{color:C.tm,minWidth:80}}>{b.l}</span>
+            <div style={{flex:1,height:4,background:C.cd,borderRadius:3,overflow:"hidden"}}>
+              <div style={{width:Math.round(b.v/b.max*100)+"%",height:"100%",background:b.v/b.max>=.7?C.grn:b.v/b.max>=.4?C.gld:C.acc,borderRadius:3}}/>
+            </div>
+            <span style={{fontSize:9,color:C.ts,..._s.mono,minWidth:30,textAlign:"right"}}>{b.v}/{b.max}</span>
+          </div>)}
+        </div>
+      </div>
+    </div>
+    {st.healthBreakdown.find(b=>b.v/b.max<.6)&&<div style={{background:C.gld+"10",border:"1px solid "+C.gld+"25",borderRadius:12,padding:10,marginBottom:16,fontSize:11,color:C.ts,lineHeight:1.5}}>
+      💡 <strong style={{color:C.gld}}>Para mejorar:</strong> {st.healthBreakdown.filter(b=>b.v/b.max<.6).slice(0,2).map(b=>b.hint).join(" · ")}
+    </div>}
+
+    {/* PERIOD COMPARISONS */}
+    <h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10,letterSpacing:"-0.02em"}}>Comparativas</h4>
+    <div style={{..._s.grid2lg,marginBottom:8}}>
+      <div className="sc"><div style={{fontSize:9,color:C.tm,fontWeight:700,marginBottom:4}}>SEMANA</div><div className="n" style={{color:C.grn,fontSize:18}}>${fm(st.wow.cur.revenue)}</div><div style={{fontSize:10,color:C.ts}}>{st.wow.cur.bookings} reservas {renderDelta(st.wow.revPct,"$")}</div></div>
+      <div className="sc"><div style={{fontSize:9,color:C.tm,fontWeight:700,marginBottom:4}}>MES (30D)</div><div className="n" style={{color:C.grn,fontSize:18}}>${fm(st.mom.cur.revenue)}</div><div style={{fontSize:10,color:C.ts}}>{st.mom.cur.bookings} reservas {renderDelta(st.mom.revPct,"$")}</div></div>
+    </div>
+    <div style={{fontSize:10,color:C.tm,marginBottom:16,paddingLeft:2}}>vs periodo anterior: ${fm(st.wow.prev.revenue)} (sem) · ${fm(st.mom.prev.revenue)} (mes)</div>
+
+    <div className="stat-grid" style={{..._s.grid2lg,marginBottom:16}}><div className="sc"><div className="n" style={{color:C.grn}}>${fm(st.rev)}</div><div className="l">{t("Ingresos")} total</div></div><div className="sc"><div className="n" style={{color:C.acc}}>{st.bks}</div><div className="l">{t("Reservas")} total</div></div><div className="sc"><div className="n" style={{color:C.gld}}>{st.occ}%</div><div className="l">{t("Ocupación")}</div></div><div className="sc"><div className="n" style={{color:C.txt}}><span dangerouslySetInnerHTML={{__html:ic("star",14,C.gld)}}/>{st.avg}</div><div className="l">Rating</div></div></div>
     <div style={{..._s.grid2lg,marginBottom:16}}><div className="sc" style={{border:"1px solid "+C.grn+"30"}}><div className="n" style={{color:C.grn}}>${fm(st.settledAmt||0)}</div><div className="l">Liquidado</div></div><div className="sc" style={{border:"1px solid "+C.gld+"30"}}><div className="n" style={{color:C.gld}}>${fm(st.pendSettle||0)}</div><div className="l">Por liquidar</div></div></div>
     <div style={{..._s.grid2lg,marginBottom:16}}><div className="sc" style={{border:"1px solid #6c5ce730"}}><div className="n" style={{color:"#6c5ce7"}}>{capCount}</div><div className="l">{capLabel}</div></div><div className="sc" style={{border:"1px solid "+C.grn+"30"}}><div className="n" style={{color:C.grn}}>{course.has_food_service?"Sí":"No"} / {course.has_pro_shop?"Sí":"No"}</div><div className="l">Comida / Shop</div></div></div>
-    <h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10,letterSpacing:"-0.02em"}}>Último Periodo ({st.lastMoLabel}){monthly.length>=2&&<span style={{fontSize:10,color:monthly[0].revenue>monthly[1].revenue?C.grn:C.acc,marginLeft:8}}>{monthly[0].revenue>monthly[1].revenue?"▲":"▼"} {monthly[1].revenue>0?Math.round(Math.abs(monthly[0].revenue-monthly[1].revenue)/monthly[1].revenue*100):0}% vs {monthly[1].label}</span>}</h4>
-    <div style={{..._s.grid2lg,marginBottom:16}}><div className="sc" style={{border:"1px solid "+C.grn+"30"}}><div className="n" style={{color:C.grn}}>${fm(st.lastMoAvg)}</div><div className="l">Ticket Promedio</div></div><div className="sc" style={{border:"1px solid "+C.acc+"30"}}><div className="n" style={{color:C.acc}}>{st.lastMoPlayers}</div><div className="l">{unitLabel}</div></div></div>
+
     {monthly.length>0&&<><h4 style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:10}} dangerouslySetInnerHTML={{__html:unitIcon+" "+unitLabel+" por Mes"}}/>{monthly.slice(0,6).map(m=><div key={m.month} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{color:C.ts,textTransform:"capitalize"}}>{m.label}</span><span style={{color:C.txt,fontWeight:700}}>{m.players} &#183; ${fm(m.revenue)} &#183; Ticket ${fm(m.avgTicket)}</span></div><div style={{height:8,background:C.cd,borderRadius:6,overflow:"hidden"}}><div style={{width:Math.round(m.players/maxP*100)+"%",height:"100%",background:`linear-gradient(90deg,${C.acc},#ff6b6b)`,borderRadius:6}}/></div></div>)}</>}
-    <h4 style={{fontSize:13,fontWeight:700,color:C.txt,marginTop:16,marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("clock",14,C.txt)+" Ocupación por Horario"}}></h4>
+
+    {/* DAY-OF-WEEK HEATMAP */}
+    <h4 style={{fontSize:13,fontWeight:700,color:C.txt,marginTop:16,marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("calendar",14,C.txt)+" Ocupación por día (90d)"}}></h4>
+    <div style={{display:"flex",gap:6,marginBottom:16}}>{st.dowOcc.map((v,i)=>{const intensity=v/maxDow;const col=v>=70?C.acc:v>=40?C.gld:v>0?C.grn:C.bd;return<div key={i} style={{flex:1,textAlign:"center"}}>
+      <div style={{height:50,background:col,opacity:Math.max(intensity,.15),borderRadius:8,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"4px 0",marginBottom:4}}>
+        <span style={{fontSize:10,fontWeight:800,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,.3)"}}>{v}%</span>
+      </div>
+      <div style={{fontSize:10,color:C.tm,fontWeight:600}}>{DOW_LABELS[i]}</div>
+    </div>})}</div>
+
+    <h4 style={{fontSize:13,fontWeight:700,color:C.txt,marginTop:16,marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("clock",14,C.txt)+" Ocupación por horario"}}></h4>
     {(st.occBands||[]).map((x,i)=>{const c=x.v>70?C.acc:x.v>40?C.gld:C.grn;return<div key={i} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.ts,marginBottom:3}}><span>{x.l}</span><span style={{fontWeight:700,color:c}}>{x.v}%</span></div><div style={{height:6,background:C.cd,borderRadius:6}}><div style={{width:x.v+"%",height:"100%",background:c,borderRadius:6}}/></div></div>})}
+
     <h4 style={{fontSize:13,fontWeight:700,color:C.txt,marginTop:16,marginBottom:10}}>Clientes</h4>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}><div className="sc" style={{border:"1px solid "+C.grn+"30"}}><div className="n" style={{color:C.grn}}>{st.frequent||0}</div><div className="l">Frecuentes</div></div><div className="sc" style={{border:"1px solid "+C.gld+"30"}}><div className="n" style={{color:C.gld}}>{st.returning||0}</div><div className="l">Recurrentes</div></div><div className="sc" style={{border:"1px solid "+C.acc+"30"}}><div className="n" style={{color:C.acc}}>{st.newC||0}</div><div className="l">{t("Nuevos")}</div></div></div>
     <div className="sc" style={{marginBottom:10}}><div className="n" style={{color:C.txt}}>{st.uniqueUsers||0}</div><div className="l">{t("Clientes únicos")}</div></div>
+
+    {/* AT-RISK CUSTOMERS */}
+    {st.atRisk.length>0&&<>
+      <div onClick={()=>setAtRiskOpen(!atRiskOpen)} style={{background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:14,padding:12,marginBottom:16,marginTop:10,cursor:"pointer"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:"50%",background:C.acc+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("alert",18,C.acc)}}/>
+          <div style={{flex:1}}><div style={{fontSize:13,fontWeight:800,color:C.acc}}>{st.atRisk.length} cliente{st.atRisk.length===1?"":"s"} en riesgo</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>Frecuentes que no reservan hace 60+ días</div></div>
+          <span dangerouslySetInnerHTML={{__html:ic(atRiskOpen?"up":"down",16,C.acc)}}/>
+        </div>
+        {atRiskOpen&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid "+C.acc+"20",display:"flex",flexDirection:"column",gap:8}} onClick={e=>e.stopPropagation()}>
+          {st.atRisk.slice(0,10).map(r=><div key={r.uid} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:C.cd,borderRadius:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.profile.nickname||r.profile.full_name||"Sin nombre"}</div>
+              <div style={{fontSize:10,color:C.ts}}>{r.cnt} reservas · última hace {r.daysSince}d</div>
+            </div>
+            {r.profile.email&&<a href={"mailto:"+r.profile.email+"?subject=Te extrañamos en "+course.course_name+"&body=Hola, hace tiempo que no te vemos. Tenemos novedades — ¿agendamos tu próximo round?"} target="_blank" rel="noopener" style={{padding:"6px 12px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:8,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"none"}}>Email</a>}
+          </div>)}
+          {st.atRisk.length>10&&<div style={{fontSize:11,color:C.ts,textAlign:"center",marginTop:4}}>+{st.atRisk.length-10} más</div>}
+        </div>}
+      </div>
+    </>}
+
     {st.totalMatches>0&&<><h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginTop:16,marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("trophy",14,C.gld)+" Partidas en tu campo"}}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}><div className="sc" style={{border:"1px solid "+C.grn+"30"}}><div className="n" style={{color:C.grn}}>{st.totalMatches}</div><div className="l">Total</div></div><div className="sc" style={{border:"1px solid "+C.gld+"30"}}><div className="n" style={{color:C.gld}}>{st.activeMatches}</div><div className="l">Activas</div></div><div className="sc" style={{border:"1px solid "+C.acc+"30"}}><div className="n" style={{color:C.acc}}>{st.totalBadges}</div><div className="l">Badges</div></div></div>
     {Object.keys(st.fmtBreakdown||{}).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{Object.entries(st.fmtBreakdown).map(([fmt,cnt])=><span key={fmt} style={{fontSize:10,color:C.grn,background:C.grn+"12",padding:"3px 10px",borderRadius:6,fontWeight:700}}>{fmtLabel(fmt)}: {cnt}</span>)}</div>}</>}
-    <button onClick={()=>{const csv="Mes,Reservas,Ingresos,Jugadores,Ticket\n"+monthly.map(m=>m.label+","+m.bookings+","+m.revenue+","+m.players+","+m.avgTicket).join("\n");const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=course.course_name.replace(/\s/g,"_")+"_analytics.csv";a.click()}} style={{width:"100%",padding:12,marginTop:10,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:C.shCard||"none"}} dangerouslySetInnerHTML={{__html:ic("download",14,C.txt)+" Exportar CSV"}}/>
+
+    {/* CSV EXPORT — full or by date range */}
+    {csvRange?<div style={{marginTop:16,padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:14}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.txt,marginBottom:10}}>Exportar por rango</div>
+      <div style={{..._s.grid2lg,marginBottom:10}}>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>DESDE</label><input type="date" value={csvFrom} onChange={e=>setCsvFrom(e.target.value)} max={csvTo} style={{...inp0,marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>HASTA</label><input type="date" value={csvTo} onChange={e=>setCsvTo(e.target.value)} max={new Date().toISOString().slice(0,10)} style={{...inp0,marginTop:4}}/></div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={exportCsvRange} style={{flex:1,padding:11,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Descargar CSV</button>
+        <button onClick={()=>setCsvRange(false)} style={{padding:"11px 16px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontSize:12,cursor:"pointer"}}>Cancelar</button>
+      </div>
+    </div>:<div style={{display:"flex",gap:8,marginTop:10}}>
+      <button onClick={()=>{const csv="Mes,Reservas,Ingresos,Jugadores,Ticket\n"+monthly.map(m=>m.label+","+m.bookings+","+m.revenue+","+m.players+","+m.avgTicket).join("\n");const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=course.course_name.replace(/\s/g,"_")+"_lifetime.csv";a.click()}} style={{flex:1,padding:12,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:C.shCard||"none"}} dangerouslySetInnerHTML={{__html:ic("download",14,C.txt)+" CSV mensual"}}/>
+      <button onClick={()=>{setCsvRange(true);if(!csvFrom){const d30=new Date();d30.setDate(d30.getDate()-30);setCsvFrom(d30.toISOString().slice(0,10))}}} style={{flex:1,padding:12,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("calendar",14,C.txt)+" Por rango"}}/>
+    </div>}
   </div>}
 
 function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=useState(true);const[selDate,setSelDate]=useState(new Date().toISOString().split("T")[0]);const[det,setDet]=useState(null);const[bkSearch,setBkSearch]=useState("");
