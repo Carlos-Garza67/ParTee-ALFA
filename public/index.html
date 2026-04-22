@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.16.2">
+<meta name="version" content="17.16.3">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1221,7 +1221,12 @@ function TourneoTab(){
     for(const inv of invitees){
       const team=gMode==="teams"?(teamAssign[inv.user_id]||"B"):null;
       await sb.from("tournament_players").insert({tournament_id:t.id,user_id:inv.user_id,player_name:inv.player_name,player_pid:inv.player_pid,team});
-      createNotif(inv.user_id,"match_update","Nueva partida",(p?.nickname||p?.full_name)+" te invitó a "+tName+" en "+c?.course_name,{match_id:t.id,action_route:"tab:2",action_label:"Ver partida"});
+      // Título/mensaje específico cuando la partida nace de un grupo existente
+      const notifTitle=fromGroupId?"Grupo convertido a partida":"Nueva partida";
+      const notifMsg=fromGroupId
+        ?"Tu grupo en "+(c?.course_name||"")+" fue convertido a partida: "+tName
+        :(p?.nickname||p?.full_name)+" te invitó a "+tName+" en "+c?.course_name;
+      createNotif(inv.user_id,"match_update",notifTitle,notifMsg,{match_id:t.id,action_route:"tab:2",action_label:"Ver partida"});
     }
     // Gemelación: sincronizar el grupo con la partida creada (name, modo, formato, tournament_id) y cerrarlo
     if(fromGroupId){await sb.from("match_requests").update({tournament_id:t.id,name:tName,game_mode:gMode,game_format:gFmt,status:"closed"}).eq("id",fromGroupId);setFromGroupId(null)}
@@ -2180,6 +2185,11 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
       if(error){window.__toast?.("Error: "+error.message,"error");return}
       if(!res?.success){window.__toast?.(res?.error||"No se pudo aceptar","warn");openDetail(detail);load();return}
       createNotif(mem.user_id,"match_update","Solicitud aceptada","Te uniste al grupo en "+detail.course_name,{match_id:detail.id,action_route:"tab:2",action_label:"Ver grupo"});
+      // Notificar a otros miembros ya aceptados (excluir al creador que hace la acción y al nuevo miembro)
+      const newName=mem.user?.nickname||mem.user?.full_name||mem.player_name||"Un jugador";
+      for(const mm of members){
+        if(mm.user_id!==s.user.id&&mm.user_id!==mem.user_id)createNotif(mm.user_id,"match_update","Nuevo miembro en el grupo",newName+" se unió al grupo en "+detail.course_name,{match_id:detail.id,action_route:"tab:2",action_label:"Ver grupo"});
+      }
       window.__toast?.("Aceptado","success")
     }else{
       // DELETE en vez de UPDATE status=rejected → permite re-solicitar más tarde (#7)
@@ -2193,15 +2203,32 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     openDetail(freshDetail||detail);
     load()
   }
-  async function deleteGroup(id){await sb.from("match_members").delete().eq("match_id",id);await sb.from("match_requests").delete().eq("id",id);setDetail(null);load();window.__toast?.("Grupo eliminado","success")}
+  async function deleteGroup(id){
+    // Notificar a miembros aceptados ANTES de borrar (snapshot de course_name/members)
+    if(detail){
+      const courseName=detail.course_name||"";
+      const creatorName=p?.nickname||p?.full_name||"El creador";
+      for(const mm of members){
+        if(mm.user_id!==s.user.id)createNotif(mm.user_id,"match_update","Grupo eliminado",creatorName+" eliminó el grupo en "+courseName,{action_route:"tab:2",action_label:"Ver grupos"});
+      }
+    }
+    await sb.from("match_members").delete().eq("match_id",id);
+    await sb.from("match_requests").delete().eq("id",id);
+    setDetail(null);load();window.__toast?.("Grupo eliminado","success")
+  }
   // Miembro aceptado sale del grupo voluntariamente (#1)
   async function leaveGroup(grp){
     if(!grp)return;
     if(grp.creator_id===s.user.id)return window.__toast?.("El creador no puede salir, elimina el grupo","warn");
     const go=async()=>{
       await sb.from("match_members").delete().eq("match_id",grp.id).eq("user_id",s.user.id);
+      const leaverName=p?.nickname||p?.full_name||"Un jugador";
       // Notificar al creador
-      createNotif(grp.creator_id,"match_update","Miembro salió del grupo",(p?.nickname||p?.full_name)+" salió de tu grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});
+      createNotif(grp.creator_id,"match_update","Miembro salió del grupo",leaverName+" salió de tu grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});
+      // Notificar a otros miembros aceptados (excluir al creador ya notificado y al que sale)
+      for(const mm of members){
+        if(mm.user_id!==s.user.id&&mm.user_id!==grp.creator_id)createNotif(mm.user_id,"match_update","Miembro salió del grupo",leaverName+" salió del grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});
+      }
       window.__toast?.("Saliste del grupo","info");
       setDetail(null);load();
     };
@@ -2215,6 +2242,11 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     const go=async()=>{
       await sb.from("match_members").delete().eq("id",m.id);
       createNotif(m.user_id,"match_update","Fuiste removido del grupo","El creador te removió del grupo en "+detail.course_name,{match_id:detail.id,action_route:"tab:2",action_label:"Ver grupos"});
+      // Notificar a otros miembros aceptados (excluir al creador que hace la acción y al removido)
+      const removedName=m.user?.nickname||m.user?.full_name||m.player_name||"Un jugador";
+      for(const mm of members){
+        if(mm.user_id!==s.user.id&&mm.user_id!==m.user_id)createNotif(mm.user_id,"match_update","Miembro removido",removedName+" fue removido del grupo en "+detail.course_name,{match_id:detail.id,action_route:"tab:2",action_label:"Ver grupo"});
+      }
       window.__toast?.("Miembro removido","info");
       openDetail(detail);load();
     };
@@ -2232,6 +2264,20 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     const upd={name:(editData.name||"").trim()||null,play_date:editData.play_date||detail.play_date,play_time:editData.flexTime?"flexible":(editData.play_time||"flexible"),game_format:editData.game_format||null};
     const{error}=await sb.from("match_requests").update(upd).eq("id",detail.id);
     if(error){window.__toast?.(error.message,"error");return}
+    // Notificar a miembros aceptados si cambió fecha/hora/formato (no notificar si sólo cambió nombre)
+    const dateChanged=upd.play_date!==detail.play_date;
+    const timeChanged=upd.play_time!==detail.play_time;
+    const formatChanged=(upd.game_format||null)!==(detail.game_format||null);
+    if(dateChanged||timeChanged||formatChanged){
+      const changes=[];
+      if(dateChanged)changes.push("fecha: "+upd.play_date);
+      if(timeChanged)changes.push("hora: "+(upd.play_time==="flexible"?"flexible":upd.play_time));
+      if(formatChanged)changes.push("formato: "+(upd.game_format?fmtLabel(upd.game_format):"—"));
+      const msg="Cambios en el grupo en "+detail.course_name+" — "+changes.join(", ");
+      for(const mm of members){
+        if(mm.user_id!==s.user.id)createNotif(mm.user_id,"match_update","Grupo actualizado",msg,{match_id:detail.id,action_route:"tab:2",action_label:"Ver grupo"});
+      }
+    }
     window.__toast?.("Grupo actualizado","success");
     setEditMode(false);
     // Refetch detail + lista
