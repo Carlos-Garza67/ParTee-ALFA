@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.17.1">
+<meta name="version" content="17.17.3">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1256,7 +1256,7 @@ function TourneoTab(){
     const courseIds=new Set((c||[]).map(x=>x.id));
     const filteredBks=(bks||[]).filter(b=>courseIds.has(b.course_id));
     // Enrich con game_status: bloquear bookings que ya tienen torneo activo o grupo abierto
-    if(filteredBks.length>0){const bkIds=filteredBks.map(b=>b.id);const[{data:trns},{data:mrs}]=await Promise.all([sb.from("tournaments").select("booking_id,status").in("booking_id",bkIds).in("status",["setup","in_progress","active"]),sb.from("match_requests").select("booking_id,status").in("booking_id",bkIds).in("status",["open","full"])]);const tSet=new Set((trns||[]).map(t=>t.booking_id));const mSet=new Set((mrs||[]).map(m=>m.booking_id));filteredBks.forEach(b=>{b.game_status={has_tournament:tSet.has(b.id),has_group:mSet.has(b.id)}})}
+    if(filteredBks.length>0){const{data:gsMap}=await sb.rpc("booking_game_status_bulk",{p_ids:filteredBks.map(b=>b.id)});filteredBks.forEach(b=>{b.game_status=(gsMap||{})[b.id]||{}})}
     setMyBookings(filteredBks);
     setCourses(c||[]);setFriends(f||[]);if(bk&&!selCourse)setSelCourse(bk.course_id);setView("create")}
   const maxP=4;
@@ -1271,8 +1271,38 @@ function TourneoTab(){
   async function createTorneo(){const c=courses.find(x=>x.id===selCourse);
     // max_players heredado del grupo (si viene de grupo) o calculado del tamaño del team de invitación
     const mp=inheritedMaxPlayers||(selFr.length+1);
-    const{data:t,error}=await sb.from("tournaments").insert({name:tName,created_by:s.user.id,course_id:selCourse,course_name:c?.course_name||"",status:"setup",game_mode:gMode,game_format:gFmt,booking_id:bkRef?.id||null,play_date:bkRef?.date||null,play_time:bkRef?.time||null,max_players:mp}).select().single();
-    if(error)return window.__toast?.(error.message,"error");
+    let t;
+    if(fromGroupId){
+      // Conversión atómica grupo→partida. La RPC:
+      //  1) inserta el tournament con un flag transaccional 'partee.converting_group' que permite
+      //     bypassar el trigger trg_tournaments_single_game (que de otra forma bloquearía el insert
+      //     por existir un match_request activo en el mismo booking);
+      //  2) actualiza el match_request con status='completed' y tournament_id (la gemelación);
+      //  3) retorna el tournament_id. Todo bajo FOR UPDATE para prevenir doble conversión.
+      const{data:tid,error}=await sb.rpc("convert_group_to_tournament",{p_group_id:fromGroupId,p_name:tName,p_game_mode:gMode,p_game_format:gFmt,p_max_players:mp});
+      if(error){
+        const msg=error.code==="23505"?"Esta reservación ya tiene una partida":
+          (error.message||"").includes("already_converted")?"Este grupo ya fue convertido a partida":
+          error.message||"Error al convertir grupo";
+        return window.__toast?.(msg,"error");
+      }
+      // La RPC solo devuelve el id; traemos el registro completo para openDetail
+      const{data:tf}=await sb.from("tournaments").select("*").eq("id",tid).single();
+      if(!tf)return window.__toast?.("No se pudo cargar la partida creada","error");
+      t=tf;
+    }else{
+      // Partida directa (con o sin booking). Manejamos los códigos de error del invariante:
+      //  23505 → UNIQUE violada (ya hay tournament en este booking);
+      //  23P01 → trigger cross-table (ya hay grupo activo; el usuario debería convertir, no paralelizar).
+      const{data:tn,error}=await sb.from("tournaments").insert({name:tName,created_by:s.user.id,course_id:selCourse,course_name:c?.course_name||"",status:"setup",game_mode:gMode,game_format:gFmt,booking_id:bkRef?.id||null,play_date:bkRef?.date||null,play_time:bkRef?.time||null,max_players:mp}).select().single();
+      if(error||!tn){
+        const msg=error?.code==="23505"?"Esta reservación ya tiene una partida":
+          error?.code==="23P01"?"Esta reservación ya tiene un grupo activo. Conviértelo a partida en vez de crear una paralela.":
+          error?.message||"Error al crear partida";
+        return window.__toast?.(msg,"error");
+      }
+      t=tn;
+    }
     const myTeam=gMode==="teams"?"A":null;
     await sb.from("tournament_players").insert({tournament_id:t.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id,is_creator:true,team:myTeam});
     // Construir lista de invitados: cuando viene de grupo usamos groupMembers directo (puede incluir no-amigos);
@@ -1286,12 +1316,14 @@ function TourneoTab(){
       // Título/mensaje específico cuando la partida nace de un grupo existente
       const notifTitle=fromGroupId?"Grupo convertido a partida":"Nueva partida";
       const notifMsg=fromGroupId
-        ?"Tu grupo en "+(c?.course_name||"")+" fue convertido a partida: "+tName
-        :(p?.nickname||p?.full_name)+" te invitó a "+tName+" en "+c?.course_name;
+        ?"Tu grupo en "+(c?.course_name||t.course_name||"")+" fue convertido a partida: "+tName
+        :(p?.nickname||p?.full_name)+" te invitó a "+tName+" en "+(c?.course_name||t.course_name||"");
       createNotif(inv.user_id,"match_update",notifTitle,notifMsg,{match_id:t.id,action_route:"tab:2",action_label:"Ver partida"});
     }
-    // Gemelación: sincronizar el grupo con la partida creada (name, modo, formato, tournament_id) y cerrarlo
-    if(fromGroupId){await sb.from("match_requests").update({tournament_id:t.id,name:tName,game_mode:gMode,game_format:gFmt,status:"closed"}).eq("id",fromGroupId);setFromGroupId(null)}
+    // Nota: cuando fromGroupId, la RPC convert_group_to_tournament ya actualizó el match_request
+    // con status='completed' y tournament_id. El UPDATE manual previo usaba status:'closed' que
+    // el CHECK rechazaba silenciosamente — ahora queda correctamente completado por la RPC.
+    if(fromGroupId)setFromGroupId(null);
     loadTorneos();openDetail(t)}
   async function openDetail(tn){
     setAt(tn);setView("detail");setPlayers([]);setHoles([]);setScores({});setReactions([]);setBadges([]);setCurHole(1);
@@ -2202,7 +2234,7 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     if(data)setDetail(data);
   },[detail?.id]);
   async function loadCourses(){const{data}=await sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("listing_status","active").in("facility_type",["campo","simulador"]).order("course_name");setCourses(data||[])}
-  async function loadBookings(){const today=new Date().toISOString().slice(0,10);const{data}=await sb.from("bookings").select("id,course_id,course_name,booking_date,booking_time,party_size").eq("user_id",s.user.id).eq("status","confirmed").gte("booking_date",today).order("booking_date",{ascending:true}).limit(10);const bks=data||[];if(bks.length>0){const bkIds=bks.map(b=>b.id);const[{data:trns},{data:mrs}]=await Promise.all([sb.from("tournaments").select("booking_id,status").in("booking_id",bkIds).in("status",["setup","in_progress","active"]),sb.from("match_requests").select("booking_id,status").in("booking_id",bkIds).in("status",["open","full"])]);const tSet=new Set((trns||[]).map(t=>t.booking_id));const mSet=new Set((mrs||[]).map(m=>m.booking_id));bks.forEach(b=>{b.game_status={has_tournament:tSet.has(b.id),has_group:mSet.has(b.id)}})}setMyBookings(bks)}
+  async function loadBookings(){const today=new Date().toISOString().slice(0,10);const{data}=await sb.from("bookings").select("id,course_id,course_name,booking_date,booking_time,party_size").eq("user_id",s.user.id).eq("status","confirmed").gte("booking_date",today).order("booking_date",{ascending:true}).limit(10);const bks=data||[];if(bks.length>0){const{data:gsMap}=await sb.rpc("booking_game_status_bulk",{p_ids:bks.map(b=>b.id)});bks.forEach(b=>{b.game_status=(gsMap||{})[b.id]||{}})}setMyBookings(bks)}
   async function load(){
     if(!s?.user?.id){setLd(false);return}
     setLd(true);
@@ -2234,9 +2266,16 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     const c2=courses.find(x=>x.id===selCourse);
     const finalName=(gName||"").trim()||null;
     const finalTime=flexTime?"flexible":playTime;
-    // Insertamos y obtenemos el id directamente (sin re-SELECT para evitar race conditions)
-    const{data:mr,error}=await sb.from("match_requests").insert({creator_id:s.user.id,course_id:selCourse,course_name:c2?.course_name||"",city:c2?.city||"",play_date:playDate,play_time:finalTime,max_players:maxP+1,game_mode:gameMode,game_format:gameFmt||null,name:finalName}).select().single();
-    if(error||!mr){window.__toast?.(error?.message||"Error al crear grupo","error");return}
+    // Insertamos y obtenemos el id directamente (sin re-SELECT para evitar race conditions).
+    // booking_id se persiste si el usuario seleccionó una reservación — establece la relación 1:1 con el booking
+    // que los índices UNIQUE parciales y los triggers trg_*_single_game hacen cumplir a nivel DB.
+    const{data:mr,error}=await sb.from("match_requests").insert({creator_id:s.user.id,course_id:selCourse,course_name:c2?.course_name||"",city:c2?.city||"",play_date:playDate,play_time:finalTime,max_players:maxP+1,game_mode:gameMode,game_format:gameFmt||null,name:finalName,booking_id:selBkId||null}).select().single();
+    if(error||!mr){
+      const msg=error?.code==="23505"?"Esta reservación ya tiene un grupo activo":
+        error?.code==="23P01"?"Esta reservación ya tiene una partida. No se puede crear un grupo independiente.":
+        error?.message||"Error al crear grupo";
+      window.__toast?.(msg,"error");return;
+    }
     // El creador se agrega como miembro aceptado (el trigger sync actualizará current_players/status)
     await sb.from("match_members").insert({match_id:mr.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id||"",status:"accepted"});
     window.__toast?.("¡Grupo creado!","success");
