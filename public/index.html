@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.16.1">
+<meta name="version" content="17.16.2">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2121,11 +2121,13 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
   </div>}
 
 function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=useState("browse");const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);const[myMemberships,setMyMemberships]=useState({});const[pendingCounts,setPendingCounts]=useState({});const[ld,setLd]=useState(true);const[courses,setCourses]=useState([]);const[selCourse,setSelCourse]=useState("");const[playDate,setPlayDate]=useState("");const[playTime,setPlayTime]=useState("");const[flexTime,setFlexTime]=useState(true);const[maxP,setMaxP]=useState(2);const[gameMode,setGameMode]=useState("");const[gameFmt,setGameFmt]=useState("");const[fDate,setFDate]=useState("");const[fCourse,setFCourse]=useState("");const[detail,setDetail]=useState(null);const[members,setMembers]=useState([]);const[pending,setPending]=useState([]);const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);const[selBkId,setSelBkId]=useState(null);const[autoFilledName,setAutoFilledName]=useState(false);const[editMode,setEditMode]=useState(false);const[editData,setEditData]=useState({});
-  useEffect(()=>{load();loadCourses()},[]);
-  useEffect(()=>{if(view==="create")loadBookings()},[view]);
+  useEffect(()=>{if(s?.user?.id){load();loadCourses()}},[s?.user?.id]);
+  useEffect(()=>{if(view==="create")loadBookings();if(view==="mine"&&s?.user?.id)load()},[view]);
   async function loadCourses(){const{data}=await sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("listing_status","active").in("facility_type",["campo","simulador"]).order("course_name");setCourses(data||[])}
   async function loadBookings(){const today=new Date().toISOString().slice(0,10);const{data}=await sb.from("bookings").select("id,course_id,course_name,booking_date,booking_time,party_size").eq("user_id",s.user.id).eq("status","confirmed").gte("booking_date",today).order("booking_date",{ascending:true}).limit(10);setMyBookings(data||[])}
-  async function load(){setLd(true);
+  async function load(){
+    if(!s?.user?.id){setLd(false);return}
+    setLd(true);
     // 1) Public/active groups for Buscar — excluir propios (descubrir es para conocer gente nueva)
     const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").in("status",["open","full"]).neq("creator_id",s.user.id).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");
     setGroups(all||[]);
@@ -2160,8 +2162,12 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     // El creador se agrega como miembro aceptado (el trigger sync actualizará current_players/status)
     await sb.from("match_members").insert({match_id:mr.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id||"",status:"accepted"});
     window.__toast?.("¡Grupo creado!","success");
-    setView("browse");setGName("");setSelBkId(null);setAutoFilledName(false);setSelCourse("");setPlayDate("");setPlayTime("");setFlexTime(true);setGameMode("");setGameFmt("");
-    load()
+    // Limpiar form
+    setGName("");setSelBkId(null);setAutoFilledName(false);setSelCourse("");setPlayDate("");setPlayTime("");setFlexTime(true);setGameMode("");setGameFmt("");
+    // Navegar a "Mis Grupos" para que el creador vea su grupo inmediatamente (confirmación visual)
+    setView("mine");
+    // Refrescar datos (incluye el nuevo grupo)
+    await load();
   }
   async function requestJoin(grp){if(grp.creator_id===s.user.id)return window.__toast?.("Es tu grupo","info");const{error}=await sb.from("match_members").insert({match_id:grp.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id||"",status:"pending"});if(error){window.__toast?.(error.code==="23505"?"Ya solicitaste unirte":"Error: "+error.message,"warn");return}setMyMemberships(prev=>({...prev,[grp.id]:"pending"}));createNotif(grp.creator_id,"match_update","Solicitud de grupo",(p?.nickname||p?.full_name)+" quiere unirse a tu grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});window.__toast?.("¡Solicitud enviada!","success")}
   async function openDetail(grp){setDetail(grp);const{data:mem}=await sb.from("match_members").select("*,user:user_id(full_name,nickname,player_id,city,handicap)").eq("match_id",grp.id).eq("status","accepted");setMembers(mem||[]);const{data:pend}=await sb.from("match_members").select("*,user:user_id(full_name,nickname,player_id,city,handicap)").eq("match_id",grp.id).eq("status","pending");setPending(pend||[])}
