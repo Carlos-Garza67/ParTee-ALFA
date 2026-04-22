@@ -1013,7 +1013,21 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   const[splitPerPerson,setSplitPerPerson]=useState("");
   const[search,setSearch]=useState("");
   const[processing,setProcessing]=useState(false);
-  const toggleFr=fid=>setSelFr(prev=>prev.includes(fid)?prev.filter(x=>x!==fid):[...prev,fid]);
+  const[activeCount,setActiveCount]=useState(0);
+  useEffect(()=>{
+    if(!booking?.id)return;
+    sb.from("booking_participants").select("id").eq("booking_id",booking.id).eq("is_creator_proportional",false).not("status","in","(cancelled,rejected,expired)").then(({data})=>setActiveCount((data||[]).length));
+  },[booking?.id]);
+  const availableSpots=Math.max(0,(booking?.party_size||0)-1-activeCount);
+  const atLimit=selFr.length>=availableSpots;
+  const toggleFr=fid=>setSelFr(prev=>{
+    if(prev.includes(fid))return prev.filter(x=>x!==fid);
+    if(prev.length>=availableSpots){
+      window.__toast?.("Solo quedan "+availableSpots+" espacios disponibles","warn");
+      return prev;
+    }
+    return[...prev,fid];
+  });
   const creatorAmount=withSplit?Number(splitPerPerson||0):0;
   const totalSplit=withSplit?creatorAmount*(selFr.length+1):0;
   const visibleFriends=friends.filter(f=>{
@@ -1066,6 +1080,7 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
       const msg=e.message||"Error al invitar";
       if(msg.includes("tee_time_too_close"))window.__toast?.("No se pueden enviar invitaciones a <24h del tee time","error");
       else if(msg.includes("split_already_configured"))window.__toast?.("Esta reserva ya tiene un split activo","error");
+      else if(msg.includes("party_size_exceeded"))window.__toast?.("No caben más jugadores en esta reserva","error");
       else window.__toast?.("Error: "+msg,"error");
     }finally{setProcessing(false)}
   };
@@ -1088,6 +1103,13 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
       ))}
     </div>
     {tab==="amigos"&&<>
+      <div style={{background:availableSpots===0?C.acc+"15":C.grn+"10",border:"1px solid "+(availableSpots===0?C.acc+"30":C.grn+"25"),borderRadius:10,padding:"10px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+        <span dangerouslySetInnerHTML={{__html:ic(availableSpots===0?"alert":"users",16,availableSpots===0?C.acc:C.grn)}}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:availableSpots===0?C.acc:C.txt}}>{availableSpots===0?t("Reserva llena"):availableSpots+" "+(availableSpots===1?t("espacio disponible"):t("espacios disponibles"))}</div>
+          <div style={{fontSize:11,color:C.ts,marginTop:1}}>{t("Reserva para")} {booking.party_size} {t("jugadores")} · {activeCount+1} {t("ocupados")} ({t("tú")} + {activeCount})</div>
+        </div>
+      </div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:10,marginBottom:10}}>
         <div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Dividir costo (split)")}</div><div style={{fontSize:11,color:C.ts,marginTop:1}}>{t("Cada invitado paga su parte al aceptar")}</div></div>
         <div onClick={()=>setWithSplit(v=>!v)} style={{width:42,height:24,borderRadius:12,background:withSplit?C.grn:C.bd,position:"relative",cursor:"pointer",transition:".2s"}}><div style={{position:"absolute",top:2,left:withSplit?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:".2s"}}/></div>
