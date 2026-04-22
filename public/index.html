@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.16.3">
+<meta name="version" content="17.16.4">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -515,7 +515,7 @@ function MapEmbed({lat,lng,name}){if(!lat||!lng)return null;const src="https://w
 
 function createNotif(userId,type,title,message,extra){
   if(!userId)return;
-  sb.from("notifications").insert({user_id:userId,type:type||"alert",title:title||"",message:message||"",...(extra||{})}).then(()=>{});
+  sb.from("notifications").insert({user_id:userId,type:type||"alert",title:title||"",message:message||"",...(extra||{})}).then(({error})=>{if(error)console.error("[createNotif] insert failed:",error,{userId,type,title,extra})});
   fetch(SB_FN_URL+"/send-push",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"send",user_id:userId,title:title||"Partee Golf",body:message||"",tag:type||"alert",url:"https://www.partee.com.mx"})}).catch(()=>{})
 }
 function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[show,setShow]=useState(false);const[notifs,setNotifs]=useState([]);const[ld,setLd]=useState(false);
