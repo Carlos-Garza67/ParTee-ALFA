@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.16.4">
+<meta name="version" content="17.17.0">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -518,8 +518,34 @@ function createNotif(userId,type,title,message,extra){
   sb.from("notifications").insert({user_id:userId,type:type||"alert",title:title||"",message:message||"",...(extra||{})}).then(({error})=>{if(error)console.error("[createNotif] insert failed:",error,{userId,type,title,extra})});
   fetch(SB_FN_URL+"/send-push",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"send",user_id:userId,title:title||"Partee Golf",body:message||"",tag:type||"alert",url:"https://www.partee.com.mx"})}).catch(()=>{})
 }
+// Hook de Realtime: suscribe a postgres_changes sobre `table` con `filter` opcional
+// (formato Realtime: "col=eq.valor"). `onChange(payload)` recibe eventos INSERT/UPDATE/DELETE.
+// Usa ref para el callback → el canal NO se recrea cuando cambia la función, solo cuando cambian `deps`.
+// Cleanup automático al desmontar o al cambiar deps.
+function useRealtime(table,filter,onChange,deps){
+  const cbRef=useRef(onChange);
+  useEffect(()=>{cbRef.current=onChange});
+  useEffect(()=>{
+    if(!table)return;
+    const chName="rt:"+table+":"+(filter||"all")+":"+Math.random().toString(36).slice(2,8);
+    const ch=sb.channel(chName).on("postgres_changes",{event:"*",schema:"public",table,...(filter?{filter}:{})},(payload)=>{try{cbRef.current&&cbRef.current(payload)}catch(e){console.error("[useRealtime]",table,e)}}).subscribe((status)=>{if(status==="CHANNEL_ERROR"||status==="TIMED_OUT")console.warn("[useRealtime]",table,"status:",status)});
+    return()=>{sb.removeChannel(ch)}
+  },deps||[]);
+}
 function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[show,setShow]=useState(false);const[notifs,setNotifs]=useState([]);const[ld,setLd]=useState(false);
   useEffect(()=>{if(!s)return;loadCount();const iv=setInterval(loadCount,30000);return()=>clearInterval(iv)},[s]);
+  // Realtime: campana se actualiza live ante INSERT/UPDATE/DELETE en notifications del usuario
+  useRealtime(s?.user?.id?"notifications":null,s?.user?.id?("user_id=eq."+s.user.id):null,(payload)=>{
+    if(payload.eventType==="INSERT"){
+      if(!payload.new.is_read)setCount(c=>c+1);
+      setNotifs(p=>[payload.new,...p]);
+    }else if(payload.eventType==="UPDATE"){
+      setNotifs(p=>p.map(n=>n.id===payload.new.id?payload.new:n));
+    }else if(payload.eventType==="DELETE"){
+      setNotifs(p=>p.filter(n=>n.id!==payload.old.id));
+      if(payload.old&&payload.old.is_read===false)setCount(c=>Math.max(0,c-1));
+    }
+  },[s?.user?.id]);
   async function loadCount(){if(!s)return;const{count:c}=await sb.from("notifications").select("id",{count:"exact",head:true}).eq("user_id",s.user.id).eq("is_read",false);setCount(c||0)}
   async function openPanel(){setShow(true);setLd(true);const{data}=await sb.from("notifications").select("*").eq("user_id",s.user.id).order("created_at",{ascending:false}).limit(50);setNotifs(data||[]);setLd(false);
     await sb.from("notifications").update({is_read:true}).eq("user_id",s.user.id).eq("is_read",false);setCount(0)}
@@ -1130,6 +1156,39 @@ function TourneoTab(){
   const[players,setPlayers]=useState([]);const[holes,setHoles]=useState([]);const[scores,setScores]=useState({});
   const[curHole,setCurHole]=useState(1);const[pendingChallenges,setPendingChallenges]=useState([]);const[reactions,setReactions]=useState([]);const[badges,setBadges]=useState([]);const[reactComment,setReactComment]=useState("");const[offlinePending,setOfflinePending]=useState(_offlineQ.count());const[isOnline,setIsOnline]=useState(typeof navigator!=="undefined"?navigator.onLine:true);useEffect(()=>{const on=()=>setIsOnline(true);const off=()=>setIsOnline(false);window.addEventListener("online",on);window.addEventListener("offline",off);return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off)}},[]);const panelRef=useRef(null);
   useEffect(()=>{if(s)loadTorneos()},[s]);
+  // Realtime (Fase B — partidas): lista de torneos del usuario live
+  useRealtime(s?.user?.id?"tournaments":null,null,()=>{if(s?.user?.id)loadTorneos()},[s?.user?.id]);
+  // Realtime: players del torneo abierto (nuevos jugadores, posiciones finales, cambios de equipo)
+  useRealtime(at?.id?"tournament_players":null,at?.id?("tournament_id=eq."+at.id):null,(payload)=>{
+    if(!at)return;
+    if(payload.eventType==="INSERT")setPlayers(p=>p.some(x=>x.id===payload.new.id)?p:[...p,payload.new]);
+    else if(payload.eventType==="UPDATE")setPlayers(p=>p.map(x=>x.id===payload.new.id?payload.new:x));
+    else if(payload.eventType==="DELETE")setPlayers(p=>p.filter(x=>x.id!==payload.old.id));
+  },[at?.id]);
+  // Realtime: scores live — reconciliación fina (crítico para leaderboard durante partida activa)
+  useRealtime(at?.id?"tournament_scores":null,at?.id?("tournament_id=eq."+at.id):null,(payload)=>{
+    if(!at)return;
+    if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
+      const sc=payload.new;if(!sc||!sc.player_id||sc.hole_number==null)return;
+      setScores(prev=>({...prev,[sc.player_id]:{...(prev[sc.player_id]||{}),[sc.hole_number]:sc.strokes}}));
+    }else if(payload.eventType==="DELETE"){
+      const sc=payload.old;if(!sc||!sc.player_id||sc.hole_number==null)return;
+      setScores(prev=>{const pl={...(prev[sc.player_id]||{})};delete pl[sc.hole_number];return{...prev,[sc.player_id]:pl}});
+    }
+  },[at?.id]);
+  // Realtime: estado del torneo abierto (setup→in_progress→completed, edit_deadline, etc.)
+  useRealtime(at?.id?"tournaments":null,at?.id?("id=eq."+at.id):null,(payload)=>{
+    if(!at)return;
+    if(payload.eventType==="UPDATE"&&payload.new)setAt(prev=>prev?{...prev,...payload.new}:prev);
+    else if(payload.eventType==="DELETE"){setAt(null);setView("list");loadTorneos()}
+  },[at?.id]);
+  // Realtime: reacciones del torneo abierto. Refetch con join para traer user_id→nickname/full_name
+  useRealtime(at?.id?"match_reactions":null,at?.id?("tournament_id=eq."+at.id):null,async(payload)=>{
+    if(!at)return;
+    if(payload.eventType==="DELETE"){setReactions(p=>p.filter(r=>r.id!==payload.old.id));return}
+    const{data}=await sb.from("match_reactions").select("*,user:user_id(full_name,nickname)").eq("tournament_id",at.id).order("created_at",{ascending:false});
+    setReactions(data||[]);
+  },[at?.id]);
   async function loadTorneos(){setLd(true);const[chR,tpR]=await Promise.all([sb.from("challenges").select("*,challenger:challenger_id(full_name,nickname,player_id)").eq("challenged_id",s.user.id).eq("status","pending"),sb.from("tournament_players").select("tournament_id").eq("user_id",s.user.id)]);setPendingChallenges(chR.data||[]);const tids=[...new Set((tpR.data||[]).map(t=>t.tournament_id))];if(tids.length>0){const{data}=await sb.from("tournaments").select("*").in("id",tids).order("created_at",{ascending:false});setTorneos((data||[]).filter(x=>!_delTorneoIds.has(x.id)))}else setTorneos([]);setLd(false)}
   async function quickDelete(tn){await _deleteT(tn,null)}
   const[bkRef,setBkRef]=useState(null);
@@ -2128,6 +2187,17 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
 function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=useState("browse");const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);const[myMemberships,setMyMemberships]=useState({});const[pendingCounts,setPendingCounts]=useState({});const[ld,setLd]=useState(true);const[courses,setCourses]=useState([]);const[selCourse,setSelCourse]=useState("");const[playDate,setPlayDate]=useState("");const[playTime,setPlayTime]=useState("");const[flexTime,setFlexTime]=useState(true);const[maxP,setMaxP]=useState(2);const[gameMode,setGameMode]=useState("");const[gameFmt,setGameFmt]=useState("");const[fDate,setFDate]=useState("");const[fCourse,setFCourse]=useState("");const[detail,setDetail]=useState(null);const[members,setMembers]=useState([]);const[pending,setPending]=useState([]);const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);const[selBkId,setSelBkId]=useState(null);const[autoFilledName,setAutoFilledName]=useState(false);const[editMode,setEditMode]=useState(false);const[editData,setEditData]=useState({});
   useEffect(()=>{if(s?.user?.id){load();loadCourses()}},[s?.user?.id]);
   useEffect(()=>{if(view==="create")loadBookings();if(view==="mine"&&s?.user?.id)load()},[view]);
+  // Realtime: lista de grupos live. Solo suscribir cuando estamos en browse/mine (evita tráfico en create/detail)
+  useRealtime(s?.user?.id&&(view==="browse"||view==="mine")?"match_requests":null,null,()=>{if(s?.user?.id)load()},[s?.user?.id,view]);
+  // Realtime: cambios en los miembros del grupo abierto (nuevas solicitudes, aceptaciones, salidas, expulsiones)
+  useRealtime(detail?.id?"match_members":null,detail?.id?("match_id=eq."+detail.id):null,()=>{if(detail)openDetail(detail)},[detail?.id]);
+  // Realtime: cambios en el match_request abierto (nombre/fecha/hora/formato/eliminación)
+  useRealtime(detail?.id?"match_requests":null,detail?.id?("id=eq."+detail.id):null,async(payload)=>{
+    if(!detail)return;
+    if(payload.eventType==="DELETE"){setDetail(null);load();return}
+    const{data}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("id",detail.id).single();
+    if(data)setDetail(data);
+  },[detail?.id]);
   async function loadCourses(){const{data}=await sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("listing_status","active").in("facility_type",["campo","simulador"]).order("course_name");setCourses(data||[])}
   async function loadBookings(){const today=new Date().toISOString().slice(0,10);const{data}=await sb.from("bookings").select("id,course_id,course_name,booking_date,booking_time,party_size").eq("user_id",s.user.id).eq("status","confirmed").gte("booking_date",today).order("booking_date",{ascending:true}).limit(10);setMyBookings(data||[])}
   async function load(){
