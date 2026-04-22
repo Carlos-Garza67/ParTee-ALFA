@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.17.3">
+<meta name="version" content="17.17.4">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1189,6 +1189,14 @@ function TourneoTab(){
     const{data}=await sb.from("match_reactions").select("*,user:user_id(full_name,nickname)").eq("tournament_id",at.id).order("created_at",{ascending:false});
     setReactions(data||[]);
   },[at?.id]);
+  // Realtime — badges Partida/Grupo de "Desde tus reservas" (live). Un ref estable con los IDs evita
+  // re-suscribir el canal en cada cambio del game_status de una card; el callback siempre lee IDs frescos.
+  const myBkIdsRef=useRef([]);useEffect(()=>{myBkIdsRef.current=myBookings.map(b=>b.id)},[myBookings]);
+  const refreshBkGameStatus=async()=>{const ids=myBkIdsRef.current;if(!ids.length)return;const{data:gsMap}=await sb.rpc("booking_game_status_bulk",{p_ids:ids});setMyBookings(prev=>prev.map(b=>({...b,game_status:(gsMap||{})[b.id]||b.game_status||{}})))};
+  // match_requests: alguien creó/canceló/convirtió un grupo sobre uno de mis bookings → refresca badges del wizard
+  useRealtime(view==="create"?"match_requests":null,null,(payload)=>{const bkId=payload.new?.booking_id||payload.old?.booking_id;if(bkId&&myBkIdsRef.current.includes(bkId))refreshBkGameStatus()},[view]);
+  // tournaments: alguien creó/canceló/completó una partida sobre uno de mis bookings → refresca badges del wizard
+  useRealtime(view==="create"?"tournaments":null,null,(payload)=>{const bkId=payload.new?.booking_id||payload.old?.booking_id;if(bkId&&myBkIdsRef.current.includes(bkId))refreshBkGameStatus()},[view]);
   async function loadTorneos(){setLd(true);const[chR,tpR]=await Promise.all([sb.from("challenges").select("*,challenger:challenger_id(full_name,nickname,player_id)").eq("challenged_id",s.user.id).eq("status","pending"),sb.from("tournament_players").select("tournament_id").eq("user_id",s.user.id)]);setPendingChallenges(chR.data||[]);const tids=[...new Set((tpR.data||[]).map(t=>t.tournament_id))];if(tids.length>0){const{data}=await sb.from("tournaments").select("*").in("id",tids).order("created_at",{ascending:false});setTorneos((data||[]).filter(x=>!_delTorneoIds.has(x.id)))}else setTorneos([]);setLd(false)}
   async function quickDelete(tn){await _deleteT(tn,null)}
   const[bkRef,setBkRef]=useState(null);
@@ -2233,6 +2241,14 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     const{data}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("id",detail.id).single();
     if(data)setDetail(data);
   },[detail?.id]);
+  // Realtime — badges Partida/Grupo de "Desde tus reservas" (live). Mismo patrón que TourneoTab:
+  // ref estable con IDs + refresh via booking_game_status_bulk para mantener consistencia con la fuente DB.
+  const myBkIdsRef=useRef([]);useEffect(()=>{myBkIdsRef.current=myBookings.map(b=>b.id)},[myBookings]);
+  const refreshBkGameStatus=async()=>{const ids=myBkIdsRef.current;if(!ids.length)return;const{data:gsMap}=await sb.rpc("booking_game_status_bulk",{p_ids:ids});setMyBookings(prev=>prev.map(b=>({...b,game_status:(gsMap||{})[b.id]||b.game_status||{}})))};
+  // match_requests: alguien creó/canceló/convirtió un grupo sobre uno de mis bookings → refresca badges del wizard
+  useRealtime(view==="create"?"match_requests":null,null,(payload)=>{const bkId=payload.new?.booking_id||payload.old?.booking_id;if(bkId&&myBkIdsRef.current.includes(bkId))refreshBkGameStatus()},[view]);
+  // tournaments: alguien creó/canceló/completó una partida sobre uno de mis bookings → refresca badges del wizard
+  useRealtime(view==="create"?"tournaments":null,null,(payload)=>{const bkId=payload.new?.booking_id||payload.old?.booking_id;if(bkId&&myBkIdsRef.current.includes(bkId))refreshBkGameStatus()},[view]);
   async function loadCourses(){const{data}=await sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("listing_status","active").in("facility_type",["campo","simulador"]).order("course_name");setCourses(data||[])}
   async function loadBookings(){const today=new Date().toISOString().slice(0,10);const{data}=await sb.from("bookings").select("id,course_id,course_name,booking_date,booking_time,party_size").eq("user_id",s.user.id).eq("status","confirmed").gte("booking_date",today).order("booking_date",{ascending:true}).limit(10);const bks=data||[];if(bks.length>0){const{data:gsMap}=await sb.rpc("booking_game_status_bulk",{p_ids:bks.map(b=>b.id)});bks.forEach(b=>{b.game_status=(gsMap||{})[b.id]||{}})}setMyBookings(bks)}
   async function load(){
