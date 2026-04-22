@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.17.4">
+<meta name="version" content="17.18.2">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -572,7 +572,7 @@ function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[sho
       </div>
       <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:"0 20px",minHeight:0}}>
         {ld?<div style={{padding:"20px 0"}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60} mb={10}/><Skeleton w="80%" h={16}/></div>:notifs.length===0?<EmptyState icon="bell" iconColor={C.tm} title={t("Sin notificaciones")} sub="Aquí aparecerán tus alertas"/>:
-        notifs.map(n=>{const routeMap={booking:"tab:1",share_request:"tab:1:requests",friend_request:"tab:3",match_update:"tab:2",booking_reminder:"tab:1"};const route=n.action_route||routeMap[n.type]||null;const label=n.action_label||(route?{booking:t("Ver reserva"),share_request:t("Ver solicitud"),friend_request:t("Ver amigos"),match_update:t("Ver grupo"),booking_reminder:t("Ver reserva")}[n.type]||t("Ver"):null);const hasAction=!!route;return<div key={n.id} onClick={()=>{if(hasAction){setShow(false);window.__navigate?.(route)}}} style={{display:"flex",gap:10,padding:"12px 0",borderBottom:"1px solid "+C.bd,alignItems:"flex-start",cursor:hasAction?"pointer":"default"}}>
+        notifs.map(n=>{const routeMap={booking:"tab:1",share_request:"tab:1:requests",booking_invitation:"tab:1:requests",booking_invitation_response:"tab:1",split_payment_received:"tab:1",split_reminder:"tab:1:requests",split_gap_charged:"tab:1",friend_request:"tab:3",match_update:"tab:2",booking_reminder:"tab:1"};const route=n.action_route||routeMap[n.type]||null;const label=n.action_label||(route?{booking:t("Ver reserva"),share_request:t("Ver solicitud"),booking_invitation:t("Ver invitación"),booking_invitation_response:t("Ver reserva"),split_payment_received:t("Ver reserva"),split_reminder:t("Ver invitación"),split_gap_charged:t("Ver reserva"),friend_request:t("Ver amigos"),match_update:t("Ver grupo"),booking_reminder:t("Ver reserva")}[n.type]||t("Ver"):null);const hasAction=!!route;return<div key={n.id} onClick={()=>{if(hasAction){setShow(false);window.__navigate?.(route)}}} style={{display:"flex",gap:10,padding:"12px 0",borderBottom:"1px solid "+C.bd,alignItems:"flex-start",cursor:hasAction?"pointer":"default"}}>
           <div style={{width:34,height:34,borderRadius:10,background:n.is_read?(C.glass||C.w04):(C.acc+"10"),border:"1px solid "+(n.is_read?(C.glassBd||C.bd):C.acc+"20"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ico[n.type]||ic("bell",16,C.txt)}}/>
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:n.is_read?500:700,color:C.txt}}>{n.title}</div><div style={{fontSize:12,color:C.ts,marginTop:2,lineHeight:1.4}}>{n.message}</div><div style={{..._s.flexB,marginTop:4}}><span style={{fontSize:10,color:C.tm}}>{ago(n.created_at)}</span>{hasAction&&<span style={{fontSize:10,fontWeight:700,color:C.grn,display:"flex",alignItems:"center",gap:3}}>{label} <span dangerouslySetInnerHTML={{__html:ic("right",10,C.grn)}}/></span>}</div></div>
           <button onClick={e=>{e.stopPropagation();deleteOne(n.id)}} style={{background:"none",border:"none",cursor:"pointer",padding:4,flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",14,C.tm)}}/>
@@ -1002,40 +1002,363 @@ function Ok({d,onHome}){
     {!d?.bk&&<button className="success-actions" onClick={onHome} style={{marginTop:14,padding:"14px 40px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}}>{t("Explorar")}</button>}
   </div>}
 
-function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[shareModal,setShareModal]=useState(null);const[selFr,setSelFr]=useState([]);
-  const[shareMode,setShareMode]=useState(null);
-  const[splitItems,setSplitItems]=useState([{name:"Green Fee",amount:""}]);
-  const[sentReqs,setSentReqs]=useState([]);const[recvReqs,setRecvReqs]=useState([]);
-  useEffect(()=>{if(s){load();loadReqs();sb.from("friends").select("*,friend:friend_id(id,full_name,player_id)").eq("user_id",s.user.id).in("status",["accepted","blocked"]).then(({data})=>setFriends(data||[]))}},[s,tab]);
+// ========================= v17.18.2 — Booking participants + Split =========================
+// InvitePlayersSheet: bottom-sheet unificado para invitar a una reserva.
+// Tabs: "Amigos" (con/sin split) | "Público" (abrir al descubrimiento) | "Partida" (partida formal).
+function InvitePlayersSheet({booking,friends,onClose,onInvited}){
+  const{s,p}=useA();
+  const[tab,setTab]=useState("amigos");
+  const[selFr,setSelFr]=useState([]);
+  const[withSplit,setWithSplit]=useState(false);
+  const[splitPerPerson,setSplitPerPerson]=useState("");
+  const[search,setSearch]=useState("");
+  const[processing,setProcessing]=useState(false);
+  const toggleFr=fid=>setSelFr(prev=>prev.includes(fid)?prev.filter(x=>x!==fid):[...prev,fid]);
+  const creatorAmount=withSplit?Number(splitPerPerson||0):0;
+  const totalSplit=withSplit?creatorAmount*(selFr.length+1):0;
+  const visibleFriends=friends.filter(f=>{
+    if(!search.trim())return true;
+    const q=search.toLowerCase();
+    return(f.friend?.full_name||"").toLowerCase().includes(q)||(f.friend?.nickname||"").toLowerCase().includes(q);
+  });
+  const sendInvites=async()=>{
+    if(selFr.length===0)return;
+    if(withSplit&&(!creatorAmount||creatorAmount<=0)){
+      window.__toast?.("Ingresa un monto para el split","warn");return;
+    }
+    setProcessing(true);
+    try{
+      if(withSplit){
+        // RPC create_split_invitations — crea creator + invitees atómicamente
+        const invitees=selFr.map(fid=>({user_id:fid,split_amount:creatorAmount}));
+        const{data,error}=await sb.rpc("create_split_invitations",{
+          p_booking_id:booking.id,
+          p_invitees:invitees,
+          p_creator_amount:creatorAmount,
+          p_creator_split_items:null
+        });
+        if(error)throw error;
+        // Notificar a cada invitado
+        for(const fid of selFr){
+          createNotif(fid,"booking_invitation","Invitación a jugar",booking.course_name+" — Tu parte: $"+fm(creatorAmount)+" MXN",{booking_id:booking.id,course_name:booking.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"});
+        }
+        window.__toast?.("Invitaciones enviadas con split","success");
+      }else{
+        // Modo simple: invitaciones una por una
+        for(const fid of selFr){
+          const{error}=await sb.rpc("invite_booking_participant",{
+            p_booking_id:booking.id,
+            p_user_id:fid,
+            p_share_mode:"simple",
+            p_split_amount:null,
+            p_split_items:null
+          });
+          if(error&&error.code!=="23505")throw error; // 23505 = ya invitado, ignoramos
+        }
+        for(const fid of selFr){
+          createNotif(fid,"booking_invitation","Invitación a jugar",booking.course_name+" — Invitación sin costo",{booking_id:booking.id,course_name:booking.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"});
+        }
+        window.__toast?.("Invitaciones enviadas","success");
+      }
+      onInvited?.();
+      onClose?.();
+    }catch(e){
+      const msg=e.message||"Error al invitar";
+      if(msg.includes("tee_time_too_close"))window.__toast?.("No se pueden enviar invitaciones a <24h del tee time","error");
+      else if(msg.includes("split_already_configured"))window.__toast?.("Esta reserva ya tiene un split activo","error");
+      else window.__toast?.("Error: "+msg,"error");
+    }finally{setProcessing(false)}
+  };
+  const goToPublic=()=>{
+    window.__createMatchFromBooking={id:booking.id,course_id:booking.course_id,course_name:booking.course_name,date:booking.booking_date,time:booking.booking_time,visibility:"public"};
+    onClose?.();
+    window.__navigate?.("tab:2");
+  };
+  const goToTournament=()=>{
+    window.__createMatchFromBooking={id:booking.id,course_id:booking.course_id,course_name:booking.course_name,date:booking.booking_date,time:booking.booking_time};
+    onClose?.();
+    window.__navigate?.("tab:2");
+  };
+  return<div className="bsheet-overlay" onClick={onClose}><div onClick={e=>e.stopPropagation()} className="bsheet">
+    <h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:4}}>{t("Invitar a jugar")}</h3>
+    <p style={{color:C.ts,fontSize:12,marginBottom:12}}>{booking.course_name} · {booking.booking_date} · ${fm(booking.total_cost)} MXN</p>
+    <div style={{display:"flex",gap:6,marginBottom:14,background:C.bg,borderRadius:10,padding:4}}>
+      {[{k:"amigos",l:"Amigos"},{k:"publico",l:"Público"},{k:"partida",l:"Partida"}].map(tb=>(
+        <button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:"8px 10px",borderRadius:8,border:"none",background:tab===tb.k?C.cd:"transparent",color:tab===tb.k?C.txt:C.ts,fontSize:12,fontWeight:tab===tb.k?700:500,cursor:"pointer"}}>{tb.l}</button>
+      ))}
+    </div>
+    {tab==="amigos"&&<>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:10,marginBottom:10}}>
+        <div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Dividir costo (split)")}</div><div style={{fontSize:11,color:C.ts,marginTop:1}}>{t("Cada invitado paga su parte al aceptar")}</div></div>
+        <div onClick={()=>setWithSplit(v=>!v)} style={{width:42,height:24,borderRadius:12,background:withSplit?C.grn:C.bd,position:"relative",cursor:"pointer",transition:".2s"}}><div style={{position:"absolute",top:2,left:withSplit?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:".2s"}}/></div>
+      </div>
+      {withSplit&&<div style={{background:C.grn+"10",border:"1px solid "+C.grn+"30",borderRadius:10,padding:12,marginBottom:12}}>
+        <label style={{fontSize:11,color:C.tm,marginBottom:4,display:"block"}}>{t("Monto por persona (MXN)")}</label>
+        <input type="number" value={splitPerPerson} onChange={e=>setSplitPerPerson(e.target.value)} placeholder="500" style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px",fontSize:15,color:C.grn,fontWeight:700,outline:"none"}}/>
+        {selFr.length>0&&creatorAmount>0&&<div style={{marginTop:10,fontSize:12,color:C.ts,lineHeight:1.7}}>
+          <div>{t("Tu parte")}: <strong style={{color:C.txt}}>${fm(creatorAmount)}</strong></div>
+          <div>{selFr.length} {t("invitado(s)")}: <strong style={{color:C.txt}}>${fm(creatorAmount)} c/u</strong></div>
+          <div style={{marginTop:4,paddingTop:6,borderTop:"1px dashed "+C.bd,fontWeight:700,color:C.grn}}>{t("Total reparto")}: ${fm(totalSplit)}</div>
+          {totalSplit>Number(booking.total_cost)&&<div style={{color:C.acc,fontSize:11,marginTop:3}}>⚠ {t("Supera el total de la reserva")} (${fm(booking.total_cost)})</div>}
+        </div>}
+      </div>}
+      <div style={{marginBottom:8}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t("Buscar amigo...")} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 12px",fontSize:13,color:C.txt,outline:"none"}}/>
+      </div>
+      <div style={{maxHeight:240,overflowY:"auto",marginBottom:12}}>
+        {visibleFriends.length===0?<p style={{color:C.tm,fontSize:12,textAlign:"center",padding:16}}>{friends.length===0?t("Agrega amigos primero"):t("Sin resultados")}</p>:visibleFriends.map(f=>{
+          const sel=selFr.includes(f.friend?.id);
+          return<div key={f.friend?.id} onClick={()=>toggleFr(f.friend?.id)} style={{display:"flex",alignItems:"center",gap:10,background:sel?C.grn+"12":C.bg,border:"1px solid "+(sel?C.grn:C.bd),borderRadius:10,padding:10,marginBottom:5,cursor:"pointer"}}>
+            <div style={{width:28,height:28,borderRadius:14,background:sel?C.grn+"30":C.pri,display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sel?ic("check",14,C.grn):ic("user",14,C.tm)}}/>
+            <div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{f.friend?.full_name}</div>{f.friend?.nickname&&<div style={{color:C.gld,fontSize:10}}>"{f.friend.nickname}"</div>}</div>
+          </div>;
+        })}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={sendInvites} disabled={!selFr.length||processing||(withSplit&&(!creatorAmount||creatorAmount<=0))} style={{flex:1,padding:12,background:selFr.length&&!processing?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:selFr.length&&!processing?"pointer":"default",opacity:selFr.length&&!processing?1:.4}}>{processing?t("Enviando..."):t("Enviar invitaciones")+(selFr.length?" ("+selFr.length+")":"")}</button>
+        <button onClick={onClose} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button>
+      </div>
+    </>}
+    {tab==="publico"&&<div style={{padding:"10px 0"}}>
+      <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("users",20,C.grn)}}/><h4 style={{color:C.txt,fontSize:14,fontWeight:700,margin:0}}>{t("Abrir al público")}</h4></div>
+        <p style={{color:C.ts,fontSize:12,lineHeight:1.5,margin:0}}>{t("Tu reserva aparecerá en el tab Versus para que otros jugadores (conocidos o no) puedan solicitar unirse. Tú apruebas quién entra.")}</p>
+        <p style={{color:C.tm,fontSize:11,marginTop:8}}>{t("Los grupos públicos no pueden tener split activado.")}</p>
+      </div>
+      <button onClick={goToPublic} style={{width:"100%",padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Ir a crear grupo público")}</button>
+    </div>}
+    {tab==="partida"&&<div style={{padding:"10px 0"}}>
+      <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("trophy",20,C.gld)}}/><h4 style={{color:C.txt,fontSize:14,fontWeight:700,margin:0}}>{t("Crear partida formal")}</h4></div>
+        <p style={{color:C.ts,fontSize:12,lineHeight:1.5,margin:0}}>{t("Registra una partida con formato (Stroke, Stableford, Match Play), scorecard y leaderboard. Da XP y puede ser oficial.")}</p>
+      </div>
+      <button onClick={goToTournament} style={{width:"100%",padding:12,background:`linear-gradient(135deg,${C.gld},#f59e0b)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Ir a crear partida")}</button>
+    </div>}
+  </div></div>;
+}
+
+// ParticipantsSection: lista de jugadores en una reserva con sus estados. Solo visible al dueño.
+function ParticipantsSection({booking,isOwner,onChanged}){
+  const{s}=useA();
+  const[parts,setParts]=useState([]);
+  const[ld,setLd]=useState(true);
+  const[reduceDlg,setReduceDlg]=useState(false);
+  const load=async()=>{
+    setLd(true);
+    const{data}=await sb.from("booking_participants").select("*, profile:user_id(full_name,nickname,player_id)").eq("booking_id",booking.id).neq("status","cancelled").order("created_at",{ascending:true});
+    setParts(data||[]);setLd(false);
+  };
+  useEffect(()=>{if(booking?.id)load()},[booking?.id]);
+  useRealtime(booking?.id?"booking_participants":null,booking?.id?("booking_id=eq."+booking.id):null,()=>load(),[booking?.id]);
+  const statusBadge=(p)=>{
+    if(p.is_creator_proportional)return{l:"Anfitrión",c:C.grn,bg:C.grn+"20"};
+    if(p.status==="accepted"&&p.coverage_source==="creator_absorbed")return{l:"Cubierto por anfitrión",c:C.gld,bg:C.gld+"20"};
+    if(p.status==="accepted"&&p.coverage_source==="gap_redistributed")return{l:"Cubierto entre el grupo",c:C.gld,bg:C.gld+"20"};
+    if(p.status==="accepted"&&p.payment_status==="paid_held")return{l:"Pagado",c:C.grn,bg:C.grn+"20"};
+    if(p.status==="accepted"&&p.payment_status==="paid_transferred")return{l:"Pagado",c:C.grn,bg:C.grn+"20"};
+    if(p.status==="accepted")return{l:"Confirmado",c:C.grn,bg:C.grn+"20"};
+    if(p.status==="accepted_pending_payment")return{l:"Pendiente de pago",c:C.gld,bg:C.gld+"20"};
+    if(p.status==="invited")return{l:"Invitado",c:C.ts,bg:C.bd};
+    if(p.status==="rejected")return{l:"Rechazó",c:C.acc,bg:C.acc+"20"};
+    return{l:p.status,c:C.tm,bg:C.bd};
+  };
+  const rejectedParts=parts.filter(x=>x.status==="rejected");
+  const teeDateTime=new Date((booking.booking_date||"")+"T"+((booking.booking_time||"12:00").slice(0,5)));
+  const hoursLeft=(teeDateTime.getTime()-Date.now())/3600000;
+  const canReduce=isOwner&&rejectedParts.length>0&&hoursLeft>2&&booking.party_size>1;
+  const removeParticipant=async(pid)=>{
+    if(!window.__confirm){if(!confirm(t("¿Remover este jugador?")))return}
+    else{window.__confirm(t("¿Remover este jugador? Si ya había pagado, se procesará un refund."),async()=>{
+      try{
+        const{data,error}=await sb.rpc("remove_booking_participant",{p_participant_id:pid});
+        if(error)throw error;
+        if(data?.needs_stripe_refund&&data.payment_intent_id){
+          fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_intent_id:data.payment_intent_id,partial:true})}).catch(()=>{});
+        }
+        window.__toast?.("Jugador removido","success");
+        load();onChanged?.();
+      }catch(e){
+        const msg=e.message||"";
+        if(msg.includes("tee_time_too_close"))window.__toast?.("No se puede remover a <24h del tee time","error");
+        else window.__toast?.("Error: "+msg,"error");
+      }
+    });return}
+  };
+  return<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Jugadores")} <span style={{color:C.tm,fontWeight:500}}>({parts.filter(x=>x.status==="accepted"||x.status==="accepted_pending_payment"||x.is_creator_proportional).length}/{booking.party_size})</span></h4>
+    </div>
+    {ld?<Skeleton w="100%" h={40}/>:parts.length===0?<p style={{fontSize:12,color:C.tm,margin:0}}>{t("Sin participantes todavía. Invita a jugar.")}</p>:parts.map(pp=>{
+      const bd=statusBadge(pp);
+      return<div key={pp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.bd+"40"}}>
+        <div style={{width:32,height:32,borderRadius:16,background:C.pri,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("user",14,C.tm)}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:C.txt,fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pp.profile?.full_name||"Jugador"}{pp.profile?.nickname?<span style={{color:C.gld,fontWeight:400}}> "{pp.profile.nickname}"</span>:null}</div>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginTop:2}}>
+            {pp.split_amount>0&&<span style={{fontSize:10,color:C.ts}}>${fm(pp.split_amount)}</span>}
+            <span style={{fontSize:10,color:bd.c,background:bd.bg,padding:"2px 7px",borderRadius:5,fontWeight:600}}>{bd.l}</span>
+          </div>
+        </div>
+        {isOwner&&!pp.is_creator_proportional&&(pp.status==="invited"||pp.status==="accepted_pending_payment")&&hoursLeft>24&&(
+          <button onClick={()=>removeParticipant(pp.id)} style={{width:26,height:26,borderRadius:13,background:C.acc+"15",border:"none",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
+        )}
+      </div>;
+    })}
+    {canReduce&&<div style={{background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:10,padding:10,marginTop:10}}>
+      <div style={{fontSize:12,color:C.txt,fontWeight:600,marginBottom:4}}>{rejectedParts.length} {rejectedParts.length===1?t("jugador rechazó"):t("jugadores rechazaron")}</div>
+      <div style={{fontSize:11,color:C.ts,marginBottom:8}}>{t("Puedes reducir el tamaño de la reserva. Se notificará al campo y recibirás refund por los espacios liberados.")}</div>
+      <button onClick={()=>setReduceDlg(true)} style={{width:"100%",padding:8,background:C.gld+"20",border:"1px solid "+C.gld+"40",borderRadius:8,color:C.gld,fontSize:12,fontWeight:700,cursor:"pointer"}}>{t("Reducir reserva")} → {booking.party_size-rejectedParts.length} {t("jugadores")}</button>
+    </div>}
+    {reduceDlg&&<ReduceBookingDialog booking={booking} rejectedParts={rejectedParts} onClose={()=>setReduceDlg(false)} onReduced={()=>{setReduceDlg(false);load();onChanged?.();}}/>}
+  </div>;
+}
+
+// AcceptInvitationModal: el invitado acepta o rechaza una invitación (con flujo de pago si hay split).
+function AcceptInvitationModal({invitation,onClose,onResponded}){
+  const{s,p}=useA();
+  const[processing,setProcessing]=useState(false);
+  const[error,setError]=useState("");
+  const inv=invitation;
+  const bk=inv.booking||{};
+  const accept=async()=>{
+    setProcessing(true);setError("");
+    try{
+      // Caso simple (no split): marcar directo como accepted
+      if(inv.share_mode!=="split"){
+        const{error:err}=await sb.from("booking_participants").update({status:"accepted",updated_at:new Date().toISOString()}).eq("id",inv.id);
+        if(err)throw err;
+        createNotif(inv.invited_by,"booking_invitation_response","Invitación aceptada",(p?.full_name||"Tu amigo")+" aceptó jugar en "+bk.course_name,{booking_id:inv.booking_id,action_route:"tab:1",action_label:"Ver reserva"});
+        window.__toast?.("¡Reserva confirmada!","success");
+        onResponded?.();onClose?.();
+        return;
+      }
+      // Caso split: llamar edge function split-charge
+      const sess=await sb.auth.getSession();
+      const tk=sess.data.session?.access_token;
+      const res=await fetch(SB_FN_URL+"/split-charge",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({participant_id:inv.id})});
+      const data=await res.json();
+      if(data.requires_action&&data.client_secret){
+        // 3DS: confirmar en cliente con Stripe.js
+        if(!window.Stripe){setError("Stripe no está disponible");return;}
+        const stripe=window.Stripe(STRIPE_PK);
+        const{error:stripeErr,paymentIntent}=await stripe.confirmCardPayment(data.client_secret);
+        if(stripeErr){setError(stripeErr.message);return;}
+        if(paymentIntent?.status==="succeeded"){
+          // El webhook se encarga del resto; notificamos de manera optimista
+          createNotif(inv.invited_by,"booking_invitation_response","Invitación aceptada y pagada",(p?.full_name||"Tu amigo")+" pagó su parte de $"+fm(inv.split_amount),{booking_id:inv.booking_id,action_route:"tab:1"});
+          window.__toast?.("¡Pagado! Tu lugar está asegurado","success");
+          onResponded?.();onClose?.();
+        }else{setError("Pago en estado: "+(paymentIntent?.status||"desconocido"))}
+      }else if(data.needs_card){
+        createNotif(inv.invited_by,"booking_invitation_response","Invitación aceptada (pendiente de pago)",(p?.full_name||"Tu amigo")+" aceptó pero aún no liquida su parte",{booking_id:inv.booking_id,action_route:"tab:1"});
+        window.__toast?.("Aceptado. Agrega una tarjeta para liquidar $"+fm(inv.split_amount),"info");
+        onResponded?.();onClose?.();
+      }else if(data.success){
+        createNotif(inv.invited_by,"booking_invitation_response","Invitación aceptada y pagada",(p?.full_name||"Tu amigo")+" pagó su parte de $"+fm(inv.split_amount),{booking_id:inv.booking_id,action_route:"tab:1"});
+        window.__toast?.("¡Pagado! Tu lugar está asegurado","success");
+        onResponded?.();onClose?.();
+      }else{
+        setError(data.message||data.error||"Error al procesar pago");
+      }
+    }catch(e){setError(e.message||"Error inesperado");}
+    finally{setProcessing(false);}
+  };
+  const reject=async()=>{
+    if(!window.confirm(t("¿Rechazar esta invitación?")))return;
+    setProcessing(true);
+    try{
+      await sb.from("booking_participants").update({status:"rejected",updated_at:new Date().toISOString()}).eq("id",inv.id);
+      createNotif(inv.invited_by,"booking_invitation_response","Invitación declinada",(p?.full_name||"Tu amigo")+" declinó la invitación en "+bk.course_name,{booking_id:inv.booking_id,action_route:"tab:1"});
+      window.__toast?.("Invitación rechazada","info");
+      onResponded?.();onClose?.();
+    }catch(e){setError(e.message);}
+    finally{setProcessing(false);}
+  };
+  return<div className="modal-bg" onClick={processing?null:onClose}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:440}}>
+    <h3 style={{color:C.txt,fontSize:17,fontWeight:800,margin:"0 0 4px"}}>{t("Invitación a jugar")}</h3>
+    <p style={{color:C.ts,fontSize:12,marginBottom:14}}>{t("Te invitaron a una reserva")}</p>
+    <div style={{background:C.bg,borderRadius:12,padding:14,marginBottom:14,border:"1px solid "+C.bd}}>
+      <div style={{fontSize:15,fontWeight:800,color:C.txt,marginBottom:6}}>{bk.course_name||"Campo"}</div>
+      <div style={{display:"flex",gap:16,fontSize:12,color:C.ts}}>
+        <span><span dangerouslySetInnerHTML={{__html:ic("calendar",12,C.ts)}}/> {bk.booking_date}</span>
+        <span><span dangerouslySetInnerHTML={{__html:ic("clock",12,C.ts)}}/> {bk.booking_time?.slice(0,5)}</span>
+      </div>
+    </div>
+    {inv.share_mode==="split"?<div style={{background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:12,padding:14,marginBottom:14}}>
+      <div style={{fontSize:11,color:C.tm,marginBottom:3}}>{t("Tu parte")}</div>
+      <div style={{fontSize:26,fontWeight:900,color:C.grn}}>${fm(inv.split_amount)} <span style={{fontSize:12,color:C.ts,fontWeight:500}}>MXN</span></div>
+      {inv.split_items&&inv.split_items.length>0&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px dashed "+C.grn+"40"}}>{inv.split_items.map((it,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.ts,marginBottom:2}}><span>{it.name}</span><span>${fm(it.amount)}</span></div>)}</div>}
+      <p style={{fontSize:11,color:C.ts,margin:"10px 0 0",lineHeight:1.5}}>{t("Al aceptar, se cobrará inmediatamente a tu tarjeta guardada. Si no tienes tarjeta, quedarás aceptado pendiente de pago.")}</p>
+    </div>:<div style={{background:C.grn+"10",border:"1px solid "+C.grn+"30",borderRadius:12,padding:14,marginBottom:14}}>
+      <div style={{fontSize:13,color:C.grn,fontWeight:700}}>{t("Invitación sin costo")}</div>
+      <p style={{fontSize:11,color:C.ts,margin:"6px 0 0",lineHeight:1.5}}>{t("El anfitrión cubre tu parte. Solo acepta para confirmar que irás.")}</p>
+    </div>}
+    {error&&<div style={{background:C.acc+"15",border:"1px solid "+C.acc+"30",borderRadius:10,padding:10,marginBottom:10,fontSize:12,color:C.acc}}>{error}</div>}
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={accept} disabled={processing} style={{flex:2,padding:12,background:processing?C.cd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:processing?"default":"pointer",opacity:processing?.5:1}}>{processing?t("Procesando..."):inv.share_mode==="split"?t("Aceptar y pagar"):t("Aceptar")}</button>
+      <button onClick={reject} disabled={processing} style={{flex:1,padding:12,background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontWeight:700,cursor:"pointer",opacity:processing?.5:1}}>{t("Rechazar")}</button>
+    </div>
+    <button onClick={onClose} disabled={processing} style={{width:"100%",padding:10,marginTop:8,background:"transparent",border:"none",color:C.tm,fontSize:12,cursor:"pointer"}}>{t("Cerrar")}</button>
+  </div></div>;
+}
+
+// ReduceBookingDialog: confirma reducción de reserva (party_size, refund parcial, notif al campo)
+function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
+  const[processing,setProcessing]=useState(false);
+  const newSize=Math.max(1,booking.party_size-rejectedParts.length);
+  const pricePerPlayer=Number(booking.total_cost||0)/Math.max(booking.party_size,1);
+  const refundAmount=Math.round(pricePerPlayer*rejectedParts.length*100)/100;
+  const confirm=async()=>{
+    setProcessing(true);
+    try{
+      const{data,error}=await sb.rpc("reduce_booking_size",{
+        p_booking_id:booking.id,
+        p_new_party_size:newSize,
+        p_remove_participant_ids:rejectedParts.map(p=>p.id)
+      });
+      if(error)throw error;
+      if(!data?.success)throw new Error("reduce_failed");
+      const spotsToRelease=booking.party_size-newSize;
+      try{await sb.rpc("release_slot",{p_course_name:booking.course_name,p_slot_date:booking.booking_date,p_slot_time:booking.booking_time,p_party_size:spotsToRelease})}catch(e){}
+      if(booking.stripe_payment_intent&&data.refund_amount>0){
+        fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:booking.id,partial_amount:data.refund_amount,reason:"size_reduced"})}).catch(()=>{});
+      }
+      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"booking_size_reduced",data:{booking_code:data.booking_code,course_name:data.course_name,course_id:data.course_id,date:data.booking_date,time:data.booking_time?.slice(0,5),old_party_size:data.old_party_size,new_party_size:data.new_party_size,refund_amount:data.refund_amount}})}).catch(()=>{});
+      window.__toast?.("Reserva reducida a "+newSize+" jugadores · Refund $"+fm(data.refund_amount),"success");
+      onReduced?.();
+    }catch(e){
+      const msg=e.message||"";
+      if(msg.includes("tee_time_too_close"))window.__toast?.("No se puede reducir a <2h del tee time","error");
+      else window.__toast?.("Error: "+msg,"error");
+    }finally{setProcessing(false)}
+  };
+  return<div className="modal-bg" onClick={processing?null:onClose}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:420}}>
+    <h3 style={{color:C.txt,fontSize:16,fontWeight:800,margin:"0 0 10px"}}>{t("Reducir reserva")}</h3>
+    <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}><span style={{color:C.ts}}>{t("Jugadores")}</span><span style={{color:C.txt,fontWeight:700}}>{booking.party_size} → {newSize}</span></div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}><span style={{color:C.ts}}>{t("Total")}</span><span style={{color:C.txt,fontWeight:700}}>${fm(booking.total_cost)} → ${fm(booking.total_cost-refundAmount)}</span></div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:14,paddingTop:8,borderTop:"1px dashed "+C.bd}}><span style={{color:C.grn,fontWeight:700}}>{t("Refund")}</span><span style={{color:C.grn,fontWeight:800}}>${fm(refundAmount)} MXN</span></div>
+    </div>
+    <p style={{fontSize:11,color:C.ts,lineHeight:1.6,marginBottom:12}}>{t("Se liberarán los espacios, se procesará el refund a tu tarjeta y se notificará al campo del cambio.")}</p>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={confirm} disabled={processing} style={{flex:2,padding:12,background:processing?C.cd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:processing?"default":"pointer"}}>{processing?t("Procesando..."):t("Confirmar")}</button>
+      <button onClick={onClose} disabled={processing} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>
+    </div>
+  </div></div>;
+}
+
+function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);
+  useEffect(()=>{if(s){load();loadInvitations();sb.from("friends").select("*,friend:friend_id(id,full_name,player_id,nickname)").eq("user_id",s.user.id).eq("status","accepted").then(({data})=>setFriends(data||[]))}},[s,tab]);
   useEffect(()=>{const h=e=>{if(e.detail?.tab)setTab(e.detail.tab)};window.addEventListener("partee:subtab",h);return()=>window.removeEventListener("partee:subtab",h)},[]);
   async function load(){setLd(true);const td=new Date().toISOString().split("T")[0];let q=sb.from("bookings").select("*").eq("user_id",s.user.id).order("booking_date",{ascending:tab==="up"});if(tab==="up")q=q.gte("booking_date",td).neq("status","cancelled");else q=q.lt("booking_date",td);const{data}=await q;setBs(data||[]);setLd(false)}
-  async function loadReqs(){
-    const{data:sent}=await sb.from("share_requests").select("*").eq("sender_id",s.user.id).order("created_at",{ascending:false});setSentReqs(sent||[]);
-    const{data:recv}=await sb.from("share_requests").select("*,sender:sender_id(full_name,player_id,nickname)").eq("receiver_id",s.user.id).eq("status","pending").order("created_at",{ascending:false});setRecvReqs(recv||[])}
+  async function loadInvitations(){
+    const{data}=await sb.from("booking_participants").select("*, booking:booking_id(id,course_name,booking_date,booking_time,user_id,total_cost,party_size), inviter:invited_by(full_name,nickname,player_id)").eq("user_id",s.user.id).in("status",["invited","accepted_pending_payment"]).order("created_at",{ascending:false});
+    setInvitations(data||[]);
+  }
+  useRealtime(s?.user?.id?"booking_participants":null,s?.user?.id?("user_id=eq."+s.user.id):null,()=>loadInvitations(),[s?.user?.id]);
   const openDetail=async(b)=>{setDetail(b);if(b.course_id){const{data:c}=await sb.from("golf_courses").select("*").eq("id",b.course_id).single();setCourse(c)}else{setCourse({course_name:b.course_name,city:"",state:"",photo_urls:[]})}const{data:ex}=await sb.from("booking_extras").select("*,extras_catalog(name,icon,price)").eq("booking_id",b.id);setBkExtras(ex||[])};
-  const toggleFr=fid=>setSelFr(p=>p.includes(fid)?p.filter(x=>x!==fid):[...p,fid]);
-  const addSplitItem=()=>setSplitItems(p=>[...p,{name:"",amount:""}]);
-  const updSplitItem=(i,k,v)=>setSplitItems(p=>p.map((x,j)=>j===i?{...x,[k]:v}:x));
-  const rmSplitItem=(i)=>setSplitItems(p=>p.filter((_,j)=>j!==i));
-  const splitTotal=splitItems.reduce((s,x)=>s+Number(x.amount||0),0);
-  const splitPerPerson=selFr.length>0?Math.round(splitTotal/(selFr.length+1)):0;
-  const doShare=async()=>{if(!shareModal||selFr.length===0)return;
-    try{const bk=shareModal;
-    for(const fid of selFr){
-      await sb.from("share_requests").upsert({booking_id:bk.id,sender_id:s.user.id,receiver_id:fid,share_mode:shareMode||"simple",status:"pending",split_amount:shareMode==="split"?splitPerPerson:0,split_items:shareMode==="split"?splitItems:[],course_name:bk.course_name,course_id:bk.course_id,booking_date:bk.booking_date,booking_time:bk.booking_time,total_cost:Number(bk.total_cost)},{onConflict:"booking_id,receiver_id"})}
-    for(const fid of selFr){createNotif(fid,"share_request","Solicitud de reserva compartida",bk.course_name+" — "+(shareMode==="split"?"Split $"+splitPerPerson:"Invitación"),{booking_id:bk.id,course_name:bk.course_name,action_route:"tab:1:requests",action_label:"Ver solicitud"})}if(window.__toast)window.__toast("Solicitud enviada!","success");setShareModal(null);setShareMode(null);setSelFr([]);setSplitItems([{name:"Green Fee",amount:""}]);loadReqs()}catch(e){if(window.__toast)window.__toast("Error: "+e.message,"error");console.error(e)}};
-  const acceptReq=async(req)=>{
-    try{const{data:result}=await sb.rpc("accept_share_request",{p_request_id:req.id});
-    if(!result?.ok){window.__toast?.(result?.reason||"Error al aceptar","error");return}
-    createNotif(req.sender_id,"share_request","Solicitud aceptada",(p?.full_name||"Un amigo")+" aceptó tu reserva en "+req.course_name,{booking_id:req.booking_id,course_name:req.course_name,action_route:"tab:1",action_label:"Ver reservas"});
-    fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"booking_shared_accepted",to:s.user.email,data:{booking_code:result.booking_code||"",player_name:req.sender?.full_name||"Amigo",course_name:req.course_name,date:req.booking_date,time:req.booking_time?.slice(0,5),split_amount:req.split_amount||0}})}).catch(()=>{});
-    window.__toast?.("Reserva aceptada · Código: "+result.booking_code,"success");
-    loadReqs();load()}catch(e){window.__toast?.("Error: "+e.message,"error")}};
-  const rejectReq=async(req)=>{await sb.from("share_requests").update({status:"rejected",updated_at:new Date().toISOString()}).eq("id",req.id);createNotif(req.sender_id,"share_request","Reserva declinada",(p?.full_name||"Un amigo")+" declinó tu reserva en "+req.course_name,{booking_id:req.booking_id,course_name:req.course_name,action_route:"tab:1",action_label:"Ver reservas"});loadReqs()};
-  const getReqsForBooking=(bkId)=>sentReqs.filter(r=>r.booking_id===bkId);
-  const reqStc={pending:{l:t("Pendiente"),c:C.gld},accepted:{l:"Aceptada",c:C.grn},rejected:{l:"Rechazada",c:C.acc}};
   const stc={confirmed:{l:t("Confirmada"),c:C.grn},cancelled:{l:t("Cancelada"),c:C.acc},pending:{l:t("Pendiente"),c:C.gld}};
-  if(detail){const bkReqs=getReqsForBooking(detail.id);return<div className="fi" style={{paddingBottom:20}}>
+  if(detail){return<div className="fi" style={{paddingBottom:20}}>
     <div style={{display:"flex",alignItems:"center",gap:10,padding:16,paddingBottom:0}}><button onClick={()=>{setDetail(null);setCourse(null)}} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/><h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>{t("Detalle de Reserva")}</h2></div>
     {course&&<div style={{padding:16}}><div style={{borderRadius:16,overflow:"hidden",border:"1px solid "+(C.glassBd||C.bd),marginBottom:14,boxShadow:C.shCard||"none"}}><Img imgs={course.photo_urls} h={130}/><div style={{background:C.glass||C.w04,padding:14}}><h3 style={{fontSize:15,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>{course.course_name}</h3><p style={{fontSize:12,color:C.ts,marginTop:2}}>{course.city}, {course.state}</p></div></div>
       {detail.booking_code&&<div style={{background:`linear-gradient(135deg,${C.grn},#00cec9)`,borderRadius:14,padding:14,marginBottom:14,textAlign:"center"}}><div style={{fontSize:9,textTransform:"uppercase",letterSpacing:2,color:"rgba(255,255,255,.6)",marginBottom:2}}>{t("CÓDIGO DE RESERVACIÓN")}</div><div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:3,..._s.mono}}>{detail.booking_code}</div></div>}
@@ -1049,12 +1372,11 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         {bkExtras.length>0&&bkExtras.map((ex,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}><span style={{color:C.ts}}>{ex.extras_catalog?.icon} {ex.extras_catalog?.name} x{ex.quantity}</span><span style={{color:C.txt}}>${fm(ex.total_price)}</span></div>)}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid "+C.bd,paddingTop:10,marginTop:bkExtras.length>0?8:0}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>{t("Total")}</span><div style={{textAlign:"right"}}><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(detail.total_cost)} MXN</span>{detail.total_cost>0&&detail.stripe_payment_intent&&<div style={{display:"inline-flex",alignItems:"center",gap:4,marginLeft:8,padding:"2px 8px",borderRadius:6,background:(detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"?C.acc:detail.payment_status==="no_show_fee"?C.acc:C.gld)+"15"}}><span dangerouslySetInnerHTML={{__html:ic(detail.payment_status==="paid"?"check":detail.payment_status==="refunded"?"undo":detail.payment_status==="no_show_fee"?"alert":"clock",10,detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"?C.acc:detail.payment_status==="no_show_fee"?C.acc:C.gld)}}/><span style={{fontSize:10,fontWeight:700,color:detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"||detail.payment_status==="no_show_fee"?C.acc:C.gld}}>{detail.payment_status==="paid"?t("Cobrado"):detail.payment_status==="refunded"?t("Reembolsado"):detail.payment_status==="no_show_fee"?"No-Show Fee":t("Pendiente")}</span></div>}</div></div>
       </div>
-      {bkReqs.length>0&&<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}><h4 style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{t("Solicitudes Enviadas")}</h4>
-        {bkReqs.map(r=>{const st=reqStc[r.status];return<div key={r.id} style={{..._s.flexB,padding:"6px 0",borderBottom:"1px solid "+C.bd+"40"}}><div><div style={{fontSize:13,color:C.txt}}>{friends.find(f=>f.friend?.id===r.receiver_id)?.friend?.full_name||"Amigo"}</div><div style={{fontSize:10,color:C.tm}}>{r.share_mode==="split"?"Split $"+fm(r.split_amount):"Compartida"}</div></div><span style={{fontSize:10,color:st?.c,background:(st?.c||C.tm)+"20",padding:"3px 8px",borderRadius:6,fontWeight:600}}>{st?.l}</span></div>})}</div>}
+      <ParticipantsSection booking={detail} isOwner={true} onChanged={()=>{load();loadInvitations();}}/>
       {(()=>{const courseTz=course?.timezone||"America/Mexico_City";const teeUTC=teeToUTC(detail.booking_date,detail.booking_time||"00:00:00",courseTz);const hoursUntil=(teeUTC.getTime()-Date.now())/3600000;const isPast=hoursUntil<=0;const isIn24h=!isPast&&hoursUntil<24;const isSettled=detail.settlement_status==="settled";const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;const canCancel=detail.status==="confirmed"&&!isPast&&!isSettled;const canShare=detail.status==="confirmed"&&!isPast&&detail.party_size>=2;return<>{!isPast&&detail.status==="confirmed"&&<CalBtn course={detail.course_name} date={detail.booking_date} time={detail.booking_time}/>}{course&&<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+(isIn24h&&!isFree?C.acc+"40":C.bd),marginBottom:14}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("clock",16,isIn24h&&!isFree?C.acc:isPast?C.tm:C.grn)}}/><h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Política de Cancelación")}</h4></div><div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>La hora del tee time ya pasó. No es posible cancelar ni reembolsar.</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> Estás a menos de 24h del tee time.</p><p style={{margin:"0 0 4px",color:C.acc}}>Si cancelas, <strong>no habrá reembolso</strong>. El pago queda como <strong>No-Show Fee</strong> (${fm(detail.total_cost)} MXN).</p><p style={{margin:0,color:C.ts}}>Tu espacio se liberará para otros jugadores.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de 24h antes</strong> — cancelación con reembolso completo.</p><p style={{margin:"0 0 4px"}}><strong style={{color:C.acc}}>Menos de 24h</strong> — sin reembolso (No-Show Fee). Se libera el espacio.</p><p style={{margin:0}}><strong style={{color:C.tm}}>Después del tee time</strong> — no se puede cancelar ni reembolsar.</p></>}</div></div>}
       {canCancel&&<div style={{display:"flex",gap:8,marginBottom:14}}>
-        {canShare?<button onClick={()=>{setShareModal(detail);setShareMode(null);setSelFr([]);setSplitItems([{name:"Green Fee",amount:detail.total_cost?.toString()||""}])}} style={{flex:1,padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Compartir")}</button>
-        :detail.party_size<2?<div style={{flex:1,padding:10,background:C.cd,borderRadius:10,textAlign:"center",opacity:.4}}><span style={{fontSize:12,color:C.tm}}>{t("Compartir disponible desde 2 jugadores")}</span></div>:null}
+        {canShare?<button onClick={()=>setInvModal(detail)} style={{flex:1,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("users",14,"#fff")}}/>{t("Invitar a jugar")}</button>
+        :detail.party_size<2?<div style={{flex:1,padding:10,background:C.cd,borderRadius:10,textAlign:"center",opacity:.4}}><span style={{fontSize:12,color:C.tm}}>{t("Invitar disponible desde 2 jugadores")}</span></div>:null}
         <button onClick={()=>{const go=async()=>{
           if(detail.stripe_payment_intent&&detail.payment_status==="paid"){
             try{const r=await fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id})});const d=await r.json();if(d.success){const msg=d.type==="no_show"?"Cancelada · No-Show Fee $"+fm(d.fee_amount)+" MXN · Espacio liberado":"Cancelada · Reembolso completo $"+fm(d.refund_amount)+" MXN";window.__toast?.(msg,d.type==="no_show"?"info":"success")}else{window.__toast?.(d.error||"Error","error");return}}catch(e){window.__toast?.("Error: "+e.message,"error");return}
@@ -1065,43 +1387,27 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       {detail.status==="confirmed"&&new Date(detail.booking_date)<new Date()&&<ReviewPrompt bookingId={detail.id} courseId={detail.course_id} courseName={detail.course_name}/>}
       <HoleLayout courseId={detail.course_id}/>
     </div>}
-    {shareModal&&<div className="bsheet-overlay" onClick={()=>{setShareModal(null);setShareMode(null)}}><div onClick={e=>e.stopPropagation()} className="bsheet">
-      <h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:6}}>{t("Compartir Reserva")}</h3>
-      <p style={{color:C.ts,fontSize:13,marginBottom:14}}>{shareModal.course_name} — ${fm(shareModal.total_cost)} MXN</p>
-      {!shareMode&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <div onClick={()=>setShareMode("simple")} style={{padding:16,borderRadius:14,border:"2px solid "+C.bd,background:C.cd,cursor:"pointer"}}><h4 style={{color:C.txt,fontSize:13,fontWeight:700,margin:0}}>Compartir</h4><p style={{color:C.ts,fontSize:12,marginTop:4}}>{t("Envía invitación sin dividir gastos")}</p></div>
-        <div onClick={()=>setShareMode("split")} style={{padding:16,borderRadius:14,border:"2px solid "+C.bd,background:C.cd,cursor:"pointer"}}><h4 style={{color:C.txt,fontSize:13,fontWeight:700,margin:0}}>Compartir + Split</h4><p style={{color:C.ts,fontSize:12,marginTop:4}}>{t("Divide gastos con ítems personalizados")}</p></div>
-      </div>}
-      {shareMode&&<><h4 style={{color:C.txt,fontSize:13,fontWeight:600,marginBottom:8}}>{t("Selecciona amigos")}</h4>
-      {friends.length===0?<p style={{color:C.tm}}>{t("Agrega amigos primero")}</p>:friends.map(f=>{const sel=selFr.includes(f.friend?.id);return<div key={f.friend?.id} onClick={()=>toggleFr(f.friend?.id)} style={{display:"flex",alignItems:"center",gap:10,background:sel?C.grn+"12":C.bg,border:"1px solid "+(sel?C.grn:C.bd),borderRadius:10,padding:10,marginBottom:5,cursor:"pointer"}}><div style={{width:28,height:28,borderRadius:14,background:sel?C.grn+"30":C.pri,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}} dangerouslySetInnerHTML={{__html:sel?ic("check",14,C.grn):ic("user",14,C.tm)}}/><div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{f.friend?.full_name}</div></div></div>})}
-      {shareMode==="split"&&selFr.length>0&&<><h4 style={{color:C.txt,fontSize:13,fontWeight:600,margin:"12px 0 8px"}}>{t("Ítems del split")}</h4>
-      {splitItems.map((item,i)=><div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
-        <input value={item.name} onChange={e=>updSplitItem(i,"name",e.target.value)} placeholder={t("Concepto")} style={{flex:2,background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.txt,outline:"none"}}/>
-        <input value={item.amount} onChange={e=>updSplitItem(i,"amount",e.target.value)} type="number" placeholder="$" style={{flex:1,background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.grn,outline:"none",textAlign:"right"}}/>
-        {splitItems.length>1&&<button onClick={()=>rmSplitItem(i)} style={{width:28,height:28,borderRadius:14,background:C.acc+"20",border:"none",color:C.acc,cursor:"pointer",fontSize:12,flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",14,C.tm)}}/>}
-      </div>)}
-      <button onClick={addSplitItem} style={{width:"100%",padding:8,background:"transparent",border:"1px dashed "+C.bd,borderRadius:10,color:C.tm,fontSize:12,cursor:"pointer",marginBottom:10}}>+ Agregar ítem</button>
-      <div style={{background:C.grn+"15",borderRadius:10,padding:12}}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:C.txt,marginBottom:4}}><span>{t("Total Split")}</span><span style={{color:C.grn}}>${fm(splitTotal)}</span></div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.ts}}><span>÷ {selFr.length+1} personas</span><span style={{color:C.gld,fontWeight:700}}>${fm(splitPerPerson)} c/u</span></div>
-      </div></>}
-      <p style={{fontSize:11,color:C.tm,marginTop:10}}>{t("Se enviará una solicitud. El amigo puede aceptar o rechazar.")}</p>
-      <div style={{display:"flex",gap:8,marginTop:8}}>
-        <button onClick={doShare} disabled={!selFr.length||(shareMode==="split"&&splitTotal<=0)} style={{flex:1,padding:12,background:selFr.length?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer",opacity:selFr.length?1:.4}}>{t("Enviar Solicitud")}</button>
-        <button onClick={()=>{if(shareMode){setShareMode(null);setSelFr([])}else setShareModal(null)}} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{shareMode?"Volver":"Cancelar"}</button>
-      </div></>}
-    </div></div>}
+    {invModal&&<InvitePlayersSheet booking={invModal} friends={friends} onClose={()=>setInvModal(null)} onInvited={()=>{load();loadInvitations();}}/>}
   </div>;}
-  return<div style={{padding:16}}><div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Solicitudes")+(recvReqs.length>0?" ("+recvReqs.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
-    {tab==="requests"&&<>{recvReqs.length===0?<EmptyState icon="mail" iconColor={C.tm} title={t("Sin solicitudes pendientes")} sub=""/>:recvReqs.map(r=>{const sn=r.sender?.nickname||r.sender?.full_name||"Jugador";return<div key={r.id} style={{background:C.glass||C.w04,borderRadius:14,padding:14,marginBottom:10,border:"1px solid "+C.gld+"30",boxShadow:C.shCard||"none"}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div><h4 style={{margin:0,fontSize:13,fontWeight:700,color:C.txt}}>{r.course_name}</h4><p style={{fontSize:12,color:C.ts,marginTop:2}}>{r.booking_date} · {r.booking_time?.slice(0,5)}</p></div><span style={{fontSize:10,color:C.gld,background:C.gld+"20",padding:"3px 8px",borderRadius:6,alignSelf:"flex-start"}}>{t("Pendiente")}</span></div>
-      <div style={{fontSize:13,color:C.ts,marginBottom:6}}>De: <span style={{color:C.txt,fontWeight:600}}>{sn}</span> <span style={{color:C.gld,fontSize:10}}>{r.sender?.player_id}</span></div>
-      {r.share_mode==="split"&&<div style={{background:C.grn+"12",borderRadius:10,padding:10,marginBottom:8}}><div style={{fontSize:13,fontWeight:700,color:C.grn}}>Split: ${fm(r.split_amount)} MXN</div>{r.split_items?.length>0&&r.split_items.map((it,i)=><div key={i} style={{fontSize:11,color:C.ts,marginTop:2}}>{it.name}: ${fm(it.amount)}</div>)}</div>}
-      {r.share_mode==="simple"&&<div style={{fontSize:12,color:C.tm,marginBottom:8}}>Invitación sin split de gastos</div>}
-      <div style={{display:"flex",gap:8}}><button onClick={()=>acceptReq(r)} style={{flex:1,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Aceptar")}</button><button onClick={()=>rejectReq(r)} style={{flex:1,padding:10,background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontWeight:700,cursor:"pointer"}}>{t("Rechazar")}</button></div>
-    </div>})}</>}
-    {tab!=="requests"&&<div style={{background:"transparent",marginLeft:-16,marginRight:-16,padding:"6px 20px 0",borderRadius:0,minHeight:200}}>{ld?<div><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70}/></div>:bs.length===0?<EmptyState icon="calendar" iconColor={C.grn} title={t("Sin reservas")} sub={t("Explora campos y reserva tu primer tee time")}/>:bs.map(b=>{const st=stc[b.status]||{l:b.status,c:C.gld};const bReqs=getReqsForBooking(b.id);const isPast=new Date(b.booking_date)<new Date();return<div key={b.id} onClick={()=>openDetail(b)} style={{background:C.glass||C.w04,borderRadius:16,padding:0,marginBottom:10,border:"1px solid "+(C.glassBd||C.bd),boxShadow:C.shCard||"none",cursor:"pointer",display:"flex",overflow:"hidden",opacity:isPast?.6:1}}><div style={{width:4,background:st.c,flexShrink:0,borderRadius:"16px 0 0 16px"}}/><div style={{flex:1,padding:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{b.course_name}</h4><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"3px 10px",borderRadius:8,fontWeight:700}}>{st.l}</span></div>
-      {b.booking_code&&<div style={{fontSize:10,..._s.mono,color:C.tm,letterSpacing:1,marginBottom:3}}>{b.booking_code}</div>}<div style={{display:"flex",gap:12,fontSize:12,color:C.ts,alignItems:"center"}}><span dangerouslySetInnerHTML={{__html:ic("calendar",13,C.txt)}}/><span>{b.booking_date}</span><span dangerouslySetInnerHTML={{__html:ic("clock",13,C.txt)}}/><span>{b.booking_time?.slice(0,5)}</span><span dangerouslySetInnerHTML={{__html:ic("user",13,C.txt)}}/><span>{b.party_size}</span></div><div style={{display:"flex",justifyContent:"space-between",marginTop:6}}><span style={{fontSize:14,fontWeight:800,color:C.grn}}>${fm(b.total_cost)} MXN</span><div style={{display:"flex",gap:4,alignItems:"center"}}>{isPast&&b.status==="confirmed"&&<span onClick={e=>{e.stopPropagation();setCourse(null);openDetail(b)}} style={{fontSize:9,color:C.gld,background:C.gld+"12",border:"1px solid "+C.gld+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>⭐ Calificar</span>}{!isPast&&b.status==="confirmed"&&<span onClick={e=>{e.stopPropagation();window.__createMatchFromBooking={id:b.id,course_id:b.course_id,course_name:b.course_name,date:b.booking_date,time:b.booking_time};window.__navigate?.("tab:2")}} style={{fontSize:9,color:C.grn,background:C.grn+"12",border:"1px solid "+C.grn+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>+ Partida</span>}{bReqs.length>0&&<span style={{fontSize:10,color:C.gld}} dangerouslySetInnerHTML={{__html:ic("users",10,C.gld)+bReqs.length}}></span>}<span style={{color:C.ts,fontSize:14}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div></div></div></div>})}</div>}
+  return<div style={{padding:16}}><div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Invitaciones")+(invitations.length>0?" ("+invitations.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
+    {tab==="requests"&&<>{invitations.length===0?<EmptyState icon="mail" iconColor={C.tm} title={t("Sin invitaciones pendientes")} sub={t("Cuando alguien te invite a una reserva, aparecerá aquí")}/>:invitations.map(inv=>{
+      const bk=inv.booking||{};const sn=inv.inviter?.nickname||inv.inviter?.full_name||"Jugador";
+      const pendingPay=inv.status==="accepted_pending_payment";
+      return<div key={inv.id} onClick={()=>setAcceptingInv(inv)} style={{background:C.glass||C.w04,borderRadius:14,padding:14,marginBottom:10,border:"1px solid "+(pendingPay?C.gld+"40":C.gld+"30"),boxShadow:C.shCard||"none",cursor:"pointer"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+          <div><h4 style={{margin:0,fontSize:13,fontWeight:700,color:C.txt}}>{bk.course_name||"Campo"}</h4><p style={{fontSize:12,color:C.ts,marginTop:2}}>{bk.booking_date} · {bk.booking_time?.slice(0,5)}</p></div>
+          <span style={{fontSize:10,color:pendingPay?C.gld:C.gld,background:(pendingPay?C.gld:C.gld)+"20",padding:"3px 8px",borderRadius:6,alignSelf:"flex-start",fontWeight:700}}>{pendingPay?t("Pendiente de pago"):t("Pendiente")}</span>
+        </div>
+        <div style={{fontSize:13,color:C.ts,marginBottom:6}}>{t("De")}: <span style={{color:C.txt,fontWeight:600}}>{sn}</span>{inv.inviter?.player_id&&<span style={{color:C.gld,fontSize:10,marginLeft:6}}>{inv.inviter.player_id}</span>}</div>
+        {inv.share_mode==="split"?<div style={{background:C.grn+"12",borderRadius:10,padding:10,marginBottom:8}}><div style={{fontSize:13,fontWeight:700,color:C.grn}}>{t("Tu parte")}: ${fm(inv.split_amount)} MXN</div>{inv.split_items?.length>0&&inv.split_items.map((it,i)=><div key={i} style={{fontSize:11,color:C.ts,marginTop:2}}>{it.name}: ${fm(it.amount)}</div>)}</div>:<div style={{fontSize:12,color:C.tm,marginBottom:8}}>{t("Invitación sin costo")}</div>}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
+          <span style={{fontSize:11,color:C.tm}}>{t("Toca para revisar")}</span>
+          <span dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/>
+        </div>
+      </div>;
+    })}{acceptingInv&&<AcceptInvitationModal invitation={acceptingInv} onClose={()=>setAcceptingInv(null)} onResponded={()=>{setAcceptingInv(null);loadInvitations();load();}}/>}</>}
+    {tab!=="requests"&&<div style={{background:"transparent",marginLeft:-16,marginRight:-16,padding:"6px 20px 0",borderRadius:0,minHeight:200}}>{ld?<div><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70}/></div>:bs.length===0?<EmptyState icon="calendar" iconColor={C.grn} title={t("Sin reservas")} sub={t("Explora campos y reserva tu primer tee time")}/>:bs.map(b=>{const st=stc[b.status]||{l:b.status,c:C.gld};const isPast=new Date(b.booking_date)<new Date();return<div key={b.id} onClick={()=>openDetail(b)} style={{background:C.glass||C.w04,borderRadius:16,padding:0,marginBottom:10,border:"1px solid "+(C.glassBd||C.bd),boxShadow:C.shCard||"none",cursor:"pointer",display:"flex",overflow:"hidden",opacity:isPast?.6:1}}><div style={{width:4,background:st.c,flexShrink:0,borderRadius:"16px 0 0 16px"}}/><div style={{flex:1,padding:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{b.course_name}</h4><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"3px 10px",borderRadius:8,fontWeight:700}}>{st.l}</span></div>
+      {b.booking_code&&<div style={{fontSize:10,..._s.mono,color:C.tm,letterSpacing:1,marginBottom:3}}>{b.booking_code}</div>}<div style={{display:"flex",gap:12,fontSize:12,color:C.ts,alignItems:"center"}}><span dangerouslySetInnerHTML={{__html:ic("calendar",13,C.txt)}}/><span>{b.booking_date}</span><span dangerouslySetInnerHTML={{__html:ic("clock",13,C.txt)}}/><span>{b.booking_time?.slice(0,5)}</span><span dangerouslySetInnerHTML={{__html:ic("user",13,C.txt)}}/><span>{b.party_size}</span></div><div style={{display:"flex",justifyContent:"space-between",marginTop:6}}><span style={{fontSize:14,fontWeight:800,color:C.grn}}>${fm(b.total_cost)} MXN</span><div style={{display:"flex",gap:4,alignItems:"center"}}>{isPast&&b.status==="confirmed"&&<span onClick={e=>{e.stopPropagation();setCourse(null);openDetail(b)}} style={{fontSize:9,color:C.gld,background:C.gld+"12",border:"1px solid "+C.gld+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>⭐ Calificar</span>}{!isPast&&b.status==="confirmed"&&<span onClick={e=>{e.stopPropagation();window.__createMatchFromBooking={id:b.id,course_id:b.course_id,course_name:b.course_name,date:b.booking_date,time:b.booking_time};window.__navigate?.("tab:2")}} style={{fontSize:9,color:C.grn,background:C.grn+"12",border:"1px solid "+C.grn+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>+ Partida</span>}<span style={{color:C.ts,fontSize:14}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div></div></div></div>})}</div>}
   </div>;
 }
 
