@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.0">
+<meta name="version" content="18.0.1">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -919,36 +919,11 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
   const go=async()=>{if(!s)return;
     const{data:conflictCheck}=await sb.rpc("check_booking_conflict",{p_user_id:s.user.id,p_booking_date:sl.slot_date,p_booking_time:sl.slot_time});if(conflictCheck?.conflict){window.__toast?.("Ya tienes una reservación en "+conflictCheck.existing_course+" a las "+conflictCheck.existing_time?.slice(0,5)+" ese día","error");return}
     const{data:capCheck}=await sb.from("time_slots").select("booked_count,booking_count,status").eq("course_name",c.course_name).eq("slot_date",sl.slot_date).eq("slot_time",sl.slot_time).single();if(capCheck){const spotsLeft=8-(capCheck.booked_count||0);const bksLeft=2-(capCheck.booking_count||0);if(capCheck.status==="booked"||bksLeft<=0||spotsLeft<n){window.__toast?.("Slot no disponible"+(spotsLeft<n?" ("+spotsLeft+" "+t("lugares restantes")+")" :""),"error");return}}
-    // ==== Path 2 (n>1): edge function atómica ====
+    // ==== Path 2 (n>1): usa StripePayment modal + RPC atomico en onSuccess ====
     if(n>1){
-      if(!cardOk){window.__toast?.("Agrega una tarjeta antes de reservar con varios jugadores","error");return}
       if(appliedPromo){window.__toast?.("Los códigos promocionales aún no aplican a reservas con varios jugadores","warn");return}
-      setBusy(true);
-      try{
-        const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
-        const invitees=selectedFriends.map(fid=>{const base={user_id:fid};if(paymentMode==="split"){base.split_amount=Math.round((gT/n)*100)/100}return base});
-        const body={booking_data:{course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:gT},payment_mode:paymentMode,social_mode:"none",invitees};
-        const res=await fetch(SB_FN_URL+"/create-booking-with-participants",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify(body)});
-        const data=await res.json();
-        if(!data.success){
-          const msg=data.message||data.error||"Error al crear reserva";
-          if(data.error==="card_requires_authentication")window.__toast?.(msg,"error");
-          else if(data.error==="no_payment_method")window.__toast?.("Agrega una tarjeta antes de reservar","error");
-          else if(data.error==="slot_unavailable")window.__toast?.(msg,"error");
-          else window.__toast?.(msg,"error");
-          setBusy(false);return;
-        }
-        // Fetch the booking row to return in onOk
-        const{data:bkRow}=await sb.from("bookings").select("*").eq("id",data.booking_id).single();
-        // Insert extras if any (best effort, non-blocking)
-        if(Object.keys(cart).length>0){
-          const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:data.booking_id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);
-          if(ei.length>0)await sb.from("booking_extras").insert(ei);
-        }
-        setBusy(false);
-        window.__toast?.("¡Reserva confirmada! "+(invitees.length>0?"Invitaciones enviadas.":""),"success");
-        onOk({bk:bkRow||{id:data.booking_id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,booking_code:data.booking_code},tot:data.charged_amount||gT});
-      }catch(e){setBusy(false);window.__toast?.("Error de conexión: "+e.message,"error")}
+      const chargeAmount=paymentMode==="split"?Math.round((gT/n)*100)/100:grand;
+      setPayData({amount:chargeAmount,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n,isPathTwo:true,totalCost:gT,extras:Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0)});
       return;
     }
     // ==== Path 1 (n=1): flujo existente ====
@@ -1032,10 +1007,6 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
           })}
         </div>}
       </div>}
-      {!cardOk&&<div style={{background:C.acc+"15",border:"1px solid "+C.acc+"30",borderRadius:10,padding:10,marginBottom:10,display:"flex",gap:8,alignItems:"center"}}>
-        <span dangerouslySetInnerHTML={{__html:ic("alert",14,C.acc)}}/>
-        <div style={{flex:1,fontSize:11,color:C.acc}}>{t("Agrega una tarjeta en tu perfil para reservar con varios jugadores")}</div>
-      </div>}
     </>}
     <div onClick={()=>setExtrasOpen(!extrasOpen)} style={{..._s.flexB,cursor:"pointer",padding:"12px 0",marginBottom:extrasOpen?8:0}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,margin:0}}> Extras</h3>{Object.keys(cart).length>0&&<span className="price-badge" style={{background:C.grn,color:"#fff",fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:10}}>{Object.keys(cart).length} · ${fm(eT)}</span>}</div>
@@ -1052,11 +1023,49 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       {promoResult&&!promoResult.ok&&<div style={{fontSize:11,color:C.acc,marginTop:4}}>{promoResult.msg}</div>}
     </div>
     <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.grn}} dangerouslySetInnerHTML={{__html:ic("tag",12,C.grn)+" Descuento ("+appliedPromo?.code+")"}}></span><span style={{color:C.grn,fontWeight:700}}>-${fm(discount)}</span></div>}{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>{t("Extras")}</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>{t("Total")}</span><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
-    <button onClick={go} disabled={busy||(n>1&&!cardOk)} style={{width:"100%",padding:"16px 20px",marginTop:14,background:n>1&&!cardOk?C.cd:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:(busy||(n>1&&!cardOk))?"not-allowed":"pointer",opacity:(busy||(n>1&&!cardOk))?.6:1,boxShadow:(busy||(n>1&&!cardOk))?"none":"0 6px 20px rgba(233,69,96,.40)",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>{busy?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:n>1?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>{paymentMode==="split"?"Reservar y pagar tu parte $"+fm(Math.round((gT/n)*100)/100):"Reservar y pagar $"+fm(grand)} MXN</span></>:grand>0?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>Pagar ${fm(grand)} MXN</span></>:"Confirmar Reserva Gratis"}</button>
+    <button onClick={go} disabled={busy} style={{width:"100%",padding:"16px 20px",marginTop:14,background:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1,boxShadow:busy?"none":"0 6px 20px rgba(233,69,96,.40)",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>{busy?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:n>1?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>{paymentMode==="split"?"Reservar y pagar tu parte $"+fm(Math.round((gT/n)*100)/100):"Reservar y pagar $"+fm(grand)} MXN</span></>:grand>0?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>Pagar ${fm(grand)} MXN</span></>:"Confirmar Reserva Gratis"}</button>
     {payData&&<div className="bsheet-overlay" style={{display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPayData(null)}>
       <div onClick={e=>e.stopPropagation()} className="bsheet" style={{background:C.cd,borderTop:"1px solid "+C.bd}}>
         <StripePayment amount={payData.amount} bookingId={null} courseName={payData.courseName} date={payData.date} time={payData.time} partySize={payData.partySize}
-          onSuccess={async(paymentIntentId)=>{const bk=await createBookingAfterPay(paymentIntentId);setPayData(null);if(bk){if(window.__toast)window.__toast("¡Pago exitoso! Reserva confirmada","success");onOk({bk,tot:payData.amount})}}}
+          onSuccess={async(paymentIntentId)=>{
+            if(payData.isPathTwo){
+              // === Path 2: llamar RPC atómico create_booking_with_participants ===
+              const dateStr=sl.slot_date.replace(/-/g,"");const rand=Math.random().toString(36).substring(2,6).toUpperCase();const bookingCode="PT-"+dateStr+"-"+rand;
+              const invitees=selectedFriends.map(fid=>{const base={user_id:fid};if(paymentMode==="split"){base.split_amount=Math.round((gT/n)*100)/100}return base});
+              const{data:rpcResult,error:rpcErr}=await sb.rpc("create_booking_with_participants",{
+                p_booking_data:{course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:gT,booking_code:bookingCode,stripe_payment_intent:paymentIntentId},
+                p_payment_mode:paymentMode,
+                p_social_mode:"none",
+                p_invitees:invitees
+              });
+              if(rpcErr||!rpcResult?.success){
+                // Rollback: refund automático
+                try{
+                  const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+                  await fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({payment_intent_id:paymentIntentId,reason:"booking_creation_failed"})});
+                }catch(e){console.error("refund failed",e)}
+                window.__toast?.("Error al crear reserva: "+(rpcErr?.message||"unknown")+". Se reembolsó el pago.","error");
+                setPayData(null);return;
+              }
+              // Post-processing: fetch booking row + extras + notifs
+              const{data:bkRow}=await sb.from("bookings").select("*").eq("id",rpcResult.booking_id).single();
+              if(payData.extras?.length>0){const ei=payData.extras.map(e=>({...e,booking_id:rpcResult.booking_id}));await sb.from("booking_extras").insert(ei)}
+              await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
+              if(selectedFriends.length>0){
+                const notifs=selectedFriends.map(fid=>{const split_amt=paymentMode==="split"?Math.round((gT/n)*100)/100:null;return{user_id:fid,type:"booking_invitation",title:"Invitación a jugar",body:c.course_name+" — "+(split_amt?"Tu parte: $"+fm(split_amt)+" MXN":"Invitación sin costo"),metadata:{booking_id:rpcResult.booking_id,course_name:c.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"}}});
+                await sb.from("notifications").insert(notifs);
+              }
+              sendBookingEmails(bkRow,c,s.user.email,pr?.full_name||s.user.email,n,gT);
+              setPayData(null);
+              window.__toast?.("¡Reserva confirmada!"+(selectedFriends.length>0?" Invitaciones enviadas.":""),"success");
+              onOk({bk:bkRow,tot:gT});
+            } else {
+              // === Path 1 (n=1): flujo existente ===
+              const bk=await createBookingAfterPay(paymentIntentId);
+              setPayData(null);
+              if(bk){if(window.__toast)window.__toast("¡Pago exitoso! Reserva confirmada","success");onOk({bk,tot:payData.amount})}
+            }
+          }}
           onCancel={()=>setPayData(null)}/>
       </div>
     </div>}
