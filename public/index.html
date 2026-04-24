@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.2">
+<meta name="version" content="18.0.4">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1139,38 +1139,27 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
     }
     setProcessing(true);
     try{
-      if(withSplit){
-        // RPC create_split_invitations — crea creator + invitees atómicamente
-        const invitees=selFr.map(fid=>({user_id:fid,split_amount:creatorAmount}));
-        const{data,error}=await sb.rpc("create_split_invitations",{
+      // v18.0.4: loop unificado con invite_booking_participant para ambos modos.
+      // El RPC valida que share_mode coincida con booking.payment_mode (Q1).
+      const shareMode=withSplit?"split":"simple";
+      for(const fid of selFr){
+        const{error}=await sb.rpc("invite_booking_participant",{
           p_booking_id:booking.id,
-          p_invitees:invitees,
-          p_creator_amount:creatorAmount,
-          p_creator_split_items:null
+          p_user_id:fid,
+          p_share_mode:shareMode,
+          p_split_amount:withSplit?creatorAmount:null,
+          p_split_items:null
         });
-        if(error)throw error;
-        // Notificar a cada invitado
-        for(const fid of selFr){
-          createNotif(fid,"booking_invitation","Invitación a jugar",booking.course_name+" — Tu parte: $"+fm(creatorAmount)+" MXN",{booking_id:booking.id,course_name:booking.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"});
-        }
-        window.__toast?.("Invitaciones enviadas con split","success");
-      }else{
-        // Modo simple: invitaciones una por una
-        for(const fid of selFr){
-          const{error}=await sb.rpc("invite_booking_participant",{
-            p_booking_id:booking.id,
-            p_user_id:fid,
-            p_share_mode:"simple",
-            p_split_amount:null,
-            p_split_items:null
-          });
-          if(error&&error.code!=="23505")throw error; // 23505 = ya invitado, ignoramos
-        }
-        for(const fid of selFr){
-          createNotif(fid,"booking_invitation","Invitación a jugar",booking.course_name+" — Invitación sin costo",{booking_id:booking.id,course_name:booking.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"});
-        }
-        window.__toast?.("Invitaciones enviadas","success");
+        if(error&&error.code!=="23505")throw error; // 23505 = unique violation (ya invitado), se ignora
       }
+      // Notificaciones post-invitación
+      for(const fid of selFr){
+        const body=withSplit
+          ?booking.course_name+" — Tu parte: $"+fm(creatorAmount)+" MXN"
+          :booking.course_name+" — Invitación sin costo";
+        createNotif(fid,"booking_invitation","Invitación a jugar",body,{booking_id:booking.id,course_name:booking.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"});
+      }
+      window.__toast?.(withSplit?"Invitaciones enviadas con split":"Invitaciones enviadas","success");
       onInvited?.();
       onClose?.();
     }catch(e){
@@ -1502,6 +1491,27 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         {bkExtras.length>0&&bkExtras.map((ex,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}><span style={{color:C.ts}}>{ex.extras_catalog?.icon} {ex.extras_catalog?.name} x{ex.quantity}</span><span style={{color:C.txt}}>${fm(ex.total_price)}</span></div>)}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid "+C.bd,paddingTop:10,marginTop:bkExtras.length>0?8:0}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>{t("Total")}</span><div style={{textAlign:"right"}}><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(detail.total_cost)} MXN</span>{detail.total_cost>0&&detail.stripe_payment_intent&&<div style={{display:"inline-flex",alignItems:"center",gap:4,marginLeft:8,padding:"2px 8px",borderRadius:6,background:(detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"?C.acc:detail.payment_status==="no_show_fee"?C.acc:C.gld)+"15"}}><span dangerouslySetInnerHTML={{__html:ic(detail.payment_status==="paid"?"check":detail.payment_status==="refunded"?"undo":detail.payment_status==="no_show_fee"?"alert":"clock",10,detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"?C.acc:detail.payment_status==="no_show_fee"?C.acc:C.gld)}}/><span style={{fontSize:10,fontWeight:700,color:detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"||detail.payment_status==="no_show_fee"?C.acc:C.gld}}>{detail.payment_status==="paid"?t("Cobrado"):detail.payment_status==="refunded"?t("Reembolsado"):detail.payment_status==="no_show_fee"?"No-Show Fee":t("Pendiente")}</span></div>}</div></div>
       </div>
+      {/* v18 Badges: payment_mode + social_mode + countdown al auto_close */}
+      {(detail.payment_mode&&detail.payment_mode!=="solo")||(detail.social_mode&&detail.social_mode!=="none")?<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        {detail.payment_mode==="compartir"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:C.gld+"18",border:"1px solid "+C.gld+"40"}}><span dangerouslySetInnerHTML={{__html:ic("users",14,C.gld)}}/><span style={{fontSize:12,fontWeight:700,color:C.gld}}>{t("Compartir")}</span><span style={{fontSize:10,color:C.tm}}>{t("Tú pagas")}</span></div>}
+        {detail.payment_mode==="split"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:C.grn+"18",border:"1px solid "+C.grn+"40"}}><span dangerouslySetInnerHTML={{__html:ic("dollar",14,C.grn)}}/><span style={{fontSize:12,fontWeight:700,color:C.grn}}>{t("Split")}</span><span style={{fontSize:10,color:C.tm}}>{t("Cada quien paga")}</span></div>}
+        {detail.social_mode==="partida"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:C.gld+"18",border:"1px solid "+C.gld+"40"}}><span dangerouslySetInnerHTML={{__html:ic("trophy",14,C.gld)}}/><span style={{fontSize:12,fontWeight:700,color:C.gld}}>{t("Partida")}</span></div>}
+        {detail.social_mode==="grupo"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:C.pri+"35",border:"1px solid "+C.pri+"55"}}><span dangerouslySetInnerHTML={{__html:ic("group",14,"#fff")}}/><span style={{fontSize:12,fontWeight:700,color:C.txt}}>{t("Grupo")}</span></div>}
+      </div>:null}
+      {/* Countdown al auto_close_at (solo si pendiente y confirmed) */}
+      {detail.auto_close_at&&!detail.auto_close_executed_at&&detail.status==="confirmed"&&(()=>{
+        const closeAt=new Date(detail.auto_close_at);const now=new Date();const diffMs=closeAt-now;
+        if(diffMs<=0)return null;
+        const hours=Math.floor(diffMs/3600000);const mins=Math.floor((diffMs%3600000)/60000);
+        const isClose=hours<6;
+        return<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:(isClose?C.acc:C.gld)+"12",border:"1px solid "+(isClose?C.acc:C.gld)+"30",borderRadius:10,marginBottom:12}}>
+          <span dangerouslySetInnerHTML={{__html:ic("clock",16,isClose?C.acc:C.gld)}}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:isClose?C.acc:C.gld}}>{isClose?t("Cierre inminente"):t("Cierre automático de lista")}</div>
+            <div style={{fontSize:10,color:C.tm,marginTop:1}}>{t("En")} {hours>0?hours+"h ":""}{mins}m · {t("Los invitados sin respuesta serán removidos")}</div>
+          </div>
+        </div>
+      })()}
       <ParticipantsSection booking={detail} isOwner={true} onChanged={()=>{load();loadInvitations();}}/>
       {(()=>{const courseTz=course?.timezone||"America/Mexico_City";const teeUTC=teeToUTC(detail.booking_date,detail.booking_time||"00:00:00",courseTz);const hoursUntil=(teeUTC.getTime()-Date.now())/3600000;const isPast=hoursUntil<=0;const isIn24h=!isPast&&hoursUntil<24;const isSettled=detail.settlement_status==="settled";const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;const canCancel=detail.status==="confirmed"&&!isPast&&!isSettled;const canShare=detail.status==="confirmed"&&!isPast&&detail.party_size>=2;return<>{!isPast&&detail.status==="confirmed"&&<CalBtn course={detail.course_name} date={detail.booking_date} time={detail.booking_time}/>}{course&&<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+(isIn24h&&!isFree?C.acc+"40":C.bd),marginBottom:14}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("clock",16,isIn24h&&!isFree?C.acc:isPast?C.tm:C.grn)}}/><h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Política de Cancelación")}</h4></div><div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>La hora del tee time ya pasó. No es posible cancelar ni reembolsar.</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> Estás a menos de 24h del tee time.</p><p style={{margin:"0 0 4px",color:C.acc}}>Si cancelas, <strong>no habrá reembolso</strong>. El pago queda como <strong>No-Show Fee</strong> (${fm(detail.total_cost)} MXN).</p><p style={{margin:0,color:C.ts}}>Tu espacio se liberará para otros jugadores.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de 24h antes</strong> — cancelación con reembolso completo.</p><p style={{margin:"0 0 4px"}}><strong style={{color:C.acc}}>Menos de 24h</strong> — sin reembolso (No-Show Fee). Se libera el espacio.</p><p style={{margin:0}}><strong style={{color:C.tm}}>Después del tee time</strong> — no se puede cancelar ni reembolsar.</p></>}</div></div>}
       {canCancel&&<div style={{display:"flex",gap:8,marginBottom:14}}>
