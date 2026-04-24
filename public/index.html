@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.1">
+<meta name="version" content="18.0.2">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1102,8 +1102,12 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   const{s,p}=useA();
   const[tab,setTab]=useState("amigos");
   const[selFr,setSelFr]=useState([]);
-  const[withSplit,setWithSplit]=useState(false);
-  const[splitPerPerson,setSplitPerPerson]=useState("");
+  // v18.0.2: modalidad heredada del booking, no editable (Q1 bloquea switches)
+  const bookingPaymentMode=booking?.payment_mode||"solo";
+  const isSoloBooking=bookingPaymentMode==="solo"||booking?.party_size===1;
+  const withSplit=bookingPaymentMode==="split";
+  const suggestedSplitAmount=booking?.total_cost&&booking?.party_size?Math.round((Number(booking.total_cost)/Number(booking.party_size))*100)/100:0;
+  const[splitPerPerson,setSplitPerPerson]=useState(String(suggestedSplitAmount||""));
   const[search,setSearch]=useState("");
   const[processing,setProcessing]=useState(false);
   const[activeCount,setActiveCount]=useState(0);
@@ -1173,6 +1177,8 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
       const msg=e.message||"Error al invitar";
       if(msg.includes("tee_time_too_close"))window.__toast?.("No se pueden enviar invitaciones a <24h del tee time","error");
       else if(msg.includes("split_already_configured"))window.__toast?.("Esta reserva ya tiene un split activo","error");
+      else if(msg.includes("mode_mismatch"))window.__toast?.("La modalidad de la reserva no coincide. Recarga la pantalla.","error");
+      else if(msg.includes("solo_booking_cannot_invite"))window.__toast?.("Primero aumenta el tamaño de la reserva","error");
       else if(msg.includes("party_size_exceeded"))window.__toast?.("No caben más jugadores en esta reserva","error");
       else window.__toast?.("Error: "+msg,"error");
     }finally{setProcessing(false)}
@@ -1195,7 +1201,11 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
         <button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:"8px 10px",borderRadius:8,border:"none",background:tab===tb.k?C.cd:"transparent",color:tab===tb.k?C.txt:C.ts,fontSize:12,fontWeight:tab===tb.k?700:500,cursor:"pointer"}}>{tb.l}</button>
       ))}
     </div>
-    {tab==="amigos"&&<>
+    {tab==="amigos"&&(isSoloBooking?<div style={{background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:10,padding:16,textAlign:"center"}}>
+      <span style={{display:"inline-block",marginBottom:8}} dangerouslySetInnerHTML={{__html:ic("alert",22,C.acc)}}/>
+      <div style={{fontSize:13,fontWeight:700,color:C.acc,marginBottom:4}}>{t("Reserva individual")}</div>
+      <div style={{fontSize:11,color:C.ts,lineHeight:1.5}}>{t("Esta reserva es para 1 jugador. Para invitar amigos primero debes aumentar el tamaño de la reserva (próximamente).")}</div>
+    </div>:<>
       <div style={{background:availableSpots===0?C.acc+"15":C.grn+"10",border:"1px solid "+(availableSpots===0?C.acc+"30":C.grn+"25"),borderRadius:10,padding:"10px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
         <span dangerouslySetInnerHTML={{__html:ic(availableSpots===0?"alert":"users",16,availableSpots===0?C.acc:C.grn)}}/>
         <div style={{flex:1}}>
@@ -1203,13 +1213,18 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
           <div style={{fontSize:11,color:C.ts,marginTop:1}}>{t("Reserva para")} {booking.party_size} {t("jugadores")} · {activeCount+1} {t("ocupados")} ({t("tú")} + {activeCount})</div>
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:10,marginBottom:10}}>
-        <div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Dividir costo (split)")}</div><div style={{fontSize:11,color:C.ts,marginTop:1}}>{t("Cada invitado paga su parte al aceptar")}</div></div>
-        <div onClick={()=>setWithSplit(v=>!v)} style={{width:42,height:24,borderRadius:12,background:withSplit?C.grn:C.bd,position:"relative",cursor:"pointer",transition:".2s"}}><div style={{position:"absolute",top:2,left:withSplit?20:2,width:20,height:20,borderRadius:10,background:"#fff",transition:".2s"}}/></div>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:(withSplit?C.grn:C.gld)+"12",border:"1px solid "+(withSplit?C.grn:C.gld)+"35",borderRadius:10,marginBottom:10}}>
+        <span dangerouslySetInnerHTML={{__html:ic(withSplit?"split":"users",16,withSplit?C.grn:C.gld)}}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Modalidad")}: <span style={{color:withSplit?C.grn:C.gld}}>{withSplit?"Split":"Compartir"}</span></div>
+          <div style={{fontSize:11,color:C.ts,marginTop:1}}>{withSplit?t("Cada invitado paga su parte al aceptar"):t("Los invitados no pagan, solo aceptan")}</div>
+        </div>
+        <span style={{fontSize:10,color:C.tm,fontWeight:600}} dangerouslySetInnerHTML={{__html:ic("lock",11,C.tm)}}/>
       </div>
       {withSplit&&<div style={{background:C.grn+"10",border:"1px solid "+C.grn+"30",borderRadius:10,padding:12,marginBottom:12}}>
         <label style={{fontSize:11,color:C.tm,marginBottom:4,display:"block"}}>{t("Monto por persona (MXN)")}</label>
-        <input type="number" value={splitPerPerson} onChange={e=>setSplitPerPerson(e.target.value)} placeholder="500" style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px",fontSize:15,color:C.grn,fontWeight:700,outline:"none"}}/>
+        <input type="number" value={splitPerPerson} onChange={e=>setSplitPerPerson(e.target.value)} placeholder={String(suggestedSplitAmount||500)} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px",fontSize:15,color:C.grn,fontWeight:700,outline:"none"}}/>
+        <div style={{fontSize:10,color:C.tm,marginTop:4}}>{t("Sugerido")}: ${fm(suggestedSplitAmount)} ({t("total de reserva entre party_size")})</div>
         {selFr.length>0&&creatorAmount>0&&<div style={{marginTop:10,fontSize:12,color:C.ts,lineHeight:1.7}}>
           <div>{t("Tu parte")}: <strong style={{color:C.txt}}>${fm(creatorAmount)}</strong></div>
           <div>{selFr.length} {t("invitado(s)")}: <strong style={{color:C.txt}}>${fm(creatorAmount)} c/u</strong></div>
@@ -1233,7 +1248,7 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
         <button onClick={sendInvites} disabled={!selFr.length||processing||(withSplit&&(!creatorAmount||creatorAmount<=0))} style={{flex:1,padding:12,background:selFr.length&&!processing?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:selFr.length&&!processing?"pointer":"default",opacity:selFr.length&&!processing?1:.4}}>{processing?t("Enviando..."):t("Enviar invitaciones")+(selFr.length?" ("+selFr.length+")":"")}</button>
         <button onClick={onClose} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button>
       </div>
-    </>}
+    </>)}
     {tab==="publico"&&<div style={{padding:"10px 0"}}>
       <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14,marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("users",20,C.grn)}}/><h4 style={{color:C.txt,fontSize:14,fontWeight:700,margin:0}}>{t("Abrir al público")}</h4></div>
