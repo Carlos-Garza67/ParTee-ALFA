@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="17.18.2">
+<meta name="version" content="18.0.0">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -910,13 +910,48 @@ async function sendBookingEmails(bk,course,playerEmail,playerName,partySize,tota
   }catch(e){}
 }
 
-function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});const[extrasOpen,setExtrasOpen]=useState(false);const[promoCode,setPromoCode]=useState("");const[promoResult,setPromoResult]=useState(null);const[promoLoading,setPromoLoading]=useState(false);const[appliedPromo,setAppliedPromo]=useState(null);const[payData,setPayData]=useState(null);
+function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});const[extrasOpen,setExtrasOpen]=useState(false);const[promoCode,setPromoCode]=useState("");const[promoResult,setPromoResult]=useState(null);const[promoLoading,setPromoLoading]=useState(false);const[appliedPromo,setAppliedPromo]=useState(null);const[payData,setPayData]=useState(null);const[paymentMode,setPaymentMode]=useState("compartir");const[selectedFriends,setSelectedFriends]=useState([]);const[friendsList,setFriendsList]=useState([]);const[friendSearch,setFriendSearch]=useState("");const[friendsOpen,setFriendsOpen]=useState(false);const cardOk=!!(pr?.card_last4);
   useEffect(()=>{sb.from("extras_catalog").select("*").eq("is_active",true).order("sort_order").then(({data})=>setExtras(data||[]))},[]);
+  useEffect(()=>{if(!s?.user?.id)return;sb.from("friends").select("*,friend:friend_id(id,full_name,nickname,player_id)").eq("user_id",s.user.id).eq("status","accepted").then(({data})=>setFriendsList(data||[]))},[s?.user?.id]);
+  useEffect(()=>{if(n<=1){setSelectedFriends([]);setPaymentMode("compartir")}else if(selectedFriends.length>n-1){setSelectedFriends(prev=>prev.slice(0,n-1))}},[n]);
   const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;const grand=Math.max(0,gT-discount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
   const go=async()=>{if(!s)return;
     const{data:conflictCheck}=await sb.rpc("check_booking_conflict",{p_user_id:s.user.id,p_booking_date:sl.slot_date,p_booking_time:sl.slot_time});if(conflictCheck?.conflict){window.__toast?.("Ya tienes una reservación en "+conflictCheck.existing_course+" a las "+conflictCheck.existing_time?.slice(0,5)+" ese día","error");return}
     const{data:capCheck}=await sb.from("time_slots").select("booked_count,booking_count,status").eq("course_name",c.course_name).eq("slot_date",sl.slot_date).eq("slot_time",sl.slot_time).single();if(capCheck){const spotsLeft=8-(capCheck.booked_count||0);const bksLeft=2-(capCheck.booking_count||0);if(capCheck.status==="booked"||bksLeft<=0||spotsLeft<n){window.__toast?.("Slot no disponible"+(spotsLeft<n?" ("+spotsLeft+" "+t("lugares restantes")+")" :""),"error");return}}
+    // ==== Path 2 (n>1): edge function atómica ====
+    if(n>1){
+      if(!cardOk){window.__toast?.("Agrega una tarjeta antes de reservar con varios jugadores","error");return}
+      if(appliedPromo){window.__toast?.("Los códigos promocionales aún no aplican a reservas con varios jugadores","warn");return}
+      setBusy(true);
+      try{
+        const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+        const invitees=selectedFriends.map(fid=>{const base={user_id:fid};if(paymentMode==="split"){base.split_amount=Math.round((gT/n)*100)/100}return base});
+        const body={booking_data:{course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:gT},payment_mode:paymentMode,social_mode:"none",invitees};
+        const res=await fetch(SB_FN_URL+"/create-booking-with-participants",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify(body)});
+        const data=await res.json();
+        if(!data.success){
+          const msg=data.message||data.error||"Error al crear reserva";
+          if(data.error==="card_requires_authentication")window.__toast?.(msg,"error");
+          else if(data.error==="no_payment_method")window.__toast?.("Agrega una tarjeta antes de reservar","error");
+          else if(data.error==="slot_unavailable")window.__toast?.(msg,"error");
+          else window.__toast?.(msg,"error");
+          setBusy(false);return;
+        }
+        // Fetch the booking row to return in onOk
+        const{data:bkRow}=await sb.from("bookings").select("*").eq("id",data.booking_id).single();
+        // Insert extras if any (best effort, non-blocking)
+        if(Object.keys(cart).length>0){
+          const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:data.booking_id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);
+          if(ei.length>0)await sb.from("booking_extras").insert(ei);
+        }
+        setBusy(false);
+        window.__toast?.("¡Reserva confirmada! "+(invitees.length>0?"Invitaciones enviadas.":""),"success");
+        onOk({bk:bkRow||{id:data.booking_id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,booking_code:data.booking_code},tot:data.charged_amount||gT});
+      }catch(e){setBusy(false);window.__toast?.("Error de conexión: "+e.message,"error")}
+      return;
+    }
+    // ==== Path 1 (n=1): flujo existente ====
     if(grand<=0){
       setBusy(true);
       const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:0,extras_total:eT,status:"confirmed",payment_status:"free",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();
@@ -953,6 +988,55 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     </div>
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:24,marginBottom:4}}><button onClick={()=>setN(Math.max(1,n-1))} style={{width:38,height:38,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,fontSize:18,cursor:"pointer",color:C.txt}}>-</button><span style={{fontSize:22,fontWeight:800,color:C.txt}}>{n}</span><button onClick={()=>setN(Math.min(4,n+1))} style={{width:38,height:38,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,fontSize:18,cursor:"pointer",color:C.txt}}>+</button></div>
     <p style={{textAlign:"center",fontSize:11,color:C.tm,marginBottom:14}}>{n===1?"Reserva individual":n+" jugadores"} (máx. 4){n>=2?<span style={{color:C.grn}}> · Compartir y Split disponible</span>:""}</p>
+    {n>1&&<>
+      <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:10}}>
+        <div style={{fontSize:12,color:C.tm,marginBottom:8,fontWeight:600}}>{t("Modalidad de pago")}</div>
+        <div style={{display:"flex",gap:8}}>
+          {[{k:"compartir",l:"Compartir",d:"Tú pagas por todos"},{k:"split",l:"Split",d:"Cada quien su parte"}].map(m=>(
+            <button key={m.k} onClick={()=>setPaymentMode(m.k)} style={{flex:1,padding:"10px 8px",borderRadius:10,border:paymentMode===m.k?"2px solid "+C.grn:"1px solid "+C.bd,background:paymentMode===m.k?C.grn+"12":C.bg,cursor:"pointer",textAlign:"left"}}>
+              <div style={{fontSize:13,fontWeight:700,color:paymentMode===m.k?C.grn:C.txt}}>{m.l}</div>
+              <div style={{fontSize:10,color:C.ts,marginTop:2}}>{m.d}</div>
+            </button>
+          ))}
+        </div>
+        {paymentMode==="split"&&<div style={{marginTop:10,padding:10,background:C.grn+"10",borderRadius:8,border:"1px solid "+C.grn+"25"}}>
+          <div style={{fontSize:11,color:C.ts}}>{t("Tu parte")}</div>
+          <div style={{fontSize:17,fontWeight:800,color:C.grn}}>${fm(Math.round((gT/n)*100)/100)} MXN</div>
+          <div style={{fontSize:10,color:C.tm,marginTop:2}}>{t("Cada invitado pagará el mismo monto al aceptar")}</div>
+        </div>}
+        {paymentMode==="compartir"&&<div style={{marginTop:10,padding:10,background:C.bg,borderRadius:8,border:"1px solid "+C.bd}}>
+          <div style={{fontSize:11,color:C.ts}}>{t("Tú pagas")}</div>
+          <div style={{fontSize:17,fontWeight:800,color:C.txt}}>${fm(gT)} MXN</div>
+          <div style={{fontSize:10,color:C.tm,marginTop:2}}>{t("Los invitados solo aceptan la invitación")}</div>
+        </div>}
+      </div>
+      <div onClick={()=>setFriendsOpen(!friendsOpen)} style={{..._s.flexB,cursor:"pointer",padding:"10px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span dangerouslySetInnerHTML={{__html:ic("users",15,C.txt)}}/>
+          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Invitar amigos")} {selectedFriends.length>0?<span style={{color:C.grn}}>({selectedFriends.length}/{n-1})</span>:<span style={{color:C.tm,fontWeight:400}}>({t("opcional")})</span>}</span>
+        </div>
+        <span style={{transition:"transform .2s",transform:friendsOpen?"rotate(180deg)":"rotate(0)"}} dangerouslySetInnerHTML={{__html:ic("down",15,C.ts)}}/>
+      </div>
+      {friendsOpen&&<div style={{background:C.cd,borderRadius:14,padding:12,border:"1px solid "+C.bd,marginBottom:10}}>
+        <input value={friendSearch} onChange={e=>setFriendSearch(e.target.value)} placeholder={t("Buscar amigo...")} style={{width:"100%",padding:"9px 12px",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,color:C.txt,fontSize:12,outline:"none",marginBottom:8}}/>
+        {friendsList.length===0?<p style={{fontSize:12,color:C.tm,textAlign:"center",padding:16}}>{t("Agrega amigos primero desde la tab Amigos")}</p>:<div style={{maxHeight:220,overflowY:"auto"}}>
+          {friendsList.filter(f=>{if(!friendSearch.trim())return true;const q=friendSearch.toLowerCase();return(f.friend?.full_name||"").toLowerCase().includes(q)||(f.friend?.nickname||"").toLowerCase().includes(q)}).map(f=>{
+            const fid=f.friend?.id;const sel=selectedFriends.includes(fid);const atLimit=!sel&&selectedFriends.length>=n-1;
+            return<div key={fid} onClick={()=>{if(atLimit){window.__toast?.("Solo puedes invitar a "+(n-1)+" amigos con party_size de "+n,"warn");return}setSelectedFriends(prev=>sel?prev.filter(x=>x!==fid):[...prev,fid])}} style={{display:"flex",alignItems:"center",gap:10,padding:8,background:sel?C.grn+"12":"transparent",border:"1px solid "+(sel?C.grn+"40":"transparent"),borderRadius:10,cursor:atLimit?"not-allowed":"pointer",opacity:atLimit?.4:1,marginBottom:4}}>
+              <div style={{width:26,height:26,borderRadius:13,background:sel?C.grn+"30":C.bg,display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sel?ic("check",13,C.grn):ic("user",13,C.tm)}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:C.txt}}>{f.friend?.full_name}</div>
+                {f.friend?.nickname&&<div style={{fontSize:10,color:C.gld}}>"{f.friend.nickname}"</div>}
+              </div>
+            </div>
+          })}
+        </div>}
+      </div>}
+      {!cardOk&&<div style={{background:C.acc+"15",border:"1px solid "+C.acc+"30",borderRadius:10,padding:10,marginBottom:10,display:"flex",gap:8,alignItems:"center"}}>
+        <span dangerouslySetInnerHTML={{__html:ic("alert",14,C.acc)}}/>
+        <div style={{flex:1,fontSize:11,color:C.acc}}>{t("Agrega una tarjeta en tu perfil para reservar con varios jugadores")}</div>
+      </div>}
+    </>}
     <div onClick={()=>setExtrasOpen(!extrasOpen)} style={{..._s.flexB,cursor:"pointer",padding:"12px 0",marginBottom:extrasOpen?8:0}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,margin:0}}> Extras</h3>{Object.keys(cart).length>0&&<span className="price-badge" style={{background:C.grn,color:"#fff",fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:10}}>{Object.keys(cart).length} · ${fm(eT)}</span>}</div>
       <span style={{color:C.ts,fontSize:18,transition:"transform .2s",transform:extrasOpen?"rotate(180deg)":"rotate(0)"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.ts)}}/>
@@ -968,7 +1052,7 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       {promoResult&&!promoResult.ok&&<div style={{fontSize:11,color:C.acc,marginTop:4}}>{promoResult.msg}</div>}
     </div>
     <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.grn}} dangerouslySetInnerHTML={{__html:ic("tag",12,C.grn)+" Descuento ("+appliedPromo?.code+")"}}></span><span style={{color:C.grn,fontWeight:700}}>-${fm(discount)}</span></div>}{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>{t("Extras")}</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>{t("Total")}</span><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
-    <button onClick={go} disabled={busy} style={{width:"100%",padding:"16px 20px",marginTop:14,background:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1,boxShadow:busy?"none":"0 6px 20px rgba(233,69,96,.40)",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>{busy?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:grand>0?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>Pagar ${fm(grand)} MXN</span></>:"Confirmar Reserva Gratis"}</button>
+    <button onClick={go} disabled={busy||(n>1&&!cardOk)} style={{width:"100%",padding:"16px 20px",marginTop:14,background:n>1&&!cardOk?C.cd:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:(busy||(n>1&&!cardOk))?"not-allowed":"pointer",opacity:(busy||(n>1&&!cardOk))?.6:1,boxShadow:(busy||(n>1&&!cardOk))?"none":"0 6px 20px rgba(233,69,96,.40)",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>{busy?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>Procesando...</>:n>1?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>{paymentMode==="split"?"Reservar y pagar tu parte $"+fm(Math.round((gT/n)*100)/100):"Reservar y pagar $"+fm(grand)} MXN</span></>:grand>0?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>Pagar ${fm(grand)} MXN</span></>:"Confirmar Reserva Gratis"}</button>
     {payData&&<div className="bsheet-overlay" style={{display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPayData(null)}>
       <div onClick={e=>e.stopPropagation()} className="bsheet" style={{background:C.cd,borderTop:"1px solid "+C.bd}}>
         <StripePayment amount={payData.amount} bookingId={null} courseName={payData.courseName} date={payData.date} time={payData.time} partySize={payData.partySize}
