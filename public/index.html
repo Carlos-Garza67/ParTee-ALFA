@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.7">
+<meta name="version" content="18.0.8">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2293,25 +2293,95 @@ function RankingScreen({onBack}){
         <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:800,color:C.gld}}>{u.wins}</div><div style={{fontSize:10,color:C.tm}}>wins</div></div></div>})
       :<div style={{textAlign:"center",padding:30,color:C.tm}}><div style={{fontSize:13}}>{t("Sin partidas aún")}</div></div>}</div>}
   </div>}
-// v18.0.7 — EarningsCard: muestra Saldo por Cobrar agregado + desglose por booking + CTA onboarding Stripe Connect.
-// El botón "Configurar cuenta para cobrar" llama /create-connect-account y redirige al URL de onboarding de Stripe.
-function EarningsCard(){
+// v18.0.8 — PaymentAndMovementsSection: consolida PaymentCard + Saldo por Cobrar + lista cronológica de movimientos.
+// Movimientos = cargos hechos + cobros recibidos + reembolsos + transferencias Stripe Connect.
+function PaymentAndMovementsSection(){
   const{s,p:pr}=useA();
   const[earnings,setEarnings]=useState([]);
+  const[charges,setCharges]=useState([]);
+  const[refunds,setRefunds]=useState([]);
   const[ld,setLd]=useState(true);
   const[busy,setBusy]=useState(false);
+  const[showAll,setShowAll]=useState(false);
   const hasConnect=!!(pr?.stripe_account_id&&pr?.stripe_account_verified);
   const pendingConnect=!!(pr?.stripe_account_id&&!pr?.stripe_account_verified);
   useEffect(()=>{
     if(!s?.user?.id)return;
-    sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,booking:booking_id(id,course_name,booking_date,total_cost,user_id,settlement_status,settlement_date)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}).then(({data})=>{
-      setEarnings((data||[]).filter(e=>e.booking&&e.booking.user_id===s.user.id===false)); // payments a mí como creador
+    let alive=true;
+    Promise.all([
+      // Cobros recibidos (split donde soy creador del booking, pagado por otros)
+      sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,paid_at,booking:booking_id(id,course_name,booking_date,user_id,settlement_status,settlement_date)").in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}),
+      // Cargos: bookings que hice yo (como creador)
+      sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
+      // Cargos como participante en split
+      sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,created_at,payment_status,booking:booking_id(id,course_name,booking_date,user_id)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}).limit(60),
+    ]).then(([recvRes,bksRes,partRes])=>{
+      if(!alive)return;
+      const recv=(recvRes.data||[]).filter(e=>e.booking&&e.booking.user_id!==s.user.id===false&&e.booking.user_id===s.user.id);
+      // Cobros: solo cuando el booking es mío Y el participante NO soy yo (otro me pagó)
+      // El segundo filtro lo hacemos abajo cuando construimos los movimientos
+      setEarnings(recv);
+      setCharges(bksRes.data||[]);
+      // Pagos hechos como participante (no como creador). Booking ajeno donde yo pagué split.
+      setRefunds((partRes.data||[]).filter(p=>p.booking&&p.booking.user_id!==s.user.id));
       setLd(false);
-    }).catch(()=>setLd(false));
+    }).catch(()=>{if(alive)setLd(false)});
+    return()=>{alive=false};
   },[s?.user?.id]);
-  // Agrupar por booking. Un booking puede tener varios participantes pagando split.
+  // Construir lista unificada de movimientos
+  const movements=[];
+  // Cargos: bookings propios pagados
+  charges.forEach(b=>{
+    movements.push({
+      id:"chg-"+b.id,
+      kind:"charge",
+      date:b.created_at||b.booking_date,
+      amount:Number(b.total_cost||0),
+      title:b.course_name||"Reserva",
+      sub:b.booking_date+" · "+t("Reserva")+(b.booking_code?" "+b.booking_code:""),
+      status:b.payment_status,
+    });
+    if(b.payment_status==="refunded"){
+      movements.push({
+        id:"ref-"+b.id,
+        kind:"refund",
+        date:b.created_at,
+        amount:Number(b.total_cost||0),
+        title:b.course_name||"Reserva",
+        sub:t("Reembolso completo"),
+        status:"refunded",
+      });
+    }else if(b.payment_status==="partially_refunded"){
+      movements.push({
+        id:"pref-"+b.id,
+        kind:"refund",
+        date:b.created_at,
+        amount:0, // monto exacto vive en payment_intents/refunds; aquí solo marcamos ocurrencia
+        title:b.course_name||"Reserva",
+        sub:t("Reembolso parcial"),
+        status:"partially_refunded",
+        amountUnknown:true,
+      });
+    }
+  });
+  // Pagos como participante de un split (cargos a mí pero booking ajeno)
+  refunds.forEach(p=>{
+    movements.push({
+      id:"split-"+p.id,
+      kind:"charge",
+      date:p.paid_at||p.created_at,
+      amount:Number(p.split_amount||0),
+      title:p.booking?.course_name||"Reserva",
+      sub:t("Tu parte del split")+" · "+(p.booking?.booking_date||""),
+      status:p.payment_status,
+    });
+  });
+  // Cobros recibidos como creador (alguien más me pagó split)
+  // Filtramos a los participantes que no soy yo del booking propio
+  const creatorEarnings=earnings.filter(e=>e.booking&&e.booking.user_id===s.user.id);
+  // Agrupar por booking para card de saldo
   const byBooking=new Map();
-  earnings.forEach(e=>{
+  creatorEarnings.forEach(e=>{
     const bk=e.booking;if(!bk)return;
     if(!byBooking.has(bk.id))byBooking.set(bk.id,{bk,total:0,held:0,transferred:0,items:[]});
     const row=byBooking.get(bk.id);
@@ -2321,9 +2391,25 @@ function EarningsCard(){
     if(e.payment_status==="paid_transferred")row.transferred+=amt;
     row.items.push(e);
   });
-  const groups=Array.from(byBooking.values()).sort((a,b)=>String(b.bk.booking_date||"").localeCompare(String(a.bk.booking_date||"")));
-  const totalPending=groups.reduce((acc,g)=>acc+g.held,0);
-  const totalTransferred=groups.reduce((acc,g)=>acc+g.transferred,0);
+  const earnGroups=Array.from(byBooking.values()).sort((a,b)=>String(b.bk.booking_date||"").localeCompare(String(a.bk.booking_date||"")));
+  const totalPending=earnGroups.reduce((acc,g)=>acc+g.held,0);
+  const totalTransferred=earnGroups.reduce((acc,g)=>acc+g.transferred,0);
+  // Sumar cobros como movimientos también
+  creatorEarnings.forEach(e=>{
+    if(!e.booking)return;
+    movements.push({
+      id:"earn-"+e.id,
+      kind:e.payment_status==="paid_transferred"?"transfer":"earning",
+      date:e.paid_at||e.created_at,
+      amount:Number(e.split_amount||0),
+      title:e.booking.course_name||"Reserva",
+      sub:e.payment_status==="paid_transferred"?t("Transferido a tu cuenta"):t("Cobro pendiente de transferir"),
+      status:e.payment_status,
+    });
+  });
+  // Ordenar cronológicamente desc
+  movements.sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+  const visibleMov=showAll?movements:movements.slice(0,15);
   const startConnect=async()=>{
     setBusy(true);
     try{
@@ -2335,43 +2421,60 @@ function EarningsCard(){
     }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
     finally{setBusy(false)}
   };
-  if(ld)return<Skeleton w="100%" h={80}/>;
-  if(groups.length===0)return<div style={{padding:20,textAlign:"center"}}>
-    <div style={{marginBottom:8}} dangerouslySetInnerHTML={{__html:ic("dollar",32,C.tm)}}/>
-    <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:4}}>{t("Sin ingresos por cobrar")}</div>
-    <div style={{fontSize:11,color:C.ts,lineHeight:1.5}}>{t("Cuando invitas amigos con modo Split, los pagos que reciben aparecen aquí")}</div>
-  </div>;
+  const movMeta={
+    charge:{label:t("Cargo"),color:C.acc,sign:"-",icon:"down"},
+    refund:{label:t("Reembolso"),color:C.ts,sign:"+",icon:"check"},
+    earning:{label:t("Cobro"),color:C.gld,sign:"+",icon:"dollar"},
+    transfer:{label:t("Transferencia"),color:C.grn,sign:"+",icon:"check"},
+  };
   return<div>
-    <div style={{background:`linear-gradient(135deg,${C.gld}22,${C.grn}12)`,borderRadius:14,padding:14,marginBottom:14,border:"1px solid "+C.gld+"30"}}>
+    {/* Bloque 1: Tarjeta */}
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>{t("Tarjeta guardada")}</div>
+      <PaymentCard userId={s.user.id} email={s.user.email} cardLast4={pr?.card_last4} cardBrand={pr?.card_brand}/>
+    </div>
+    {/* Bloque 2: Saldo por Cobrar (solo si hay cobros recibidos o cuenta Connect) */}
+    {(earnGroups.length>0||hasConnect||pendingConnect)&&<div style={{background:`linear-gradient(135deg,${C.gld}22,${C.grn}12)`,borderRadius:14,padding:14,marginBottom:14,border:"1px solid "+C.gld+"30"}}>
       <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>{t("Saldo por Cobrar")}</div>
       <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
         <span style={{fontSize:26,fontWeight:900,color:C.gld,..._s.mono,letterSpacing:"-0.02em"}}>${fm(totalPending)}</span>
         <span style={{fontSize:12,color:C.tm,fontWeight:700}}>MXN</span>
-        {totalPending>0&&<span style={{fontSize:10,fontWeight:700,color:C.gld,background:C.gld+"20",padding:"2px 7px",borderRadius:5,marginLeft:4}}>${fm(totalPending)} {t("pendiente")}</span>}
       </div>
       {totalTransferred>0&&<div style={{fontSize:11,color:C.grn,marginTop:4}}><span dangerouslySetInnerHTML={{__html:ic("check",11,C.grn)}}/> ${fm(totalTransferred)} {t("ya transferido")}</div>}
       {!hasConnect&&!pendingConnect&&totalPending>0&&<button onClick={startConnect} disabled={busy} style={{width:"100%",marginTop:10,padding:12,background:`linear-gradient(135deg,${C.gld},#f59e0b)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("dollar",14,"#fff")}}/>{busy?t("Abriendo Stripe..."):t("Configurar cuenta para cobrar")}</button>}
       {pendingConnect&&<button onClick={startConnect} disabled={busy} style={{width:"100%",marginTop:10,padding:11,background:C.gld+"18",border:"1px solid "+C.gld+"40",borderRadius:12,color:C.gld,fontSize:12,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>{busy?t("Abriendo..."):t("Continuar verificación Stripe")} →</button>}
       {hasConnect&&<div style={{marginTop:10,padding:"8px 12px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:10,display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("check",12,C.grn)}}/><span style={{fontSize:11,fontWeight:700,color:C.grn}}>{t("Cuenta Stripe verificada")}</span></div>}
+    </div>}
+    {/* Bloque 3: Movimientos */}
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{t("Movimientos recientes")}</div>
+        {movements.length>15&&<button onClick={()=>setShowAll(!showAll)} style={{background:"none",border:"none",fontSize:11,color:C.pri,fontWeight:700,cursor:"pointer",padding:0}}>{showAll?t("Ver menos"):t("Ver todos")+" ("+movements.length+")"}</button>}
+      </div>
+      {ld?<Skeleton w="100%" h={120}/>:movements.length===0?<div style={{padding:24,textAlign:"center",background:C.bg,borderRadius:12,border:"1px solid "+C.bd}}>
+        <div style={{marginBottom:8}} dangerouslySetInnerHTML={{__html:ic("dollar",28,C.tm)}}/>
+        <div style={{fontSize:12,fontWeight:700,color:C.txt,marginBottom:4}}>{t("Sin movimientos aún")}</div>
+        <div style={{fontSize:10,color:C.ts,lineHeight:1.5}}>{t("Tus cargos, cobros y reembolsos aparecerán aquí")}</div>
+      </div>:<div style={{background:C.bg,borderRadius:12,border:"1px solid "+C.bd,overflow:"hidden"}}>
+        {visibleMov.map((m,i)=>{
+          const meta=movMeta[m.kind]||movMeta.charge;
+          return<div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderBottom:i<visibleMov.length-1?"1px solid "+C.bd:"none"}}>
+            <div style={{width:30,height:30,borderRadius:8,background:meta.color+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(meta.icon,14,meta.color)}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:1}}>
+                <span style={{fontSize:9,fontWeight:700,color:meta.color,background:meta.color+"15",padding:"1px 6px",borderRadius:4,letterSpacing:".04em",textTransform:"uppercase"}}>{meta.label}</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.title}</span>
+              </div>
+              <div style={{fontSize:10,color:C.ts,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.sub}</div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:13,fontWeight:800,color:meta.color,..._s.mono}}>{m.amountUnknown?"—":meta.sign+"$"+fm(m.amount)}</div>
+              <div style={{fontSize:9,color:C.tm,marginTop:1}}>{m.date?String(m.date).slice(0,10):""}</div>
+            </div>
+          </div>;
+        })}
+      </div>}
     </div>
-    <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>{t("Desglose por reserva")}</div>
-    {groups.map(g=><div key={g.bk.id} style={{background:C.bg,borderRadius:12,padding:12,marginBottom:8,border:"1px solid "+C.bd}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.bk.course_name}</div>
-          <div style={{fontSize:10,color:C.ts,marginTop:2}}>{g.bk.booking_date}{g.bk.settlement_date?" · "+t("Liquida")+": "+g.bk.settlement_date:""}</div>
-        </div>
-        <div style={{textAlign:"right",marginLeft:8}}>
-          <div style={{fontSize:14,fontWeight:800,color:g.held>0?C.gld:C.grn,..._s.mono}}>${fm(g.total)}</div>
-          <div style={{fontSize:9,color:C.tm,marginTop:1}}>{g.items.length} {t("pago(s)")}</div>
-        </div>
-      </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-        {g.held>0&&<span style={{fontSize:9,fontWeight:700,color:C.gld,background:C.gld+"15",padding:"2px 7px",borderRadius:5}}>{t("Pendiente")}: ${fm(g.held)}</span>}
-        {g.transferred>0&&<span style={{fontSize:9,fontWeight:700,color:C.grn,background:C.grn+"15",padding:"2px 7px",borderRadius:5}}>{t("Transferido")}: ${fm(g.transferred)}</span>}
-        {g.bk.settlement_status==="settled"&&<span style={{fontSize:9,fontWeight:700,color:C.ts,background:C.bd,padding:"2px 7px",borderRadius:5}}>{t("Liquidado")}</span>}
-      </div>
-    </div>)}
   </div>;
 }
 
@@ -2431,7 +2534,7 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
       {myBadges.length>0?<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{myBadges.map(b=><div key={b.id} style={{background:C.gld+"10",border:"1px solid "+C.gld+"20",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:16}}>{b.badge_icon}</span><div><div style={{fontSize:10,fontWeight:700,color:C.txt}}>{b.badge_name}</div><div style={{fontSize:8,color:C.tm}}>{new Date(b.earned_at).toLocaleDateString()}</div></div></div>)}</div>
       :<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{[{i:"🦅",n:"Birdie Hunter"},{i:"⚙️",n:"Par Machine"},{i:"🎯",n:"Eagle Eye"},{i:"💯",n:"Sub 100"},{i:"⚡",n:"Racha Pars"},{i:"👑",n:"Comeback"},{i:"🔥",n:"Clutch"},{i:"💪",n:"Iron Man"},{i:"🏆",n:"Underdog"},{i:"🦋",n:"Social"}].map((b,i)=><div key={i} style={{background:C.w06,borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5,opacity:.35}}><span style={{fontSize:16}}>{b.i}</span><div style={{fontSize:10,fontWeight:600,color:C.tm}}>???</div></div>)}</div>}
     </GlassCard>
-    {[{k:"info",icon:ic("user",18,C.grn),label:"Info Personal",color:C.grn,content:<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button onClick={()=>ed?save():setEd(true)} style={{background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",color:"#fff",fontSize:11,fontWeight:700,padding:"7px 16px",borderRadius:10,cursor:"pointer",boxShadow:C.shAcc||"none"}}>{sv?"...":ed?t("Guardar"):t("Editar")}</button></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{l:t("Nombre"),v:nm,set:setNm,p:"Nombre"},{l:t("Apodo"),v:nick,set:setNick,p:"Apodo"},{l:t("Ciudad"),v:city,set:setCity,p:"Ciudad"},{l:t("Estado"),v:pst,set:setPst,p:"Estado"},{l:t("Teléfono"),v:ph,set:setPh,p:"Tel"},{l:"Handicap",v:hc,set:setHc,p:"HCP"}].map((f,i)=><div key={i}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{f.l}</label><input {...inp(f.v,f.set,f.p)}/></div>)}<div><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("FECHA NAC.")}</label><input type={ed?"date":"text"} value={bd} onChange={e=>setBd(e.target.value)} disabled={!ed} style={{width:"100%",background:ed?C.bg:C.cd,border:"1px solid "+(ed?C.bd:"transparent"),borderRadius:10,padding:"10px 14px",fontSize:13,color:ed?C.txt:C.ts,outline:"none",boxSizing:"border-box",marginTop:4}}/>{age!=null&&<div style={{fontSize:11,color:C.gld,marginTop:4}}>{age} años</div>}</div></div></div>},{k:"prefs",icon:ic("settings",18,C.ts),label:t("Preferencias"),color:C.ts,content:<div><PushToggle/><ThemeToggle/><LangToggle/><ChangePassword/><div style={{marginTop:4}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>ZONA HORARIA</label><select value={userTz} onChange={e=>{setUserTz(e.target.value);if(ed){}else{sb.from("user_profiles").update({timezone:e.target.value}).eq("id",s.user.id).then(()=>ref())}}} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.txt,outline:"none",boxSizing:"border-box",appearance:"auto"}}><option value="">Detectar automático ({detectTz().split("/").pop()})</option>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select></div><div style={{marginTop:8}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>MANO</label><div style={{display:"flex",gap:8}}>{[{k:"diestro",l:t("Diestro")},{k:"zurdo",l:t("Zurdo")}].map(h=><button key={h.k} onClick={()=>{if(ed)setHand(h.k)}} style={{flex:1,padding:10,borderRadius:12,border:"2px solid "+(hand===h.k?C.acc:C.bd),background:hand===h.k?C.acc+"12":C.bg,cursor:ed?"pointer":"default",fontSize:12,fontWeight:700,color:hand===h.k?C.acc:C.ts}}>{h.l}</button>)}</div></div><div style={{marginTop:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>MARCA</label><div className="brand-scroll">{BRANDS.map(b=><div key={b.id} className={"brand-card"+(brand===b.id?" active":"")} onClick={()=>{if(ed)setBrand(brand===b.id?"":b.id)}} style={{opacity:ed?1:.7,cursor:ed?"pointer":"default"}}><img src={b.logo} alt={b.id} onError={e=>{e.target.style.display="none"}}/><div style={{fontSize:11,fontWeight:700,color:brand===b.id?C.acc:C.ts}}>{b.id}</div></div>)}</div></div></div>},{k:"pay",icon:ic("credit",18,C.secGld||C.gld),label:t("Método de Pago"),color:C.secGld||C.gld,content:<PaymentCard userId={s.user.id} email={s.user.email} cardLast4={pr?.card_last4} cardBrand={pr?.card_brand}/>},{k:"earnings",icon:ic("dollar",18,C.gld),label:t("Saldo por Cobrar"),color:C.gld,content:<EarningsCard/>}].map(sec=><div key={sec.k} style={{marginBottom:8}}><div onClick={()=>setOpenSec(openSec===sec.k?null:sec.k)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:openSec===sec.k?"14px 14px 0 0":14,cursor:"pointer",boxShadow:C.shCard||"none"}}><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:32,height:32,borderRadius:10,background:sec.color+"10",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sec.icon}}/><span style={{fontSize:14,fontWeight:700,color:C.txt}}>{sec.label}</span></div><div style={{transform:openSec===sec.k?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/></div>{openSec===sec.k&&<div style={{padding:16,background:C.el||C.cd,border:"1px solid "+(C.elBd||C.bd),borderTop:"none",borderRadius:"0 0 14px 14px"}}>{sec.content}</div>}</div>)}
+    {[{k:"info",icon:ic("user",18,C.grn),label:"Info Personal",color:C.grn,content:<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button onClick={()=>ed?save():setEd(true)} style={{background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",color:"#fff",fontSize:11,fontWeight:700,padding:"7px 16px",borderRadius:10,cursor:"pointer",boxShadow:C.shAcc||"none"}}>{sv?"...":ed?t("Guardar"):t("Editar")}</button></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{l:t("Nombre"),v:nm,set:setNm,p:"Nombre"},{l:t("Apodo"),v:nick,set:setNick,p:"Apodo"},{l:t("Ciudad"),v:city,set:setCity,p:"Ciudad"},{l:t("Estado"),v:pst,set:setPst,p:"Estado"},{l:t("Teléfono"),v:ph,set:setPh,p:"Tel"},{l:"Handicap",v:hc,set:setHc,p:"HCP"}].map((f,i)=><div key={i}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{f.l}</label><input {...inp(f.v,f.set,f.p)}/></div>)}<div><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("FECHA NAC.")}</label><input type={ed?"date":"text"} value={bd} onChange={e=>setBd(e.target.value)} disabled={!ed} style={{width:"100%",background:ed?C.bg:C.cd,border:"1px solid "+(ed?C.bd:"transparent"),borderRadius:10,padding:"10px 14px",fontSize:13,color:ed?C.txt:C.ts,outline:"none",boxSizing:"border-box",marginTop:4}}/>{age!=null&&<div style={{fontSize:11,color:C.gld,marginTop:4}}>{age} años</div>}</div></div></div>},{k:"prefs",icon:ic("settings",18,C.ts),label:t("Preferencias"),color:C.ts,content:<div><PushToggle/><ThemeToggle/><LangToggle/><ChangePassword/><div style={{marginTop:4}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>ZONA HORARIA</label><select value={userTz} onChange={e=>{setUserTz(e.target.value);if(ed){}else{sb.from("user_profiles").update({timezone:e.target.value}).eq("id",s.user.id).then(()=>ref())}}} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.txt,outline:"none",boxSizing:"border-box",appearance:"auto"}}><option value="">Detectar automático ({detectTz().split("/").pop()})</option>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select></div><div style={{marginTop:8}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>MANO</label><div style={{display:"flex",gap:8}}>{[{k:"diestro",l:t("Diestro")},{k:"zurdo",l:t("Zurdo")}].map(h=><button key={h.k} onClick={()=>{if(ed)setHand(h.k)}} style={{flex:1,padding:10,borderRadius:12,border:"2px solid "+(hand===h.k?C.acc:C.bd),background:hand===h.k?C.acc+"12":C.bg,cursor:ed?"pointer":"default",fontSize:12,fontWeight:700,color:hand===h.k?C.acc:C.ts}}>{h.l}</button>)}</div></div><div style={{marginTop:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>MARCA</label><div className="brand-scroll">{BRANDS.map(b=><div key={b.id} className={"brand-card"+(brand===b.id?" active":"")} onClick={()=>{if(ed)setBrand(brand===b.id?"":b.id)}} style={{opacity:ed?1:.7,cursor:ed?"pointer":"default"}}><img src={b.logo} alt={b.id} onError={e=>{e.target.style.display="none"}}/><div style={{fontSize:11,fontWeight:700,color:brand===b.id?C.acc:C.ts}}>{b.id}</div></div>)}</div></div></div>},{k:"payments",icon:ic("credit",18,C.gld),label:t("Método de pago y movimientos"),color:C.gld,content:<PaymentAndMovementsSection/>}].map(sec=><div key={sec.k} style={{marginBottom:8}}><div onClick={()=>setOpenSec(openSec===sec.k?null:sec.k)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:openSec===sec.k?"14px 14px 0 0":14,cursor:"pointer",boxShadow:C.shCard||"none"}}><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:32,height:32,borderRadius:10,background:sec.color+"10",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sec.icon}}/><span style={{fontSize:14,fontWeight:700,color:C.txt}}>{sec.label}</span></div><div style={{transform:openSec===sec.k?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/></div>{openSec===sec.k&&<div style={{padding:16,background:C.el||C.cd,border:"1px solid "+(C.elBd||C.bd),borderTop:"none",borderRadius:"0 0 14px 14px"}}>{sec.content}</div>}</div>)}
     <div style={{marginTop:20,padding:"20px 16px",borderRadius:16,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd)}}>
       <button onClick={()=>{if(window.__confirm)window.__confirm("¿Cerrar sesión?",()=>out());else if(confirm("Cerrar sesión?"))out()}} style={{width:"100%",padding:13,background:C.acc+"0a",border:"1px solid "+C.acc+"30",borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:14}}>{t("Cerrar Sesión")}</button>
       <div style={{display:"flex",justifyContent:"center",gap:16,marginBottom:14}}><span onClick={()=>setTermsView("terms")} style={{fontSize:11,color:C.ts,cursor:"pointer"}}>Términos</span><span style={{color:C.bd}}>|</span><span onClick={()=>setTermsView("privacy")} style={{fontSize:11,color:C.ts,cursor:"pointer"}}>{t("Privacidad")}</span></div>{termsView&&<TermsModal type={termsView} onClose={()=>setTermsView(null)}/>}
