@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.8">
+<meta name="version" content="18.0.9">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2309,20 +2309,20 @@ function PaymentAndMovementsSection(){
     if(!s?.user?.id)return;
     let alive=true;
     Promise.all([
-      // Cobros recibidos (split donde soy creador del booking, pagado por otros)
-      sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,paid_at,booking:booking_id(id,course_name,booking_date,user_id,settlement_status,settlement_date)").in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}),
+      // v18.0.9 — Cobros recibidos: participantes OTROS (no yo) en bookings donde soy creador.
+      // El filtro neq("user_id", me) evita que mi propio pago aparezca aquí cuando también soy participante de mi split.
+      sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,paid_at,booking:booking_id(id,course_name,booking_date,user_id,settlement_status,settlement_date)").in("payment_status",["paid_held","paid_transferred"]).neq("user_id",s.user.id).order("created_at",{ascending:false}),
       // Cargos: bookings que hice yo (como creador)
       sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
-      // Cargos como participante en split
+      // Cargos como participante en split (booking ajeno donde yo pagué)
       sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,created_at,payment_status,booking:booking_id(id,course_name,booking_date,user_id)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}).limit(60),
     ]).then(([recvRes,bksRes,partRes])=>{
       if(!alive)return;
-      const recv=(recvRes.data||[]).filter(e=>e.booking&&e.booking.user_id!==s.user.id===false&&e.booking.user_id===s.user.id);
-      // Cobros: solo cuando el booking es mío Y el participante NO soy yo (otro me pagó)
-      // El segundo filtro lo hacemos abajo cuando construimos los movimientos
+      // Solo cobros donde el booking es mío (creador del booking)
+      const recv=(recvRes.data||[]).filter(e=>e.booking&&e.booking.user_id===s.user.id);
       setEarnings(recv);
       setCharges(bksRes.data||[]);
-      // Pagos hechos como participante (no como creador). Booking ajeno donde yo pagué split.
+      // Pagos hechos como participante: solo donde el booking NO es mío (no contar pagar mi propio split)
       setRefunds((partRes.data||[]).filter(p=>p.booking&&p.booking.user_id!==s.user.id));
       setLd(false);
     }).catch(()=>{if(alive)setLd(false)});
