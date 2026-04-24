@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.5">
+<meta name="version" content="18.0.7">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1100,7 +1100,7 @@ function Ok({d,onHome}){
 // Tabs: "Amigos" (con/sin split) | "Público" (abrir al descubrimiento) | "Partida" (partida formal).
 function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   const{s,p}=useA();
-  const[tab,setTab]=useState("amigos");
+  // v18.0.7 — InvitePlayersSheet simplificado: solo selector de amigos (tabs Público/Partida eliminadas).
   const[selFr,setSelFr]=useState([]);
   // v18.0.2: modalidad heredada del booking, no editable (Q1 bloquea switches)
   const bookingPaymentMode=booking?.payment_mode||"solo";
@@ -1172,28 +1172,13 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
       else window.__toast?.("Error: "+msg,"error");
     }finally{setProcessing(false)}
   };
-  const goToPublic=()=>{
-    window.__createMatchFromBooking={id:booking.id,course_id:booking.course_id,course_name:booking.course_name,date:booking.booking_date,time:booking.booking_time,visibility:"public"};
-    onClose?.();
-    window.__navigate?.("tab:2");
-  };
-  const goToTournament=()=>{
-    window.__createMatchFromBooking={id:booking.id,course_id:booking.course_id,course_name:booking.course_name,date:booking.booking_date,time:booking.booking_time};
-    onClose?.();
-    window.__navigate?.("tab:2");
-  };
   return<div className="bsheet-overlay" onClick={onClose}><div onClick={e=>e.stopPropagation()} className="bsheet">
     <h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:4}}>{t("Invitar a jugar")}</h3>
     <p style={{color:C.ts,fontSize:12,marginBottom:12}}>{booking.course_name} · {booking.booking_date} · ${fm(booking.total_cost)} MXN</p>
-    <div style={{display:"flex",gap:6,marginBottom:14,background:C.bg,borderRadius:10,padding:4}}>
-      {[{k:"amigos",l:"Amigos"},{k:"publico",l:"Público"},{k:"partida",l:"Partida"}].map(tb=>(
-        <button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:"8px 10px",borderRadius:8,border:"none",background:tab===tb.k?C.cd:"transparent",color:tab===tb.k?C.txt:C.ts,fontSize:12,fontWeight:tab===tb.k?700:500,cursor:"pointer"}}>{tb.l}</button>
-      ))}
-    </div>
-    {tab==="amigos"&&(isSoloBooking?<div style={{background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:10,padding:16,textAlign:"center"}}>
+    {isSoloBooking?<div style={{background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:10,padding:16,textAlign:"center"}}>
       <span style={{display:"inline-block",marginBottom:8}} dangerouslySetInnerHTML={{__html:ic("alert",22,C.acc)}}/>
       <div style={{fontSize:13,fontWeight:700,color:C.acc,marginBottom:4}}>{t("Reserva individual")}</div>
-      <div style={{fontSize:11,color:C.ts,lineHeight:1.5}}>{t("Esta reserva es para 1 jugador. Para invitar amigos primero debes aumentar el tamaño de la reserva (próximamente).")}</div>
+      <div style={{fontSize:11,color:C.ts,lineHeight:1.5}}>{t("Esta reserva es para 1 jugador. Para invitar amigos primero debes aumentar el tamaño de la reserva desde la sección Modalidad.")}</div>
     </div>:<>
       <div style={{background:availableSpots===0?C.acc+"15":C.grn+"10",border:"1px solid "+(availableSpots===0?C.acc+"30":C.grn+"25"),borderRadius:10,padding:"10px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
         <span dangerouslySetInnerHTML={{__html:ic(availableSpots===0?"alert":"users",16,availableSpots===0?C.acc:C.grn)}}/>
@@ -1237,22 +1222,7 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
         <button onClick={sendInvites} disabled={!selFr.length||processing||(withSplit&&(!creatorAmount||creatorAmount<=0))} style={{flex:1,padding:12,background:selFr.length&&!processing?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:selFr.length&&!processing?"pointer":"default",opacity:selFr.length&&!processing?1:.4}}>{processing?t("Enviando..."):t("Enviar invitaciones")+(selFr.length?" ("+selFr.length+")":"")}</button>
         <button onClick={onClose} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button>
       </div>
-    </>)}
-    {tab==="publico"&&<div style={{padding:"10px 0"}}>
-      <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14,marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("users",20,C.grn)}}/><h4 style={{color:C.txt,fontSize:14,fontWeight:700,margin:0}}>{t("Abrir al público")}</h4></div>
-        <p style={{color:C.ts,fontSize:12,lineHeight:1.5,margin:0}}>{t("Tu reserva aparecerá en el tab Versus para que otros jugadores (conocidos o no) puedan solicitar unirse. Tú apruebas quién entra.")}</p>
-        <p style={{color:C.tm,fontSize:11,marginTop:8}}>{t("Los grupos públicos no pueden tener split activado.")}</p>
-      </div>
-      <button onClick={goToPublic} style={{width:"100%",padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Ir a crear grupo público")}</button>
-    </div>}
-    {tab==="partida"&&<div style={{padding:"10px 0"}}>
-      <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14,marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("trophy",20,C.gld)}}/><h4 style={{color:C.txt,fontSize:14,fontWeight:700,margin:0}}>{t("Crear partida formal")}</h4></div>
-        <p style={{color:C.ts,fontSize:12,lineHeight:1.5,margin:0}}>{t("Registra una partida con formato (Stroke, Stableford, Match Play), scorecard y leaderboard. Da XP y puede ser oficial.")}</p>
-      </div>
-      <button onClick={goToTournament} style={{width:"100%",padding:12,background:`linear-gradient(135deg,${C.gld},#f59e0b)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Ir a crear partida")}</button>
-    </div>}
+    </>}
   </div></div>;
 }
 
@@ -1328,6 +1298,48 @@ function ParticipantsSection({booking,isOwner,onChanged}){
       <div style={{fontSize:11,color:C.ts,marginBottom:8}}>{t("Puedes reducir el tamaño de la reserva. Se notificará al campo y recibirás refund por los espacios liberados.")}</div>
       <button onClick={()=>setReduceDlg(true)} style={{width:"100%",padding:8,background:C.gld+"20",border:"1px solid "+C.gld+"40",borderRadius:8,color:C.gld,fontSize:12,fontWeight:700,cursor:"pointer"}}>{t("Reducir reserva")} → {booking.party_size-rejectedParts.length} {t("jugadores")}</button>
     </div>}
+    {/* v18.0.7 — Banner de pendientes con "Cerrar lista ahora" (force_close_list) */}
+    {(()=>{
+      if(!isOwner||hoursLeft<=2)return null;
+      const pendings=parts.filter(x=>x.status==="invited"||x.status==="accepted_pending_payment");
+      if(pendings.length===0)return null;
+      const invitedCt=pendings.filter(x=>x.status==="invited").length;
+      const pendingPayCt=pendings.filter(x=>x.status==="accepted_pending_payment").length;
+      const closeNow=()=>{
+        const go=async()=>{
+          try{
+            const{data,error}=await sb.rpc("force_close_list",{p_booking_id:booking.id});
+            if(error)throw error;
+            if(data?.success===false){window.__toast?.(data.error||"No se pudo cerrar","error");return}
+            const removed=data?.removed_count||pendings.length;
+            window.__toast?.("Lista cerrada · "+removed+" "+(removed===1?"jugador removido":"jugadores removidos"),"success");
+            load();onChanged?.();
+          }catch(e){
+            const msg=e.message||"";
+            if(msg.includes("already_closed"))window.__toast?.("La lista ya está cerrada","info");
+            else if(msg.includes("not_owner"))window.__toast?.("Solo el creador puede cerrar la lista","error");
+            else window.__toast?.("Error: "+msg,"error");
+          }
+        };
+        const confirmMsg="¿Cerrar lista ahora?\n\n"+pendings.length+" jugador(es) pendiente(s) serán removidos. Si hicieron pago con split, se reembolsará automáticamente.";
+        if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go();
+      };
+      return<div style={{background:C.gld+"12",border:"1px solid "+C.gld+"40",borderRadius:10,padding:12,marginTop:10}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:8}}>
+          <span dangerouslySetInnerHTML={{__html:ic("alert",16,C.gld)}}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.gld,marginBottom:2}}>{t("Jugadores pendientes")}</div>
+            <div style={{fontSize:11,color:C.ts,lineHeight:1.4}}>
+              {invitedCt>0&&<span>{invitedCt} {t("sin responder")}</span>}
+              {invitedCt>0&&pendingPayCt>0&&" · "}
+              {pendingPayCt>0&&<span>{pendingPayCt} {t("sin pagar")}</span>}
+              {" · "}{Math.floor(hoursLeft)}h {t("al tee time")}
+            </div>
+          </div>
+        </div>
+        <button onClick={closeNow} style={{width:"100%",padding:9,background:`linear-gradient(135deg,${C.gld},#f59e0b)`,border:"none",borderRadius:8,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("check",13,"#fff")}}/>{t("Cerrar lista ahora")}</button>
+      </div>;
+    })()}
     {reduceDlg&&<ReduceBookingDialog booking={booking} rejectedParts={rejectedParts} onClose={()=>setReduceDlg(false)} onReduced={()=>{setReduceDlg(false);load();onChanged?.();}}/>}
   </div>;
 }
@@ -1575,7 +1587,55 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
   </div></div>;
 }
 
-function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);
+// v18.0.7 — ConvertToGroupModal: pide target_party_size + notas e invoca activate_group_mode RPC.
+// Convierte una reserva solo/compartir/split en modo "grupo" con pre-reserva de slots hasta T-24h.
+function ConvertToGroupModal({booking,onClose,onConverted}){
+  const currentSize=booking?.party_size||1;
+  const[target,setTarget]=useState(Math.max(2,Math.min(4,currentSize+1)));
+  const[notes,setNotes]=useState("");
+  const[busy,setBusy]=useState(false);
+  const extraSpots=Math.max(0,target-currentSize);
+  const submit=async()=>{
+    if(target<2||target>4){window.__toast?.("Tamaño debe ser entre 2 y 4","warn");return}
+    if(target<=currentSize){window.__toast?.("El tamaño objetivo debe ser mayor al actual ("+currentSize+")","warn");return}
+    setBusy(true);
+    try{
+      const{data,error}=await sb.rpc("activate_group_mode",{p_booking_id:booking.id,p_target_party_size:target,p_notes:notes||null});
+      if(error)throw error;
+      if(data?.success===false){window.__toast?.(data.error||"No se pudo convertir","error");setBusy(false);return}
+      window.__toast?.("¡Reserva convertida a grupo! Aparecerá en Versus","success");
+      onConverted?.();onClose?.();
+    }catch(e){
+      const msg=e.message||"";
+      if(msg.includes("already_group"))window.__toast?.("Esta reserva ya es un grupo","warn");
+      else if(msg.includes("tee_time_too_close"))window.__toast?.("Muy cerca del tee time para convertir","error");
+      else if(msg.includes("not_owner"))window.__toast?.("Solo el creador puede convertir la reserva","error");
+      else window.__toast?.("Error: "+msg,"error");
+    }finally{setBusy(false)}
+  };
+  return<div className="bsheet-overlay" onClick={onClose}><div onClick={e=>e.stopPropagation()} className="bsheet" style={{background:C.cd,borderTop:"1px solid "+C.bd}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}><span dangerouslySetInnerHTML={{__html:ic("group",22,C.pri)}}/><h3 style={{color:C.txt,fontSize:17,fontWeight:700,margin:0}}>{t("Convertir a Grupo")}</h3></div>
+    <p style={{color:C.ts,fontSize:12,marginBottom:14,lineHeight:1.5}}>{t("Tu reserva aparecerá en Versus para que jugadores descubran y se unan. Los cupos extras se reservan hasta T-24h; si no se llenan, se liberan automáticamente con reembolso.")}</p>
+    <div style={{background:C.bg,borderRadius:12,padding:12,border:"1px solid "+C.bd,marginBottom:12}}>
+      <div style={{fontSize:11,color:C.tm,marginBottom:4}}>{booking?.course_name}</div>
+      <div style={{fontSize:13,color:C.txt,fontWeight:700}}>{booking?.booking_date} · {booking?.booking_time?.slice(0,5)}</div>
+      <div style={{fontSize:11,color:C.ts,marginTop:4}}>{t("Tamaño actual")}: <strong style={{color:C.txt}}>{currentSize}</strong> {t("jugador(es)")}</div>
+    </div>
+    <label style={{fontSize:11,color:C.tm,marginBottom:6,display:"block",fontWeight:700,letterSpacing:".04em",textTransform:"uppercase"}}>{t("Tamaño objetivo")}</label>
+    <div style={{display:"flex",gap:8,marginBottom:12}}>{[2,3,4].map(n=>(
+      <button key={n} onClick={()=>setTarget(n)} disabled={n<=currentSize} style={{flex:1,padding:"12px 6px",borderRadius:12,border:target===n?"2px solid "+C.pri:"1px solid "+C.bd,background:target===n?C.pri+"20":n<=currentSize?C.cd:C.bg,color:n<=currentSize?C.tm:target===n?C.txt:C.ts,fontSize:14,fontWeight:800,cursor:n<=currentSize?"not-allowed":"pointer",opacity:n<=currentSize?.4:1}}>{n}</button>
+    ))}</div>
+    {extraSpots>0&&<div style={{background:C.gld+"12",border:"1px solid "+C.gld+"30",borderRadius:10,padding:10,marginBottom:12,fontSize:11,color:C.ts,lineHeight:1.5}}><strong style={{color:C.gld}}>{extraSpots}</strong> {t("cupo(s) adicional(es)")} · {t("Pre-reservados al campo hasta 24h antes del tee time")}</div>}
+    <label style={{fontSize:11,color:C.tm,marginBottom:6,display:"block",fontWeight:700,letterSpacing:".04em",textTransform:"uppercase"}}>{t("Notas (opcional)")}</label>
+    <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder={t("Ej: Buscamos jugadores intermedios, ritmo relajado")} rows={3} maxLength={280} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 12px",fontSize:12,color:C.txt,outline:"none",resize:"vertical",boxSizing:"border-box",marginBottom:14,fontFamily:"inherit"}}/>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={submit} disabled={busy||target<=currentSize} style={{flex:1,padding:12,background:busy||target<=currentSize?C.cd:`linear-gradient(135deg,${C.pri},${C.grn})`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:busy||target<=currentSize?"not-allowed":"pointer",opacity:busy||target<=currentSize?.6:1}}>{busy?t("Convirtiendo..."):t("Convertir a Grupo")}</button>
+      <button onClick={onClose} disabled={busy} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:12,color:C.ts,cursor:busy?"not-allowed":"pointer"}}>{t("Cancelar")}</button>
+    </div>
+  </div></div>;
+}
+
+function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);
   useEffect(()=>{if(s){load();loadInvitations();sb.from("friends").select("*,friend:friend_id(id,full_name,player_id,nickname)").eq("user_id",s.user.id).eq("status","accepted").then(({data})=>setFriends(data||[]))}},[s,tab]);
   useEffect(()=>{const h=e=>{if(e.detail?.tab)setTab(e.detail.tab)};window.addEventListener("partee:subtab",h);return()=>window.removeEventListener("partee:subtab",h)},[]);
   // v18.0.5: UNION de bookings del usuario (como creator) + bookings donde soy participante aceptado.
@@ -1615,26 +1675,92 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         {bkExtras.length>0&&bkExtras.map((ex,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}><span style={{color:C.ts}}>{ex.extras_catalog?.icon} {ex.extras_catalog?.name} x{ex.quantity}</span><span style={{color:C.txt}}>${fm(ex.total_price)}</span></div>)}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid "+C.bd,paddingTop:10,marginTop:bkExtras.length>0?8:0}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>{t("Total")}</span><div style={{textAlign:"right"}}><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(detail.total_cost)} MXN</span>{detail.total_cost>0&&detail.stripe_payment_intent&&<div style={{display:"inline-flex",alignItems:"center",gap:4,marginLeft:8,padding:"2px 8px",borderRadius:6,background:(detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"?C.acc:detail.payment_status==="no_show_fee"?C.acc:C.gld)+"15"}}><span dangerouslySetInnerHTML={{__html:ic(detail.payment_status==="paid"?"check":detail.payment_status==="refunded"?"undo":detail.payment_status==="no_show_fee"?"alert":"clock",10,detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"?C.acc:detail.payment_status==="no_show_fee"?C.acc:C.gld)}}/><span style={{fontSize:10,fontWeight:700,color:detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"||detail.payment_status==="no_show_fee"?C.acc:C.gld}}>{detail.payment_status==="paid"?t("Cobrado"):detail.payment_status==="refunded"?t("Reembolsado"):detail.payment_status==="no_show_fee"?"No-Show Fee":t("Pendiente")}</span></div>}</div></div>
       </div>
-      {/* v18 Badges: payment_mode + social_mode + countdown al auto_close */}
-      {(detail.payment_mode&&detail.payment_mode!=="solo")||(detail.social_mode&&detail.social_mode!=="none")?<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-        {detail.payment_mode==="compartir"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:C.gld+"18",border:"1px solid "+C.gld+"40"}}><span dangerouslySetInnerHTML={{__html:ic("users",14,C.gld)}}/><span style={{fontSize:12,fontWeight:700,color:C.gld}}>{t("Compartir")}</span><span style={{fontSize:10,color:C.tm}}>{t("Tú pagas")}</span></div>}
-        {detail.payment_mode==="split"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:C.grn+"18",border:"1px solid "+C.grn+"40"}}><span dangerouslySetInnerHTML={{__html:ic("dollar",14,C.grn)}}/><span style={{fontSize:12,fontWeight:700,color:C.grn}}>{t("Split")}</span><span style={{fontSize:10,color:C.tm}}>{t("Cada quien paga")}</span></div>}
-        {detail.social_mode==="partida"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:C.gld+"18",border:"1px solid "+C.gld+"40"}}><span dangerouslySetInnerHTML={{__html:ic("trophy",14,C.gld)}}/><span style={{fontSize:12,fontWeight:700,color:C.gld}}>{t("Partida")}</span></div>}
-        {detail.social_mode==="grupo"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:C.pri+"35",border:"1px solid "+C.pri+"55"}}><span dangerouslySetInnerHTML={{__html:ic("group",14,"#fff")}}/><span style={{fontSize:12,fontWeight:700,color:C.txt}}>{t("Grupo")}</span></div>}
-      </div>:null}
-      {/* Countdown al auto_close_at (solo si pendiente y confirmed) */}
-      {detail.auto_close_at&&!detail.auto_close_executed_at&&detail.status==="confirmed"&&(()=>{
-        const closeAt=new Date(detail.auto_close_at);const now=new Date();const diffMs=closeAt-now;
-        if(diffMs<=0)return null;
-        const hours=Math.floor(diffMs/3600000);const mins=Math.floor((diffMs%3600000)/60000);
-        const isClose=hours<6;
-        return<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:(isClose?C.acc:C.gld)+"12",border:"1px solid "+(isClose?C.acc:C.gld)+"30",borderRadius:10,marginBottom:12}}>
-          <span dangerouslySetInnerHTML={{__html:ic("clock",16,isClose?C.acc:C.gld)}}/>
-          <div style={{flex:1}}>
-            <div style={{fontSize:12,fontWeight:700,color:isClose?C.acc:C.gld}}>{isClose?t("Cierre inminente"):t("Cierre automático de lista")}</div>
-            <div style={{fontSize:10,color:C.tm,marginTop:1}}>{t("En")} {hours>0?hours+"h ":""}{mins}m · {t("Los invitados sin respuesta serán removidos")}</div>
+      {/* v18.0.7 — Modalidad: sección unificada con badges payment_mode/social_mode + countdown + acciones contextuales */}
+      {(()=>{
+        const teeDateTime=new Date((detail.booking_date||"")+"T"+((detail.booking_time||"12:00").slice(0,5)));
+        const hoursToTee=(teeDateTime.getTime()-Date.now())/3600000;
+        const isOver24h=hoursToTee>24;
+        const isIn2to24=hoursToTee>2&&hoursToTee<=24;
+        const hasGroupMode=detail.social_mode==="grupo";
+        const hasPartidaMode=detail.social_mode==="partida";
+        const hasPaymentMode=detail.payment_mode&&detail.payment_mode!=="solo";
+        const canIncrease=isOver24h&&detail.status==="confirmed"&&(detail.party_size||1)<4;
+        const canConvertGroup=isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode;
+        const canConvertPartida=isOver24h&&detail.status==="confirmed"&&!hasPartidaMode&&!hasGroupMode;
+        const pendingParts=detail._pendingCount||0; // best-effort: la banner en ParticipantsSection ya lo calcula con DB
+        const showCloseListHere=isIn2to24&&detail.status==="confirmed"; // banner principal vive en ParticipantsSection
+        const increaseBooking=async()=>{
+          const newSize=(detail.party_size||1)+1;
+          const go=async()=>{
+            setBusyAction(true);
+            try{
+              const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+              const r=await fetch(SB_FN_URL+"/increase-booking-size",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id,new_party_size:newSize})});
+              const d=await r.json();
+              if(!r.ok||d?.success===false){window.__toast?.(d?.error||"No se pudo aumentar","error");return}
+              window.__toast?.("Reserva aumentada a "+newSize+" jugadores","success");
+              const{data:fresh}=await sb.from("bookings").select("*").eq("id",detail.id).single();
+              if(fresh)setDetail(fresh);
+              load();
+            }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
+            finally{setBusyAction(false)}
+          };
+          const msg="¿Aumentar a "+newSize+" jugador(es)?\n\nSe reserva 1 cupo adicional al campo. Si el pago excede lo ya pagado, se te cobrará la diferencia.";
+          if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
+        };
+        const convertPartida=async()=>{
+          const go=async()=>{
+            setBusyAction(true);
+            try{
+              const{data,error}=await sb.rpc("set_social_mode",{p_booking_id:detail.id,p_new_mode:"partida"});
+              if(error)throw error;
+              if(data?.success===false){window.__toast?.(data.error||"No se pudo convertir","error");return}
+              window.__toast?.("Reserva marcada como Partida · Ahora puedes registrar scorecard","success");
+              const{data:fresh}=await sb.from("bookings").select("*").eq("id",detail.id).single();
+              if(fresh)setDetail(fresh);
+              load();
+            }catch(e){
+              const m=e.message||"";
+              if(m.includes("partida_locked"))window.__toast?.("Las partidas no se pueden convertir a otro modo","error");
+              else if(m.includes("tee_time_too_close"))window.__toast?.("Muy cerca del tee time","error");
+              else window.__toast?.("Error: "+m,"error");
+            }finally{setBusyAction(false)}
+          };
+          const msg="¿Convertir esta reserva en Partida?\n\nSe habilitará scorecard, formato y leaderboard. Las partidas no se pueden revertir a modo social.";
+          if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
+        };
+        if(!hasPaymentMode&&!detail.social_mode&&!detail.auto_close_at&&!canIncrease&&!canConvertGroup&&!canConvertPartida)return null;
+        return<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <span dangerouslySetInnerHTML={{__html:ic("settings",15,C.pri)}}/>
+            <h4 style={{fontSize:13,fontWeight:800,color:C.txt,margin:0,letterSpacing:"-0.01em"}}>{t("Modalidad")}</h4>
           </div>
-        </div>
+          {(hasPaymentMode||(detail.social_mode&&detail.social_mode!=="none"))&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+            {detail.payment_mode==="compartir"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.gld+"18",border:"1px solid "+C.gld+"40"}}><span dangerouslySetInnerHTML={{__html:ic("users",13,C.gld)}}/><span style={{fontSize:11,fontWeight:700,color:C.gld}}>{t("Compartir")}</span><span style={{fontSize:10,color:C.tm}}>· {t("Tú pagas")}</span></div>}
+            {detail.payment_mode==="split"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.grn+"18",border:"1px solid "+C.grn+"40"}}><span dangerouslySetInnerHTML={{__html:ic("dollar",13,C.grn)}}/><span style={{fontSize:11,fontWeight:700,color:C.grn}}>{t("Split")}</span><span style={{fontSize:10,color:C.tm}}>· {t("Cada quien paga")}</span></div>}
+            {hasPartidaMode&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.gld+"18",border:"1px solid "+C.gld+"40"}}><span dangerouslySetInnerHTML={{__html:ic("trophy",13,C.gld)}}/><span style={{fontSize:11,fontWeight:700,color:C.gld}}>{t("Partida")}</span></div>}
+            {hasGroupMode&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.pri+"35",border:"1px solid "+C.pri+"55"}}><span dangerouslySetInnerHTML={{__html:ic("group",13,"#fff")}}/><span style={{fontSize:11,fontWeight:700,color:C.txt}}>{t("Grupo")}</span></div>}
+          </div>}
+          {detail.auto_close_at&&!detail.auto_close_executed_at&&detail.status==="confirmed"&&(()=>{
+            const closeAt=new Date(detail.auto_close_at);const now=new Date();const diffMs=closeAt-now;
+            if(diffMs<=0)return null;
+            const hours=Math.floor(diffMs/3600000);const mins=Math.floor((diffMs%3600000)/60000);
+            const isClose=hours<6;
+            return<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:(isClose?C.acc:C.gld)+"12",border:"1px solid "+(isClose?C.acc:C.gld)+"30",borderRadius:10,marginBottom:10}}>
+              <span dangerouslySetInnerHTML={{__html:ic("clock",15,isClose?C.acc:C.gld)}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,fontWeight:700,color:isClose?C.acc:C.gld}}>{isClose?t("Cierre inminente"):t("Cierre automático de lista")}</div>
+                <div style={{fontSize:10,color:C.tm,marginTop:1}}>{t("En")} {hours>0?hours+"h ":""}{mins}m · {t("Los invitados sin respuesta serán removidos")}</div>
+              </div>
+            </div>;
+          })()}
+          {(canIncrease||canConvertGroup||canConvertPartida)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {canIncrease&&<button onClick={increaseBooking} disabled={busyAction} style={{flex:"1 1 auto",minWidth:110,padding:"8px 10px",background:C.grn+"12",border:"1px solid "+C.grn+"35",borderRadius:10,color:C.grn,fontSize:11,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("plus",12,C.grn)}}/>{t("Aumentar")}</button>}
+            {canConvertGroup&&<button onClick={()=>setConvertModal(detail)} disabled={busyAction} style={{flex:"1 1 auto",minWidth:130,padding:"8px 10px",background:C.pri+"35",border:"1px solid "+C.pri+"55",borderRadius:10,color:C.txt,fontSize:11,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("group",12,"#fff")}}/>{t("Convertir a Grupo")}</button>}
+            {canConvertPartida&&<button onClick={convertPartida} disabled={busyAction} style={{flex:"1 1 auto",minWidth:130,padding:"8px 10px",background:C.gld+"12",border:"1px solid "+C.gld+"35",borderRadius:10,color:C.gld,fontSize:11,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("trophy",12,C.gld)}}/>{t("Convertir a Partida")}</button>}
+          </div>}
+          {isIn2to24&&detail.status==="confirmed"&&<div style={{fontSize:10,color:C.tm,marginTop:8,fontStyle:"italic"}}>{t("A menos de 24h: el botón 'Cerrar lista ahora' aparece en la sección Jugadores si hay pendientes.")}</div>}
+        </div>;
       })()}
       <ParticipantsSection booking={detail} isOwner={true} onChanged={()=>{load();loadInvitations();}}/>
       {(()=>{const courseTz=course?.timezone||"America/Mexico_City";const teeUTC=teeToUTC(detail.booking_date,detail.booking_time||"00:00:00",courseTz);const hoursUntil=(teeUTC.getTime()-Date.now())/3600000;const isPast=hoursUntil<=0;const isIn24h=!isPast&&hoursUntil<24;const isSettled=detail.settlement_status==="settled";const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;const canCancel=detail.status==="confirmed"&&!isPast&&!isSettled;const canShare=detail.status==="confirmed"&&!isPast&&detail.party_size>=2;return<>{!isPast&&detail.status==="confirmed"&&<CalBtn course={detail.course_name} date={detail.booking_date} time={detail.booking_time}/>}{course&&<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+(isIn24h&&!isFree?C.acc+"40":C.bd),marginBottom:14}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("clock",16,isIn24h&&!isFree?C.acc:isPast?C.tm:C.grn)}}/><h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Política de Cancelación")}</h4></div><div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>La hora del tee time ya pasó. No es posible cancelar ni reembolsar.</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> Estás a menos de 24h del tee time.</p><p style={{margin:"0 0 4px",color:C.acc}}>Si cancelas, <strong>no habrá reembolso</strong>. El pago queda como <strong>No-Show Fee</strong> (${fm(detail.total_cost)} MXN).</p><p style={{margin:0,color:C.ts}}>Tu espacio se liberará para otros jugadores.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de 24h antes</strong> — cancelación con reembolso completo.</p><p style={{margin:"0 0 4px"}}><strong style={{color:C.acc}}>Menos de 24h</strong> — sin reembolso (No-Show Fee). Se libera el espacio.</p><p style={{margin:0}}><strong style={{color:C.tm}}>Después del tee time</strong> — no se puede cancelar ni reembolsar.</p></>}</div></div>}
@@ -1652,6 +1778,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       <HoleLayout courseId={detail.course_id}/>
     </div>}
     {invModal&&<InvitePlayersSheet booking={invModal} friends={friends} onClose={()=>setInvModal(null)} onInvited={()=>{load();loadInvitations();}}/>}
+    {convertModal&&<ConvertToGroupModal booking={convertModal} onClose={()=>setConvertModal(null)} onConverted={async()=>{const{data:fresh}=await sb.from("bookings").select("*").eq("id",convertModal.id).single();if(fresh)setDetail(fresh);load();}}/>}
   </div>;}
   return<div style={{padding:16}}><div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Invitaciones")+(invitations.length>0?" ("+invitations.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
     {tab==="requests"&&<>{invitations.length===0?<EmptyState icon="mail" iconColor={C.tm} title={t("Sin invitaciones pendientes")} sub={t("Cuando alguien te invite a una reserva, aparecerá aquí")}/>:invitations.map(inv=>{
@@ -2166,6 +2293,88 @@ function RankingScreen({onBack}){
         <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:800,color:C.gld}}>{u.wins}</div><div style={{fontSize:10,color:C.tm}}>wins</div></div></div>})
       :<div style={{textAlign:"center",padding:30,color:C.tm}}><div style={{fontSize:13}}>{t("Sin partidas aún")}</div></div>}</div>}
   </div>}
+// v18.0.7 — EarningsCard: muestra Saldo por Cobrar agregado + desglose por booking + CTA onboarding Stripe Connect.
+// El botón "Configurar cuenta para cobrar" llama /create-connect-account y redirige al URL de onboarding de Stripe.
+function EarningsCard(){
+  const{s,p:pr}=useA();
+  const[earnings,setEarnings]=useState([]);
+  const[ld,setLd]=useState(true);
+  const[busy,setBusy]=useState(false);
+  const hasConnect=!!(pr?.stripe_account_id&&pr?.stripe_account_verified);
+  const pendingConnect=!!(pr?.stripe_account_id&&!pr?.stripe_account_verified);
+  useEffect(()=>{
+    if(!s?.user?.id)return;
+    sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,booking:booking_id(id,course_name,booking_date,total_cost,user_id,settlement_status,settlement_date)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}).then(({data})=>{
+      setEarnings((data||[]).filter(e=>e.booking&&e.booking.user_id===s.user.id===false)); // payments a mí como creador
+      setLd(false);
+    }).catch(()=>setLd(false));
+  },[s?.user?.id]);
+  // Agrupar por booking. Un booking puede tener varios participantes pagando split.
+  const byBooking=new Map();
+  earnings.forEach(e=>{
+    const bk=e.booking;if(!bk)return;
+    if(!byBooking.has(bk.id))byBooking.set(bk.id,{bk,total:0,held:0,transferred:0,items:[]});
+    const row=byBooking.get(bk.id);
+    const amt=Number(e.split_amount||0);
+    row.total+=amt;
+    if(e.payment_status==="paid_held")row.held+=amt;
+    if(e.payment_status==="paid_transferred")row.transferred+=amt;
+    row.items.push(e);
+  });
+  const groups=Array.from(byBooking.values()).sort((a,b)=>String(b.bk.booking_date||"").localeCompare(String(a.bk.booking_date||"")));
+  const totalPending=groups.reduce((acc,g)=>acc+g.held,0);
+  const totalTransferred=groups.reduce((acc,g)=>acc+g.transferred,0);
+  const startConnect=async()=>{
+    setBusy(true);
+    try{
+      const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+      const r=await fetch(SB_FN_URL+"/create-connect-account",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({return_url:location.origin+"/?connect=ok",refresh_url:location.origin+"/?connect=refresh"})});
+      const d=await r.json();
+      if(d?.onboarding_url){location.href=d.onboarding_url;return}
+      window.__toast?.(d?.error||"No se pudo iniciar onboarding","error");
+    }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
+    finally{setBusy(false)}
+  };
+  if(ld)return<Skeleton w="100%" h={80}/>;
+  if(groups.length===0)return<div style={{padding:20,textAlign:"center"}}>
+    <div style={{marginBottom:8}} dangerouslySetInnerHTML={{__html:ic("dollar",32,C.tm)}}/>
+    <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:4}}>{t("Sin ingresos por cobrar")}</div>
+    <div style={{fontSize:11,color:C.ts,lineHeight:1.5}}>{t("Cuando invitas amigos con modo Split, los pagos que reciben aparecen aquí")}</div>
+  </div>;
+  return<div>
+    <div style={{background:`linear-gradient(135deg,${C.gld}22,${C.grn}12)`,borderRadius:14,padding:14,marginBottom:14,border:"1px solid "+C.gld+"30"}}>
+      <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>{t("Saldo por Cobrar")}</div>
+      <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
+        <span style={{fontSize:26,fontWeight:900,color:C.gld,..._s.mono,letterSpacing:"-0.02em"}}>${fm(totalPending)}</span>
+        <span style={{fontSize:12,color:C.tm,fontWeight:700}}>MXN</span>
+        {totalPending>0&&<span style={{fontSize:10,fontWeight:700,color:C.gld,background:C.gld+"20",padding:"2px 7px",borderRadius:5,marginLeft:4}}>${fm(totalPending)} {t("pendiente")}</span>}
+      </div>
+      {totalTransferred>0&&<div style={{fontSize:11,color:C.grn,marginTop:4}}><span dangerouslySetInnerHTML={{__html:ic("check",11,C.grn)}}/> ${fm(totalTransferred)} {t("ya transferido")}</div>}
+      {!hasConnect&&!pendingConnect&&totalPending>0&&<button onClick={startConnect} disabled={busy} style={{width:"100%",marginTop:10,padding:12,background:`linear-gradient(135deg,${C.gld},#f59e0b)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("dollar",14,"#fff")}}/>{busy?t("Abriendo Stripe..."):t("Configurar cuenta para cobrar")}</button>}
+      {pendingConnect&&<button onClick={startConnect} disabled={busy} style={{width:"100%",marginTop:10,padding:11,background:C.gld+"18",border:"1px solid "+C.gld+"40",borderRadius:12,color:C.gld,fontSize:12,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>{busy?t("Abriendo..."):t("Continuar verificación Stripe")} →</button>}
+      {hasConnect&&<div style={{marginTop:10,padding:"8px 12px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:10,display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("check",12,C.grn)}}/><span style={{fontSize:11,fontWeight:700,color:C.grn}}>{t("Cuenta Stripe verificada")}</span></div>}
+    </div>
+    <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>{t("Desglose por reserva")}</div>
+    {groups.map(g=><div key={g.bk.id} style={{background:C.bg,borderRadius:12,padding:12,marginBottom:8,border:"1px solid "+C.bd}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.bk.course_name}</div>
+          <div style={{fontSize:10,color:C.ts,marginTop:2}}>{g.bk.booking_date}{g.bk.settlement_date?" · "+t("Liquida")+": "+g.bk.settlement_date:""}</div>
+        </div>
+        <div style={{textAlign:"right",marginLeft:8}}>
+          <div style={{fontSize:14,fontWeight:800,color:g.held>0?C.gld:C.grn,..._s.mono}}>${fm(g.total)}</div>
+          <div style={{fontSize:9,color:C.tm,marginTop:1}}>{g.items.length} {t("pago(s)")}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {g.held>0&&<span style={{fontSize:9,fontWeight:700,color:C.gld,background:C.gld+"15",padding:"2px 7px",borderRadius:5}}>{t("Pendiente")}: ${fm(g.held)}</span>}
+        {g.transferred>0&&<span style={{fontSize:9,fontWeight:700,color:C.grn,background:C.grn+"15",padding:"2px 7px",borderRadius:5}}>{t("Transferido")}: ${fm(g.transferred)}</span>}
+        {g.bk.settlement_status==="settled"&&<span style={{fontSize:9,fontWeight:700,color:C.ts,background:C.bd,padding:"2px 7px",borderRadius:5}}>{t("Liquidado")}</span>}
+      </div>
+    </div>)}
+  </div>;
+}
+
 function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[nm,setNm]=useState(pr?.full_name||"");const[nick,setNick]=useState(pr?.nickname||"");const[ph,setPh]=useState(pr?.phone||"");const[city,setCity]=useState(pr?.city||"");const[pst,setPst]=useState(pr?.state||"");const[hc,setHc]=useState(pr?.handicap?.toString()||"");const[hand,setHand]=useState(pr?.handedness||"diestro");const[brand,setBrand]=useState(pr?.fav_brand||"");const[bd,setBd]=useState(pr?.birth_date||"");const[userTz,setUserTz]=useState(pr?.timezone||detectTz());const[tCount,setTCount]=useState(0);const[myBadges,setMyBadges]=useState([]);
   const levelThresholds=[{n:"Amateur",xp:200},{n:"Intermedio",xp:600},{n:"Avanzado",xp:1200},{n:"Pro",xp:2500},{n:"Leyenda",xp:99999}];
   const curLvlIdx=levelThresholds.findIndex(l=>l.n===(pr?.player_level||"Novato"));
@@ -2222,7 +2431,7 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
       {myBadges.length>0?<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{myBadges.map(b=><div key={b.id} style={{background:C.gld+"10",border:"1px solid "+C.gld+"20",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:16}}>{b.badge_icon}</span><div><div style={{fontSize:10,fontWeight:700,color:C.txt}}>{b.badge_name}</div><div style={{fontSize:8,color:C.tm}}>{new Date(b.earned_at).toLocaleDateString()}</div></div></div>)}</div>
       :<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{[{i:"🦅",n:"Birdie Hunter"},{i:"⚙️",n:"Par Machine"},{i:"🎯",n:"Eagle Eye"},{i:"💯",n:"Sub 100"},{i:"⚡",n:"Racha Pars"},{i:"👑",n:"Comeback"},{i:"🔥",n:"Clutch"},{i:"💪",n:"Iron Man"},{i:"🏆",n:"Underdog"},{i:"🦋",n:"Social"}].map((b,i)=><div key={i} style={{background:C.w06,borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5,opacity:.35}}><span style={{fontSize:16}}>{b.i}</span><div style={{fontSize:10,fontWeight:600,color:C.tm}}>???</div></div>)}</div>}
     </GlassCard>
-    {[{k:"info",icon:ic("user",18,C.grn),label:"Info Personal",color:C.grn,content:<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button onClick={()=>ed?save():setEd(true)} style={{background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",color:"#fff",fontSize:11,fontWeight:700,padding:"7px 16px",borderRadius:10,cursor:"pointer",boxShadow:C.shAcc||"none"}}>{sv?"...":ed?t("Guardar"):t("Editar")}</button></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{l:t("Nombre"),v:nm,set:setNm,p:"Nombre"},{l:t("Apodo"),v:nick,set:setNick,p:"Apodo"},{l:t("Ciudad"),v:city,set:setCity,p:"Ciudad"},{l:t("Estado"),v:pst,set:setPst,p:"Estado"},{l:t("Teléfono"),v:ph,set:setPh,p:"Tel"},{l:"Handicap",v:hc,set:setHc,p:"HCP"}].map((f,i)=><div key={i}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{f.l}</label><input {...inp(f.v,f.set,f.p)}/></div>)}<div><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("FECHA NAC.")}</label><input type={ed?"date":"text"} value={bd} onChange={e=>setBd(e.target.value)} disabled={!ed} style={{width:"100%",background:ed?C.bg:C.cd,border:"1px solid "+(ed?C.bd:"transparent"),borderRadius:10,padding:"10px 14px",fontSize:13,color:ed?C.txt:C.ts,outline:"none",boxSizing:"border-box",marginTop:4}}/>{age!=null&&<div style={{fontSize:11,color:C.gld,marginTop:4}}>{age} años</div>}</div></div></div>},{k:"prefs",icon:ic("settings",18,C.ts),label:t("Preferencias"),color:C.ts,content:<div><PushToggle/><ThemeToggle/><LangToggle/><ChangePassword/><div style={{marginTop:4}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>ZONA HORARIA</label><select value={userTz} onChange={e=>{setUserTz(e.target.value);if(ed){}else{sb.from("user_profiles").update({timezone:e.target.value}).eq("id",s.user.id).then(()=>ref())}}} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.txt,outline:"none",boxSizing:"border-box",appearance:"auto"}}><option value="">Detectar automático ({detectTz().split("/").pop()})</option>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select></div><div style={{marginTop:8}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>MANO</label><div style={{display:"flex",gap:8}}>{[{k:"diestro",l:t("Diestro")},{k:"zurdo",l:t("Zurdo")}].map(h=><button key={h.k} onClick={()=>{if(ed)setHand(h.k)}} style={{flex:1,padding:10,borderRadius:12,border:"2px solid "+(hand===h.k?C.acc:C.bd),background:hand===h.k?C.acc+"12":C.bg,cursor:ed?"pointer":"default",fontSize:12,fontWeight:700,color:hand===h.k?C.acc:C.ts}}>{h.l}</button>)}</div></div><div style={{marginTop:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>MARCA</label><div className="brand-scroll">{BRANDS.map(b=><div key={b.id} className={"brand-card"+(brand===b.id?" active":"")} onClick={()=>{if(ed)setBrand(brand===b.id?"":b.id)}} style={{opacity:ed?1:.7,cursor:ed?"pointer":"default"}}><img src={b.logo} alt={b.id} onError={e=>{e.target.style.display="none"}}/><div style={{fontSize:11,fontWeight:700,color:brand===b.id?C.acc:C.ts}}>{b.id}</div></div>)}</div></div></div>},{k:"pay",icon:ic("credit",18,C.secGld||C.gld),label:t("Método de Pago"),color:C.secGld||C.gld,content:<PaymentCard userId={s.user.id} email={s.user.email} cardLast4={pr?.card_last4} cardBrand={pr?.card_brand}/>}].map(sec=><div key={sec.k} style={{marginBottom:8}}><div onClick={()=>setOpenSec(openSec===sec.k?null:sec.k)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:openSec===sec.k?"14px 14px 0 0":14,cursor:"pointer",boxShadow:C.shCard||"none"}}><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:32,height:32,borderRadius:10,background:sec.color+"10",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sec.icon}}/><span style={{fontSize:14,fontWeight:700,color:C.txt}}>{sec.label}</span></div><div style={{transform:openSec===sec.k?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/></div>{openSec===sec.k&&<div style={{padding:16,background:C.el||C.cd,border:"1px solid "+(C.elBd||C.bd),borderTop:"none",borderRadius:"0 0 14px 14px"}}>{sec.content}</div>}</div>)}
+    {[{k:"info",icon:ic("user",18,C.grn),label:"Info Personal",color:C.grn,content:<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button onClick={()=>ed?save():setEd(true)} style={{background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",color:"#fff",fontSize:11,fontWeight:700,padding:"7px 16px",borderRadius:10,cursor:"pointer",boxShadow:C.shAcc||"none"}}>{sv?"...":ed?t("Guardar"):t("Editar")}</button></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{l:t("Nombre"),v:nm,set:setNm,p:"Nombre"},{l:t("Apodo"),v:nick,set:setNick,p:"Apodo"},{l:t("Ciudad"),v:city,set:setCity,p:"Ciudad"},{l:t("Estado"),v:pst,set:setPst,p:"Estado"},{l:t("Teléfono"),v:ph,set:setPh,p:"Tel"},{l:"Handicap",v:hc,set:setHc,p:"HCP"}].map((f,i)=><div key={i}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{f.l}</label><input {...inp(f.v,f.set,f.p)}/></div>)}<div><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("FECHA NAC.")}</label><input type={ed?"date":"text"} value={bd} onChange={e=>setBd(e.target.value)} disabled={!ed} style={{width:"100%",background:ed?C.bg:C.cd,border:"1px solid "+(ed?C.bd:"transparent"),borderRadius:10,padding:"10px 14px",fontSize:13,color:ed?C.txt:C.ts,outline:"none",boxSizing:"border-box",marginTop:4}}/>{age!=null&&<div style={{fontSize:11,color:C.gld,marginTop:4}}>{age} años</div>}</div></div></div>},{k:"prefs",icon:ic("settings",18,C.ts),label:t("Preferencias"),color:C.ts,content:<div><PushToggle/><ThemeToggle/><LangToggle/><ChangePassword/><div style={{marginTop:4}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>ZONA HORARIA</label><select value={userTz} onChange={e=>{setUserTz(e.target.value);if(ed){}else{sb.from("user_profiles").update({timezone:e.target.value}).eq("id",s.user.id).then(()=>ref())}}} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.txt,outline:"none",boxSizing:"border-box",appearance:"auto"}}><option value="">Detectar automático ({detectTz().split("/").pop()})</option>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select></div><div style={{marginTop:8}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>MANO</label><div style={{display:"flex",gap:8}}>{[{k:"diestro",l:t("Diestro")},{k:"zurdo",l:t("Zurdo")}].map(h=><button key={h.k} onClick={()=>{if(ed)setHand(h.k)}} style={{flex:1,padding:10,borderRadius:12,border:"2px solid "+(hand===h.k?C.acc:C.bd),background:hand===h.k?C.acc+"12":C.bg,cursor:ed?"pointer":"default",fontSize:12,fontWeight:700,color:hand===h.k?C.acc:C.ts}}>{h.l}</button>)}</div></div><div style={{marginTop:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>MARCA</label><div className="brand-scroll">{BRANDS.map(b=><div key={b.id} className={"brand-card"+(brand===b.id?" active":"")} onClick={()=>{if(ed)setBrand(brand===b.id?"":b.id)}} style={{opacity:ed?1:.7,cursor:ed?"pointer":"default"}}><img src={b.logo} alt={b.id} onError={e=>{e.target.style.display="none"}}/><div style={{fontSize:11,fontWeight:700,color:brand===b.id?C.acc:C.ts}}>{b.id}</div></div>)}</div></div></div>},{k:"pay",icon:ic("credit",18,C.secGld||C.gld),label:t("Método de Pago"),color:C.secGld||C.gld,content:<PaymentCard userId={s.user.id} email={s.user.email} cardLast4={pr?.card_last4} cardBrand={pr?.card_brand}/>},{k:"earnings",icon:ic("dollar",18,C.gld),label:t("Saldo por Cobrar"),color:C.gld,content:<EarningsCard/>}].map(sec=><div key={sec.k} style={{marginBottom:8}}><div onClick={()=>setOpenSec(openSec===sec.k?null:sec.k)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:openSec===sec.k?"14px 14px 0 0":14,cursor:"pointer",boxShadow:C.shCard||"none"}}><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:32,height:32,borderRadius:10,background:sec.color+"10",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sec.icon}}/><span style={{fontSize:14,fontWeight:700,color:C.txt}}>{sec.label}</span></div><div style={{transform:openSec===sec.k?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/></div>{openSec===sec.k&&<div style={{padding:16,background:C.el||C.cd,border:"1px solid "+(C.elBd||C.bd),borderTop:"none",borderRadius:"0 0 14px 14px"}}>{sec.content}</div>}</div>)}
     <div style={{marginTop:20,padding:"20px 16px",borderRadius:16,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd)}}>
       <button onClick={()=>{if(window.__confirm)window.__confirm("¿Cerrar sesión?",()=>out());else if(confirm("Cerrar sesión?"))out()}} style={{width:"100%",padding:13,background:C.acc+"0a",border:"1px solid "+C.acc+"30",borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:14}}>{t("Cerrar Sesión")}</button>
       <div style={{display:"flex",justifyContent:"center",gap:16,marginBottom:14}}><span onClick={()=>setTermsView("terms")} style={{fontSize:11,color:C.ts,cursor:"pointer"}}>Términos</span><span style={{color:C.bd}}>|</span><span onClick={()=>setTermsView("privacy")} style={{fontSize:11,color:C.ts,cursor:"pointer"}}>{t("Privacidad")}</span></div>{termsView&&<TermsModal type={termsView} onClose={()=>setTermsView(null)}/>}
@@ -2825,7 +3034,8 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     if(!s?.user?.id){setLd(false);return}
     setLd(true);
     // 1) Public/active groups for Buscar — excluir propios (descubrir es para conocer gente nueva)
-    const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").in("status",["open","full"]).neq("creator_id",s.user.id).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");
+    // v18.0.7 — Buscar = Grupos disponibles: solo public+open. Los privados no aparecen en descubrimiento.
+    const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("visibility","public").eq("status","open").neq("creator_id",s.user.id).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");
     setGroups(all||[]);
     // 2) User memberships: which groups am I in and with what status
     const{data:mems}=await sb.from("match_members").select("match_id,status").eq("user_id",s.user.id);
@@ -2873,6 +3083,28 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     await load();
   }
   async function requestJoin(grp){if(grp.creator_id===s.user.id)return window.__toast?.("Es tu grupo","info");const{error}=await sb.from("match_members").insert({match_id:grp.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id||"",status:"pending"});if(error){window.__toast?.(error.code==="23505"?"Ya solicitaste unirte":"Error: "+error.message,"warn");return}setMyMemberships(prev=>({...prev,[grp.id]:"pending"}));createNotif(grp.creator_id,"match_update","Solicitud de grupo",(p?.nickname||p?.full_name)+" quiere unirse a tu grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});window.__toast?.("¡Solicitud enviada!","success")}
+  // v18.0.7 — Unirse directo a grupo público vía edge fn. Retorna con el miembro ya aceptado (no pending).
+  async function joinPublicGroup(grp){
+    if(grp.creator_id===s.user.id)return window.__toast?.("Es tu grupo","info");
+    try{
+      const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+      const r=await fetch(SB_FN_URL+"/join-public-group",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({match_id:grp.id})});
+      const d=await r.json();
+      if(!r.ok||d?.success===false){
+        const m=d?.error||"";
+        if(m.includes("already_member"))window.__toast?.("Ya eres miembro de este grupo","info");
+        else if(m.includes("group_full"))window.__toast?.("El grupo se llenó","warn");
+        else if(m.includes("not_public"))window.__toast?.("Este grupo no es público","warn");
+        else if(m.includes("tee_time_passed"))window.__toast?.("El tee time ya pasó","warn");
+        else window.__toast?.(m||"No se pudo unir","error");
+        return;
+      }
+      setMyMemberships(prev=>({...prev,[grp.id]:"accepted"}));
+      createNotif(grp.creator_id,"match_update","Nuevo miembro en tu grupo",(p?.nickname||p?.full_name||"Un jugador")+" se unió a tu grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});
+      window.__toast?.("¡Te uniste al grupo!","success");
+      load();
+    }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
+  }
   async function openDetail(grp){setDetail(grp);const{data:mem}=await sb.from("match_members").select("*,user:user_id(full_name,nickname,player_id,city,handicap)").eq("match_id",grp.id).eq("status","accepted");setMembers(mem||[]);const{data:pend}=await sb.from("match_members").select("*,user:user_id(full_name,nickname,player_id,city,handicap)").eq("match_id",grp.id).eq("status","pending");setPending(pend||[])}
   async function handleRequest(memberId,action){
     const mem=pending.find(m=>m.id===memberId);
@@ -3041,7 +3273,7 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
         if(isCreator||myStat==="accepted"){return<button onClick={e=>{e.stopPropagation();openDetail(g)}} style={{width:"100%",marginTop:10,padding:10,background:"transparent",border:"1px solid "+C.grn+"40",borderRadius:10,color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer"}}>{isCreator?t("Ver grupo")+" (tuyo)":t("Ver grupo")}</button>}
         if(myStat==="pending"){return<button disabled style={{width:"100%",marginTop:10,padding:10,background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:10,color:C.gld,fontSize:12,fontWeight:700,cursor:"not-allowed",opacity:.85}} dangerouslySetInnerHTML={{__html:ic("clock",12,C.gld)+" "+t("Esperando aprobación")}}/>}
         if(myStat==="rejected"){return<button disabled style={{width:"100%",marginTop:10,padding:10,background:C.tm+"10",border:"1px solid "+C.tm+"30",borderRadius:10,color:C.tm,fontSize:12,fontWeight:600,cursor:"not-allowed"}}>{t("Solicitud rechazada")}</button>}
-        if(spots>0){return<button onClick={e=>{e.stopPropagation();requestJoin(g)}} style={{width:"100%",marginTop:10,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:C.shGrn||"none"}}>{t("Solicitar unirme")}</button>}
+        if(spots>0){return<button onClick={e=>{e.stopPropagation();joinPublicGroup(g)}} style={{width:"100%",marginTop:10,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:C.shGrn||"none"}}>{t("Unirme")}</button>}
         return null;
       })()}</div></div>})}
     </div>}
@@ -3383,6 +3615,8 @@ function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,
   const{toast:_t,confirm:_c}=useToast();
   useEffect(()=>{window.__toast=_t;window.__confirm=_c;window.__navigate=(target)=>{if(!target)return;const parts=target.split(":");if(parts[0]==="tab"){const tabIdx=parseInt(parts[1]);if(!isNaN(tabIdx)){setTab(tabIdx);setScr("home")}if(parts[2]==="requests")setTimeout(()=>{const evt=new CustomEvent("partee:subtab",{detail:{tab:"requests"}});window.dispatchEvent(evt)},100)}};return()=>{delete window.__toast;delete window.__confirm;delete window.__navigate}},[_t,_c]);
   useEffect(()=>{try{const url=new URL(location.href);const pay=url.searchParams.get("payment");if(pay)setPayResult(pay);if(pay){url.searchParams.delete("payment");url.searchParams.delete("booking_id");url.searchParams.delete("plan");history.replaceState(null,"",url.pathname)}}catch(e){}},[]);
+  // v18.0.7 — Stripe Connect onboarding return flow: ?connect=ok (verificado) | ?connect=refresh (reintentar)
+  useEffect(()=>{try{const url=new URL(location.href);const cn=url.searchParams.get("connect");if(!cn)return;if(cn==="ok"){window.__toast?.("¡Cuenta Stripe verificada! Ya puedes recibir transferencias","success");setTab(4);setScr("home")}else if(cn==="refresh"){window.__toast?.("Completa la verificación en Stripe para recibir pagos","info");setTab(4);setScr("home")}url.searchParams.delete("connect");history.replaceState(null,"",url.pathname+url.search)}catch(e){}},[]);
   if(payResult)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}}><div className={"success-check"+(payResult!=="cancelled"?" glow-ring":"")} style={{width:90,height:90,borderRadius:50,background:payResult==="cancelled"?"linear-gradient(135deg,#e74c3c,#c0392b)":`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24}}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">{payResult==="cancelled"?<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>:<path d="M20 6L9 17l-5-5"/>}</svg></div><h2 className="success-text" style={{fontSize:24,fontWeight:800,color:C.txt,marginBottom:8}}>{payResult==="success"?"¡Pago Exitoso!":payResult==="premium_success"?"¡Premium Activado!":"Pago Cancelado"}</h2><p className="success-text" style={{fontSize:13,color:C.ts,marginBottom:24,maxWidth:300}}>{payResult==="success"?"Tu reserva está confirmada.":payResult==="premium_success"?"Acceso completo a inteligencia de mercado.":"El pago fue cancelado."}</p><button className="success-actions" onClick={()=>setPayResult(null)} style={{padding:"14px 40px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}}>{payResult==="cancelled"?"Volver":"Continuar"}</button></div>;
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:24}}><div style={{textAlign:"center",maxWidth:420,width:"100%",position:"relative"}}><div style={{position:"absolute",top:"20%",left:"50%",transform:"translate(-50%,-50%)",width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,#e9456012,transparent 70%)",pointerEvents:"none"}}/><ParteeLogo h={55} mc="#e94560" tc={C.txt}/><p style={{fontSize:12,color:C.ts,marginTop:14,letterSpacing:".18em",fontWeight:500}}>FIND · CONNECT · PLAY</p><div style={{display:"flex",gap:4,marginTop:20,justifyContent:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:3,background:C.acc,opacity:.4,animation:"pl 1.2s infinite",animationDelay:i*.2+"s"}}/>)}</div></div></div>;
   if(recovery)return<ResetPasswordForm/>;
