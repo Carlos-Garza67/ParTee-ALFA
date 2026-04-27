@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.13">
+<meta name="version" content="18.0.14">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1723,26 +1723,19 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         };
         const convertPartida=async()=>{
           const go=async()=>{
-            setBusyAction(true);
-            try{
-              const{data,error}=await sb.rpc("set_social_mode",{p_booking_id:detail.id,p_new_mode:"partida"});
-              if(error)throw error;
-              if(data?.success===false){window.__toast?.(data.error||"No se pudo convertir","error");return}
-              window.__toast?.("Reserva marcada como Partida · Ahora puedes registrar scorecard","success");
-              const{data:fresh}=await sb.from("bookings").select("*").eq("id",detail.id).single();
-              if(fresh)setDetail(fresh);
-              load();
-            }catch(e){
-              // v18.0.10 — error strings alineados al RPC real set_social_mode
-              const m=e.message||"";
-              if(m.includes("partida_is_terminal"))window.__toast?.("Las partidas no se pueden convertir a otro modo","error");
-              else if(m.includes("too_close_to_tee_time"))window.__toast?.("Muy cerca del tee time (debe ser >24h)","error");
-              else if(m.includes("only_creator_can_change_mode"))window.__toast?.("Solo el creador puede cambiar la modalidad","error");
-              else if(m.includes("booking_not_confirmed"))window.__toast?.("La reserva no está confirmada","warn");
-              else if(m.includes("use_convert_group_to_tournament_rpc"))window.__toast?.("Para convertir un grupo a partida, ciérralo primero","warn");
-              else if(m.includes("group_full"))window.__toast?.("La reserva ya tiene 4 jugadores","warn");
-              else window.__toast?.("Error: "+m,"error");
-            }finally{setBusyAction(false)}
+            // v18.0.14 — flujo correcto: redirigir al wizard pre-poblado con datos del booking.
+            // El trigger trg_sync_booking_social_mode_from_tournament marca social_mode='partida'
+            // automáticamente cuando el wizard inserta el tournament. Si el usuario abandona
+            // a medias, el booking queda intacto en social_mode='none' y se puede reintentar.
+            window.__createMatchFromBooking={
+              id:detail.id,
+              course_id:detail.course_id,
+              course_name:detail.course_name,
+              date:detail.booking_date,
+              time:detail.booking_time
+            };
+            window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));
+            window.__navigate?.("tab:2");
           };
           const msg="¿Convertir esta reserva en Partida?\n\nSe habilitará scorecard, formato y leaderboard. Las partidas no se pueden revertir a modo social.";
           if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
