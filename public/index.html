@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.19">
+<meta name="version" content="18.0.20">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -829,7 +829,17 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
     const{error:err,paymentIntent}=await stripeRef.current.confirmCardPayment(secretRef.current,{payment_method:{card:cardRef.current}});
     if(err){setError(err.message);setPaying(false);return}
     if(paymentIntent?.status==="succeeded"){
-      setPaying(false);onSuccess?.(paymentIntent.id)
+      // v18.0.20 — extract card details so the parent flow can save them in user_profiles
+      let cardDetails=null;
+      try{
+        if(paymentIntent.payment_method&&typeof paymentIntent.payment_method==="string"){
+          const{paymentMethod}=await stripeRef.current.retrievePaymentMethod?.(paymentIntent.payment_method)||{};
+          if(paymentMethod?.card)cardDetails={last4:paymentMethod.card.last4,brand:paymentMethod.card.brand};
+        }else if(paymentIntent.payment_method?.card){
+          cardDetails={last4:paymentIntent.payment_method.card.last4,brand:paymentIntent.payment_method.card.brand};
+        }
+      }catch(e){console.warn("[card extract]",e)}
+      setPaying(false);onSuccess?.(paymentIntent.id,cardDetails)
     }else{setError("Estado: "+(paymentIntent?.status||"desconocido"));setPaying(false)}
   };
   return<div style={{background:C.cd,borderRadius:20,padding:20,border:"1px solid "+C.bd}}>
@@ -1027,7 +1037,11 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     {payData&&<div className="bsheet-overlay" style={{display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPayData(null)}>
       <div onClick={e=>e.stopPropagation()} className="bsheet" style={{background:C.cd,borderTop:"1px solid "+C.bd}}>
         <StripePayment amount={payData.amount} bookingId={null} courseName={payData.courseName} date={payData.date} time={payData.time} partySize={payData.partySize}
-          onSuccess={async(paymentIntentId)=>{
+          onSuccess={async(paymentIntentId,cardDetails)=>{
+            // v18.0.20 — guardar detalles de tarjeta para que aparezca en el perfil
+            if(cardDetails?.last4){
+              try{await sb.from("user_profiles").update({card_last4:cardDetails.last4,card_brand:cardDetails.brand}).eq("id",s.user.id)}catch(e){console.warn("[card save]",e)}
+            }
             if(payData.isPathTwo){
               // === Path 2: llamar RPC atómico create_booking_with_participants ===
               const dateStr=sl.slot_date.replace(/-/g,"");const rand=Math.random().toString(36).substring(2,6).toUpperCase();const bookingCode="PT-"+dateStr+"-"+rand;
@@ -2335,7 +2349,9 @@ function PaymentAndMovementsSection(){
       // El filtro neq("user_id", me) evita que mi propio pago aparezca aquí cuando también soy participante de mi split.
       sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,paid_at,booking:booking_id(id,course_name,booking_date,user_id,settlement_status,settlement_date)").in("payment_status",["paid_held","paid_transferred"]).neq("user_id",s.user.id).order("created_at",{ascending:false}),
       // Cargos: bookings que hice yo (como creador)
-      sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
+      // v18.0.20 — incluir social_mode + participants para que el movement calc del creator
+      // descuente lo que pagaron los joiners (en grupos/partidas el total_cost crece pero el creator no paga la diff)
+      sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code,social_mode,user_id,_participants:booking_participants(user_id,split_amount,payment_status)").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
       // Cargos como participante en split (booking ajeno donde yo pagué)
       sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,created_at,payment_status,booking:booking_id(id,course_name,booking_date,user_id)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}).limit(60),
     ]).then(([recvRes,bksRes,partRes])=>{
@@ -2354,11 +2370,19 @@ function PaymentAndMovementsSection(){
   const movements=[];
   // Cargos: bookings propios pagados
   charges.forEach(b=>{
+    // v18.0.20 — para bookings convertidos a grupo, el creator solo pagó su porción inicial,
+    // no el total_cost actualizado (que incluye slots pre-reservados para joiners). Calcular
+    // el monto efectivo del cargo del creator = total_cost - sum(joiners.split_amount).
+    let creatorCharge=Number(b.total_cost||0);
+    if(b.social_mode==="grupo"||b.social_mode==="partida"){
+      const joinersTotal=(b._participants||[]).filter(p=>p.user_id!==b.user_id).reduce((s,p)=>s+Number(p.split_amount||0),0);
+      creatorCharge=Math.max(0,creatorCharge-joinersTotal);
+    }
     movements.push({
       id:"chg-"+b.id,
       kind:"charge",
       date:b.created_at||b.booking_date,
-      amount:Number(b.total_cost||0),
+      amount:creatorCharge,
       title:b.course_name||"Reserva",
       sub:b.booking_date+" · "+t("Reserva")+(b.booking_code?" "+b.booking_code:""),
       status:b.payment_status,
@@ -2534,7 +2558,7 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
     <GlassCard style={{padding:14,marginTop:10}}>
       <div style={{..._s.section,color:C.txt}}>📈 Estadísticas</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        <div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:C.grn,..._s.mono}}>{pr?.matches_completed||0}</div><div style={{fontSize:9,color:C.ts}}>Partidas</div></div>
+        <div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:C.grn,..._s.mono}}>{pr?.matches_completed||0}</div><div style={{fontSize:9,color:C.ts}}>Completadas</div></div>
         <div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:C.gld,..._s.mono}}>🔥 {pr?.current_streak||0}</div><div style={{fontSize:9,color:C.ts}}>Racha</div></div>
         <div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:C.acc,..._s.mono}}>{pr?.best_streak||0}</div><div style={{fontSize:9,color:C.ts}}>Mejor racha</div></div>
       </div>
