@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.17">
+<meta name="version" content="18.0.18">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -3158,8 +3158,12 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     // 1) Public/active groups for Buscar — excluir propios (descubrir es para conocer gente nueva)
     // v18.0.7 — Buscar = Grupos disponibles: solo public+open. Los privados no aparecen en descubrimiento.
     // v18.0.11 — además filtrar legacy: solo bookings con social_mode='grupo'
+    // v18.0.18 — además filtrar grupos donde ya soy participant del booking (split-invited),
+    // para evitar que aparezcan opciones donde un click "Unirme" intente cobrar de nuevo.
+    const{data:myParticipantBookings}=await sb.from("booking_participants").select("booking_id").eq("user_id",s.user.id).in("status",["accepted","accepted_pending_payment"]);
+    const myBookingIds=new Set((myParticipantBookings||[]).map(p=>p.booking_id).filter(Boolean));
     const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap),booking:booking_id(social_mode)").eq("visibility","public").eq("status","open").neq("creator_id",s.user.id).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");
-    setGroups((all||[]).filter(g=>!g.booking_id||g.booking?.social_mode==="grupo"));
+    setGroups((all||[]).filter(g=>(!g.booking_id||g.booking?.social_mode==="grupo")&&!myBookingIds.has(g.booking_id)));
     // 2) User memberships: which groups am I in and with what status
     const{data:mems}=await sb.from("match_members").select("match_id,status").eq("user_id",s.user.id);
     const memMap={};(mems||[]).forEach(m=>{memMap[m.match_id]=m.status});
