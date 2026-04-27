@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.14">
+<meta name="version" content="18.0.15">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1722,23 +1722,18 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
           if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
         };
         const convertPartida=async()=>{
-          const go=async()=>{
-            // v18.0.14 — flujo correcto: redirigir al wizard pre-poblado con datos del booking.
-            // El trigger trg_sync_booking_social_mode_from_tournament marca social_mode='partida'
-            // automáticamente cuando el wizard inserta el tournament. Si el usuario abandona
-            // a medias, el booking queda intacto en social_mode='none' y se puede reintentar.
-            window.__createMatchFromBooking={
-              id:detail.id,
-              course_id:detail.course_id,
-              course_name:detail.course_name,
-              date:detail.booking_date,
-              time:detail.booking_time
-            };
-            window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));
-            window.__navigate?.("tab:2");
+          // v18.0.15 — sin confirm dialog redundante. Lleva directo al wizard.
+          // El compromiso (INSERT tournament) y la advertencia de no-reversibilidad ocurren
+          // en el último paso del wizard. Si el usuario abandona, el booking queda intacto.
+          window.__createMatchFromBooking={
+            id:detail.id,
+            course_id:detail.course_id,
+            course_name:detail.course_name,
+            date:detail.booking_date,
+            time:detail.booking_time
           };
-          const msg="¿Convertir esta reserva en Partida?\n\nSe habilitará scorecard, formato y leaderboard. Las partidas no se pueden revertir a modo social.";
-          if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
+          window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));
+          window.__navigate?.("tab:2");
         };
         if(!hasPaymentMode&&!detail.social_mode&&!detail.auto_close_at&&!canIncrease&&!canConvertGroup&&!canConvertPartida)return null;
         return<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}>
