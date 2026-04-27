@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.9">
+<meta name="version" content="18.0.10">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1315,9 +1315,11 @@ function ParticipantsSection({booking,isOwner,onChanged}){
             window.__toast?.("Lista cerrada · "+removed+" "+(removed===1?"jugador removido":"jugadores removidos"),"success");
             load();onChanged?.();
           }catch(e){
+            // v18.0.10 — error strings alineados al RPC real force_close_list
             const msg=e.message||"";
-            if(msg.includes("already_closed"))window.__toast?.("La lista ya está cerrada","info");
-            else if(msg.includes("not_owner"))window.__toast?.("Solo el creador puede cerrar la lista","error");
+            if(msg.includes("frozen_window"))window.__toast?.("Menos de 2h al tee time, ya no se puede modificar","warn");
+            else if(msg.includes("only_creator_can_force_close"))window.__toast?.("Solo el creador puede cerrar la lista","error");
+            else if(msg.includes("booking_not_found"))window.__toast?.("Reserva no encontrada","error");
             else window.__toast?.("Error: "+msg,"error");
           }
         };
@@ -1606,10 +1608,16 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
       window.__toast?.("¡Reserva convertida a grupo! Aparecerá en Versus","success");
       onConverted?.();onClose?.();
     }catch(e){
+      // v18.0.10 — error strings alineados al RPC real activate_group_mode
       const msg=e.message||"";
-      if(msg.includes("already_group"))window.__toast?.("Esta reserva ya es un grupo","warn");
-      else if(msg.includes("tee_time_too_close"))window.__toast?.("Muy cerca del tee time para convertir","error");
-      else if(msg.includes("not_owner"))window.__toast?.("Solo el creador puede convertir la reserva","error");
+      if(msg.includes("already_has_social_mode"))window.__toast?.("Esta reserva ya tiene modalidad activa (grupo o partida)","warn");
+      else if(msg.includes("too_close_to_tee_time"))window.__toast?.("Muy cerca del tee time para convertir (debe ser >24h)","error");
+      else if(msg.includes("only_creator_can_activate_group"))window.__toast?.("Solo el creador puede convertir la reserva","error");
+      else if(msg.includes("booking_not_confirmed"))window.__toast?.("La reserva no está confirmada","warn");
+      else if(msg.includes("invalid_target_party_size"))window.__toast?.("Tamaño objetivo inválido (debe ser 2-4)","warn");
+      else if(msg.includes("target_must_exceed_current_party_size"))window.__toast?.("El tamaño objetivo debe ser mayor al actual","warn");
+      else if(msg.includes("match_request_already_exists"))window.__toast?.("Ya existe un grupo activo para esta reserva","warn");
+      else if(msg.includes("capacity_unavailable"))window.__toast?.("El campo no tiene capacidad para los cupos extras","error");
       else window.__toast?.("Error: "+msg,"error");
     }finally{setBusy(false)}
   };
@@ -1720,9 +1728,14 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
               if(fresh)setDetail(fresh);
               load();
             }catch(e){
+              // v18.0.10 — error strings alineados al RPC real set_social_mode
               const m=e.message||"";
-              if(m.includes("partida_locked"))window.__toast?.("Las partidas no se pueden convertir a otro modo","error");
-              else if(m.includes("tee_time_too_close"))window.__toast?.("Muy cerca del tee time","error");
+              if(m.includes("partida_is_terminal"))window.__toast?.("Las partidas no se pueden convertir a otro modo","error");
+              else if(m.includes("too_close_to_tee_time"))window.__toast?.("Muy cerca del tee time (debe ser >24h)","error");
+              else if(m.includes("only_creator_can_change_mode"))window.__toast?.("Solo el creador puede cambiar la modalidad","error");
+              else if(m.includes("booking_not_confirmed"))window.__toast?.("La reserva no está confirmada","warn");
+              else if(m.includes("use_convert_group_to_tournament_rpc"))window.__toast?.("Para convertir un grupo a partida, ciérralo primero","warn");
+              else if(m.includes("group_full"))window.__toast?.("La reserva ya tiene 4 jugadores","warn");
               else window.__toast?.("Error: "+m,"error");
             }finally{setBusyAction(false)}
           };
@@ -2303,8 +2316,10 @@ function PaymentAndMovementsSection(){
   const[ld,setLd]=useState(true);
   const[busy,setBusy]=useState(false);
   const[showAll,setShowAll]=useState(false);
-  const hasConnect=!!(pr?.stripe_account_id&&pr?.stripe_account_verified);
-  const pendingConnect=!!(pr?.stripe_account_id&&!pr?.stripe_account_verified);
+  // v18.0.10 — Bug fix: column names. user_profiles tiene stripe_connect_* (no stripe_account_*).
+  // Source of truth: stripe_connect_status (verified/restricted/onboarding) escrito por connect-webhook.
+  const hasConnect=pr?.stripe_connect_status==="verified";
+  const pendingConnect=!!pr?.stripe_connect_account_id&&pr?.stripe_connect_status!=="verified";
   useEffect(()=>{
     if(!s?.user?.id)return;
     let alive=true;
@@ -3188,23 +3203,38 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
   async function requestJoin(grp){if(grp.creator_id===s.user.id)return window.__toast?.("Es tu grupo","info");const{error}=await sb.from("match_members").insert({match_id:grp.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id||"",status:"pending"});if(error){window.__toast?.(error.code==="23505"?"Ya solicitaste unirte":"Error: "+error.message,"warn");return}setMyMemberships(prev=>({...prev,[grp.id]:"pending"}));createNotif(grp.creator_id,"match_update","Solicitud de grupo",(p?.nickname||p?.full_name)+" quiere unirse a tu grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});window.__toast?.("¡Solicitud enviada!","success")}
   // v18.0.7 — Unirse directo a grupo público vía edge fn. Retorna con el miembro ya aceptado (no pending).
   async function joinPublicGroup(grp){
+    // v18.0.10 — La edge fn join-public-group espera booking_id (no match_id) y orquesta cobro Stripe.
     if(grp.creator_id===s.user.id)return window.__toast?.("Es tu grupo","info");
+    if(!grp.booking_id)return window.__toast?.("Este grupo no está vinculado a una reserva","warn");
+    if(!p?.stripe_customer_id||!p?.card_last4)return window.__toast?.("Agrega un método de pago en tu perfil antes de unirte","warn");
     try{
       const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
-      const r=await fetch(SB_FN_URL+"/join-public-group",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({match_id:grp.id})});
+      const r=await fetch(SB_FN_URL+"/join-public-group",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({booking_id:grp.booking_id})});
       const d=await r.json();
+      if(d?.requires_action){
+        // 3DS challenge: requeriría confirmar con Stripe.js. Por ahora avisamos al usuario.
+        window.__toast?.("Tu banco pide autenticación 3DS · Intenta otra tarjeta o contacta soporte","warn");
+        return;
+      }
+      if(d?.needs_card){
+        window.__toast?.("Necesitas guardar una tarjeta primero","warn");
+        return;
+      }
       if(!r.ok||d?.success===false){
-        const m=d?.error||"";
-        if(m.includes("already_member"))window.__toast?.("Ya eres miembro de este grupo","info");
-        else if(m.includes("group_full"))window.__toast?.("El grupo se llenó","warn");
-        else if(m.includes("not_public"))window.__toast?.("Este grupo no es público","warn");
-        else if(m.includes("tee_time_passed"))window.__toast?.("El tee time ya pasó","warn");
-        else window.__toast?.(m||"No se pudo unir","error");
+        const m=d?.error||d?.message||"";
+        if(m.includes("creator_cannot_join_own_group"))window.__toast?.("No puedes unirte a tu propio grupo","info");
+        else if(m.includes("not_a_group_booking"))window.__toast?.("Este booking no está en modo grupo","warn");
+        else if(m.includes("booking_not_confirmed"))window.__toast?.("La reserva no está confirmada","warn");
+        else if(m.includes("group_full")||m.includes("match_not_open"))window.__toast?.("El grupo se llenó","warn");
+        else if(m.includes("too_close_to_tee_time"))window.__toast?.("Muy cerca del tee time para unirse","warn");
+        else if(m.includes("payment_failed"))window.__toast?.("No se pudo cobrar tu tarjeta · "+(d?.message||"Verifica fondos"),"error");
+        else if(m.includes("already_member")||m.includes("23505"))window.__toast?.("Ya eres miembro de este grupo","info");
+        else window.__toast?.(d?.message||m||"No se pudo unir","error");
         return;
       }
       setMyMemberships(prev=>({...prev,[grp.id]:"accepted"}));
       createNotif(grp.creator_id,"match_update","Nuevo miembro en tu grupo",(p?.nickname||p?.full_name||"Un jugador")+" se unió a tu grupo en "+grp.course_name,{match_id:grp.id,action_route:"tab:2",action_label:"Ver grupo"});
-      window.__toast?.("¡Te uniste al grupo!","success");
+      window.__toast?.("¡Te uniste al grupo! Cargo de $"+fm(d?.amount_paid||0)+" aplicado","success");
       load();
     }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
   }
