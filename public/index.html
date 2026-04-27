@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.10">
+<meta name="version" content="18.0.11">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -3153,17 +3153,20 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     setLd(true);
     // 1) Public/active groups for Buscar — excluir propios (descubrir es para conocer gente nueva)
     // v18.0.7 — Buscar = Grupos disponibles: solo public+open. Los privados no aparecen en descubrimiento.
-    const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("visibility","public").eq("status","open").neq("creator_id",s.user.id).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");
-    setGroups(all||[]);
+    // v18.0.11 — además filtrar legacy: solo bookings con social_mode='grupo'
+    const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap),booking:booking_id(social_mode)").eq("visibility","public").eq("status","open").neq("creator_id",s.user.id).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");
+    setGroups((all||[]).filter(g=>!g.booking_id||g.booking?.social_mode==="grupo"));
     // 2) User memberships: which groups am I in and with what status
     const{data:mems}=await sb.from("match_members").select("match_id,status").eq("user_id",s.user.id);
     const memMap={};(mems||[]).forEach(m=>{memMap[m.match_id]=m.status});
     setMyMemberships(memMap);
     // 3) Mis Grupos: creados por mí OR grupos donde soy miembro (cualquier status)
     const memberMatchIds=(mems||[]).map(m=>m.match_id);
-    const{data:created}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id)").eq("creator_id",s.user.id);
-    const{data:memberOf}=memberMatchIds.length>0?await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id)").in("id",memberMatchIds).neq("creator_id",s.user.id):{data:[]};
-    const mineAll=[...(created||[]),...(memberOf||[])].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+    // v18.0.11 — solo mostrar grupos v18 (booking con social_mode='grupo'). Excluye legacy match_requests
+    const{data:created}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id),booking:booking_id(social_mode)").eq("creator_id",s.user.id);
+    const{data:memberOf}=memberMatchIds.length>0?await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id),booking:booking_id(social_mode)").in("id",memberMatchIds).neq("creator_id",s.user.id):{data:[]};
+    const isV18Group=g=>!g.booking_id||g.booking?.social_mode==="grupo"; // matches sin booking_id son legacy "Crear Grupo" sueltos, también se incluyen
+    const mineAll=[...(created||[]).filter(isV18Group),...(memberOf||[]).filter(isV18Group)].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
     setMyGroups(mineAll);
     // 4) Pending counts for groups I created (para badge de solicitudes)
     const createdIds=(created||[]).map(g=>g.id);
