@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.18">
+<meta name="version" content="18.0.19">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1052,8 +1052,11 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
               if(payData.extras?.length>0){const ei=payData.extras.map(e=>({...e,booking_id:rpcResult.booking_id}));await sb.from("booking_extras").insert(ei)}
               await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
               if(selectedFriends.length>0){
-                const notifs=selectedFriends.map(fid=>{const split_amt=paymentMode==="split"?Math.round((gT/n)*100)/100:null;return{user_id:fid,type:"booking_invitation",title:"Invitación a jugar",body:c.course_name+" — "+(split_amt?"Tu parte: $"+fm(split_amt)+" MXN":"Invitación sin costo"),metadata:{booking_id:rpcResult.booking_id,course_name:c.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"}}});
-                await sb.from("notifications").insert(notifs);
+                // v18.0.19 — alineado con schema real de notifications:
+                // antes usaba {body, metadata:{...}} pero schema real es {message, booking_id, action_route, action_label, course_name}
+                const notifs=selectedFriends.map(fid=>{const split_amt=paymentMode==="split"?Math.round((gT/n)*100)/100:null;return{user_id:fid,type:"booking_invitation",title:"Invitación a jugar",message:c.course_name+" — "+(split_amt?"Tu parte: $"+fm(split_amt)+" MXN":"Invitación sin costo"),booking_id:rpcResult.booking_id,course_name:c.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"}});
+                const{error:notifErr}=await sb.from("notifications").insert(notifs);
+                if(notifErr)console.error("[invitation notifs] insert failed:",notifErr);
               }
               sendBookingEmails(bkRow,c,s.user.email,pr?.full_name||s.user.email,n,gT);
               setPayData(null);
