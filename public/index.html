@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.20">
+<meta name="version" content="18.0.21">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2349,9 +2349,7 @@ function PaymentAndMovementsSection(){
       // El filtro neq("user_id", me) evita que mi propio pago aparezca aquí cuando también soy participante de mi split.
       sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,paid_at,booking:booking_id(id,course_name,booking_date,user_id,settlement_status,settlement_date)").in("payment_status",["paid_held","paid_transferred"]).neq("user_id",s.user.id).order("created_at",{ascending:false}),
       // Cargos: bookings que hice yo (como creador)
-      // v18.0.20 — incluir social_mode + participants para que el movement calc del creator
-      // descuente lo que pagaron los joiners (en grupos/partidas el total_cost crece pero el creator no paga la diff)
-      sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code,social_mode,user_id,_participants:booking_participants(user_id,split_amount,payment_status)").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
+      sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
       // Cargos como participante en split (booking ajeno donde yo pagué)
       sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,created_at,payment_status,booking:booking_id(id,course_name,booking_date,user_id)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}).limit(60),
     ]).then(([recvRes,bksRes,partRes])=>{
@@ -2370,19 +2368,11 @@ function PaymentAndMovementsSection(){
   const movements=[];
   // Cargos: bookings propios pagados
   charges.forEach(b=>{
-    // v18.0.20 — para bookings convertidos a grupo, el creator solo pagó su porción inicial,
-    // no el total_cost actualizado (que incluye slots pre-reservados para joiners). Calcular
-    // el monto efectivo del cargo del creator = total_cost - sum(joiners.split_amount).
-    let creatorCharge=Number(b.total_cost||0);
-    if(b.social_mode==="grupo"||b.social_mode==="partida"){
-      const joinersTotal=(b._participants||[]).filter(p=>p.user_id!==b.user_id).reduce((s,p)=>s+Number(p.split_amount||0),0);
-      creatorCharge=Math.max(0,creatorCharge-joinersTotal);
-    }
     movements.push({
       id:"chg-"+b.id,
       kind:"charge",
       date:b.created_at||b.booking_date,
-      amount:creatorCharge,
+      amount:Number(b.total_cost||0),
       title:b.course_name||"Reserva",
       sub:b.booking_date+" · "+t("Reserva")+(b.booking_code?" "+b.booking_code:""),
       status:b.payment_status,
