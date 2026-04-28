@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.22">
+<meta name="version" content="18.0.23">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2522,7 +2522,13 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
   useEffect(()=>{if(s){sb.from("tournament_players").select("id",{count:"exact"}).eq("user_id",s.user.id).then(({count})=>setTCount(count||0));sb.from("player_badges").select("*").eq("user_id",s.user.id).order("earned_at",{ascending:false}).then(({data})=>setMyBadges(data||[]))}},[]);
   const calcAge=(d)=>{if(!d)return null;const b=new Date(d+"T00:00:00");const now=new Date();let a=now.getFullYear()-b.getFullYear();if(now.getMonth()<b.getMonth()||(now.getMonth()===b.getMonth()&&now.getDate()<b.getDate()))a--;return a};
   const age=calcAge(bd);
-  const save=async()=>{setSv(true);await sb.from("user_profiles").update({full_name:nm,nickname:nick||null,phone:ph||null,city:city||null,state:pst||null,handicap:hc?parseFloat(hc):null,handedness:hand,fav_brand:brand||null,birth_date:bd||null,timezone:userTz||null}).eq("id",s.user.id);await ref();setEd(false);setSv(false)};
+  const save=async()=>{setSv(true);
+    // v18.0.23 — Bug #27 fix: si el campo handicap está vacío, NO incluirlo en UPDATE
+    // (preserva valor anterior en lugar de NULL). Sprint 3: handicap será read-only y calculado.
+    const updates={full_name:nm,nickname:nick||null,phone:ph||null,city:city||null,state:pst||null,handedness:hand,fav_brand:brand||null,birth_date:bd||null,timezone:userTz||null};
+    if(hc!==""&&hc!=null)updates.handicap=parseFloat(hc);
+    await sb.from("user_profiles").update(updates).eq("id",s.user.id);
+    await ref();setEd(false);setSv(false)};
   const inp=(v,set,p)=>({value:v,onChange:e=>set(e.target.value),disabled:!ed,placeholder:p,style:{width:"100%",background:ed?C.bg:C.cd,border:"1px solid "+(ed?C.bd:"transparent"),borderRadius:10,padding:"10px 14px",fontSize:13,color:ed?C.txt:C.ts,outline:"none",boxSizing:"border-box",marginTop:4}});
   return<div style={{padding:20,paddingBottom:30}}>
     <GlassCard style={{marginBottom:16,padding:"22px 18px"}}>
@@ -3804,7 +3810,7 @@ function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,
       {scr==="home"&&tab===4&&<Profile onRanking={()=>setScr("ranking")} onPerformance={()=>setScr("performance")}/>}
       {scr==="ranking"&&<RankingScreen onBack={()=>setScr("home")}/>}
       {scr==="performance"&&<PerformanceScreen onBack={()=>setScr("home")}/>}
-      {scr==="detail"&&co&&<Detail c={co} onBack={home} onBook={(c,s)=>{if(!p?.city||!p?.phone){window.__toast?.(t("Completa tu perfil para reservar"),"info");setTab(4);setScr("home");return}setSl(s);setScr("confirm")}}/>}
+      {scr==="detail"&&co&&<Detail c={co} onBack={home} onBook={(c,s)=>{const missing=[];if(!p?.city)missing.push(t("Ciudad"));if(!p?.phone)missing.push(t("Teléfono"));if(missing.length>0){window.__toast?.(t("Completa tu perfil para reservar")+": "+missing.join(", "),"info");setTab(4);setScr("home");return}setSl(s);setScr("confirm")}}/>}
       {scr==="confirm"&&co&&sl&&<Confirm c={co} sl={sl} onBack={()=>setScr("detail")} onOk={d=>{setOkd(d);setScr("ok")}}/>}
       {scr==="ok"&&<Ok d={okd} onHome={home}/>}
     </div>
