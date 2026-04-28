@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.23">
+<meta name="version" content="18.0.24">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -826,19 +826,14 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
   const handlePay=async()=>{
     if(!stripeRef.current||!cardRef.current||!secretRef.current)return;
     setPaying(true);setError("");
-    const{error:err,paymentIntent}=await stripeRef.current.confirmCardPayment(secretRef.current,{payment_method:{card:cardRef.current}});
+    // v18.0.24 — Bug #20 fix correcto: crear paymentMethod primero (devuelve last4/brand)
+    // y después confirmar el paymentIntent con el id. Esto unifica el flow con el del split (línea 1474).
+    const{error:pmErr,paymentMethod}=await stripeRef.current.createPaymentMethod({type:"card",card:cardRef.current});
+    if(pmErr){setError(pmErr.message);setPaying(false);return}
+    const{error:err,paymentIntent}=await stripeRef.current.confirmCardPayment(secretRef.current,{payment_method:paymentMethod.id});
     if(err){setError(err.message);setPaying(false);return}
     if(paymentIntent?.status==="succeeded"){
-      // v18.0.20 — extract card details so the parent flow can save them in user_profiles
-      let cardDetails=null;
-      try{
-        if(paymentIntent.payment_method&&typeof paymentIntent.payment_method==="string"){
-          const{paymentMethod}=await stripeRef.current.retrievePaymentMethod?.(paymentIntent.payment_method)||{};
-          if(paymentMethod?.card)cardDetails={last4:paymentMethod.card.last4,brand:paymentMethod.card.brand};
-        }else if(paymentIntent.payment_method?.card){
-          cardDetails={last4:paymentIntent.payment_method.card.last4,brand:paymentIntent.payment_method.card.brand};
-        }
-      }catch(e){console.warn("[card extract]",e)}
+      const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
       setPaying(false);onSuccess?.(paymentIntent.id,cardDetails)
     }else{setError("Estado: "+(paymentIntent?.status||"desconocido"));setPaying(false)}
   };
