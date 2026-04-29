@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.0.25">
+<meta name="version" content="18.0.27">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -389,16 +389,17 @@ function getCourseReadiness(course,slotsCount,holesCount){const ft=course?.facil
 const ToastCtx=createContext({});
 function ToastProvider({children}){const[toasts,setToasts]=useState([]);const[cDialog,setCDialog]=useState(null);
   const toast=(msg,type="info")=>{const id=Date.now();setToasts(p=>[...p,{id,msg,type}]);setTimeout(()=>setToasts(p=>p.map(t=>t.id===id?{...t,out:true}:t)),2800);setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3200)};
-  const confirm=(msg,onYes,onNo)=>setCDialog({msg,onYes:()=>{setCDialog(null);onYes?.()},onNo:()=>{setCDialog(null);onNo?.()}});
+  // v18.0.26 — confirm acepta opts: {singleButton, confirmLabel, confirmStyle: 'danger'|'primary'|'info'}
+  const confirm=(msg,onYes,onNo,opts)=>setCDialog({msg,opts:opts||{},onYes:()=>{setCDialog(null);onYes?.()},onNo:()=>{setCDialog(null);onNo?.()}});
   return<ToastCtx.Provider value={{toast,confirm}}>{children}
     <div className="toast-wrap">{toasts.map(t=><div key={t.id} className={"toast "+t.type+(t.out?" toast-out":"")}>
       <span>{t.type==="success"?"✓":t.type==="error"?"✕":t.type==="warn"?"⚠":"ℹ"}</span><span>{t.msg}</span>
     </div>)}</div>
-    {cDialog&&<div className="confirm-overlay" onClick={cDialog.onNo}><div className="confirm-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}>
-      <div dangerouslySetInnerHTML={{__html:ic("alert",28,C.acc)}} style={{marginBottom:12}}/>
-      <p style={{color:C.txt,fontSize:15,fontWeight:600,marginBottom:20}}>{cDialog.msg}</p>
-      <div style={{display:"flex",gap:10}}><button onClick={cDialog.onNo} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.bd,borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>
-      <button onClick={cDialog.onYes} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:14,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Confirmar</button></div>
+    {cDialog&&<div key={cDialog.msg.slice(0,20)} className="confirm-overlay" onClick={cDialog.onNo}><div className="confirm-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}>
+      <div dangerouslySetInnerHTML={{__html:ic("alert",28,cDialog.opts.confirmStyle==="info"?C.grn:C.acc)}} style={{marginBottom:12}}/>
+      <p style={{color:C.txt,fontSize:14,fontWeight:500,marginBottom:20,whiteSpace:"pre-wrap",textAlign:"left"}}>{cDialog.msg}</p>
+      <div style={{display:"flex",gap:10}}>{!cDialog.opts.singleButton&&<button onClick={cDialog.onNo} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.bd,borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>}
+      <button onClick={cDialog.opts.singleButton?cDialog.onNo:cDialog.onYes} style={{flex:1,padding:12,background:cDialog.opts.singleButton?C.cd:(cDialog.opts.confirmStyle==="info"?`linear-gradient(135deg,${C.grn},#00cec9)`:`linear-gradient(135deg,${C.acc},#d63d55)`),border:cDialog.opts.singleButton?"1px solid "+C.bd:"none",borderRadius:14,color:cDialog.opts.singleButton?C.txt:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>{cDialog.opts.confirmLabel||t("Confirmar")}</button></div>
     </div></div>}
   </ToastCtx.Provider>}
 const useToast=()=>useContext(ToastCtx);
@@ -2576,12 +2577,13 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
       <button onClick={()=>{if(window.__confirm)window.__confirm("¿Cerrar sesión?",()=>out());else if(confirm("Cerrar sesión?"))out()}} style={{width:"100%",padding:13,background:C.acc+"0a",border:"1px solid "+C.acc+"30",borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:14}}>{t("Cerrar Sesión")}</button>
       <div style={{display:"flex",justifyContent:"center",gap:16,marginBottom:14}}><span onClick={()=>setTermsView("terms")} style={{fontSize:11,color:C.ts,cursor:"pointer"}}>Términos</span><span style={{color:C.bd}}>|</span><span onClick={()=>setTermsView("privacy")} style={{fontSize:11,color:C.ts,cursor:"pointer"}}>{t("Privacidad")}</span></div>{termsView&&<TermsModal type={termsView} onClose={()=>setTermsView(null)}/>}
       <button onClick={async()=>{
-        // v18.0.25 — Bug #29 mitigación: bloquear delete si hay actividad pendiente.
+        // v18.0.26 — Bug #29 mitigación: bloquear delete si hay actividad pendiente.
         // Solución completa (edge function delete-account, anonimización, etc.) en Sprint 3.
         const today=new Date().toISOString().slice(0,10);
         const[bksRes,payoutsRes,tourRes]=await Promise.all([
           sb.from("bookings").select("id").eq("user_id",s.user.id).eq("status","confirmed").gte("booking_date",today),
-          sb.from("pending_payouts").select("id,amount").eq("recipient_user_id",s.user.id).eq("status","pending"),
+          // v18.0.26 fix: column es creator_user_id (no recipient_user_id). Status pending_connect cuando esperando Stripe Connect.
+          sb.from("pending_payouts").select("id,amount").eq("creator_user_id",s.user.id).in("status",["pending","pending_connect"]),
           sb.from("tournament_players").select("tournament_id").eq("user_id",s.user.id),
         ]);
         const blockers=[];
@@ -2590,13 +2592,13 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
         if((tourRes.data||[]).length>0)blockers.push((tourRes.data.length)+" "+t("partida")+(tourRes.data.length!==1?"s":""));
         if(blockers.length>0){
           const msg=t("No puedes eliminar tu cuenta porque tienes")+":\n\n• "+blockers.join("\n• ")+"\n\n"+t("Cancela tus reservas y finaliza tus partidas primero. Si tienes saldo por cobrar, configura tu cuenta de Stripe Connect para retirarlo.");
-          if(window.__confirm)window.__confirm(msg,()=>{},{singleButton:true,confirmLabel:t("Entendido")});
+          if(window.__confirm)window.__confirm(msg,null,null,{singleButton:true,confirmLabel:t("Entendido"),confirmStyle:"info"});
           else alert(msg);
           return;
         }
         const del=async()=>{await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString(),phone:null,card_last4:null,card_brand:null}).eq("id",s.user.id);out()};
         const warning=t("¿Eliminar tu cuenta?")+"\n\n"+t("Esta acción es permanente. Se eliminarán")+":\n• "+t("Tu perfil y datos personales")+"\n• "+t("Historial de movimientos y partidas")+"\n• "+t("Tarjeta guardada");
-        if(window.__confirm)window.__confirm(warning,del);
+        if(window.__confirm)window.__confirm(warning,del,null,{confirmLabel:t("Eliminar cuenta")});
         else if(confirm(warning))del();
       }} style={{width:"100%",padding:10,background:"transparent",border:"none",color:C.tm,fontSize:10,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
     </div>
