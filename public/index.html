@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.4">
+<meta name="version" content="18.3.5">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1920,6 +1920,30 @@ const FORMATS={individual:[{k:"stroke_play",l:"Stroke Play",d:t("Menor número t
 
 function stablefordPts(strokes,par){if(!strokes)return 0;const d=strokes-par;if(d<=-3)return 5;if(d===-2)return 4;if(d===-1)return 3;if(d===0)return 2;if(d===1)return 1;return 0}
 
+// v18.3.5: Match Play status — calcula estado 1v1 a partir de scores hoyo a hoyo.
+// Halved (mismo strokes) no cuenta para nadie. Match decidido cuando |lead| > hoyos restantes.
+// Hoyos restantes siguen capturables (necesario para handicap WHS).
+function matchPlayStatus(playerA,playerB,scoresMap,holes){
+  if(!playerA||!playerB||!holes||holes.length===0)return null;
+  let aWon=0,bWon=0,halved=0,played=0;const results=[];
+  for(const h of holes){
+    const scA=scoresMap?.[playerA.id]?.[h.hole_number];
+    const scB=scoresMap?.[playerB.id]?.[h.hole_number];
+    if(!scA||!scB){results.push({hole:h.hole_number,result:null});continue}
+    played++;
+    if(scA<scB){aWon++;results.push({hole:h.hole_number,result:"A"})}
+    else if(scB<scA){bWon++;results.push({hole:h.hole_number,result:"B"})}
+    else{halved++;results.push({hole:h.hole_number,result:"halved"})}
+  }
+  const lead=aWon-bWon;const remaining=holes.length-played;const decided=Math.abs(lead)>remaining;
+  let status,sub,winnerSide=null,winner=null;
+  if(decided){winnerSide=lead>0?"A":"B";winner=lead>0?playerA:playerB;status=`${winner.player_name||"Jugador"} gana ${Math.abs(lead)} & ${remaining}`;sub=`Decidido en el hoyo ${played}`}
+  else if(played===holes.length){if(lead===0){status="All Square";sub="Match terminado igualado"}else{winnerSide=lead>0?"A":"B";winner=lead>0?playerA:playerB;status=`${winner.player_name||"Jugador"} gana ${Math.abs(lead)} up`;sub="Decidido en el hoyo 18"}}
+  else if(lead===0){status=played===0?"Match listo":"All Square";sub=`${remaining} ${remaining===1?"hoyo":"hoyos"} por jugar`}
+  else{const leader=lead>0?playerA:playerB;status=`${leader.player_name||"Jugador"} · ${Math.abs(lead)} up`;sub=`${remaining} ${remaining===1?"hoyo":"hoyos"} por jugar`}
+  return{aWon,bWon,halved,played,remaining,lead,decided,results,status,sub,winnerSide,winner};
+}
+
 const _delTorneoIds=new Set();
 function SwipeRow({children,onDelete,border}){const ref=useRef(null);const sx=useRef(0);const cx=useRef(0);const sw=useRef(false);const op=useRef(false);const TS=e=>{sx.current=e.touches[0].clientX;sw.current=true;if(ref.current)ref.current.style.transition="none"};const TM=e=>{if(!sw.current)return;const d=e.touches[0].clientX-sx.current;const base=op.current?-68:0;cx.current=Math.max(Math.min(base+d,0),-72);if(ref.current)ref.current.style.transform=`translateX(${cx.current}px)`};const TE=()=>{sw.current=false;if(!ref.current)return;ref.current.style.transition="transform .25s ease";if(cx.current<-36){cx.current=-68;op.current=true;ref.current.style.transform="translateX(-68px)"}else{cx.current=0;op.current=false;ref.current.style.transform="translateX(0)"}};return React.createElement("div",{style:{overflow:"hidden",borderRadius:14,marginBottom:8,border:border||"none"}},React.createElement("div",{ref,onTouchStart:TS,onTouchMove:TM,onTouchEnd:TE,style:{display:"flex",willChange:"transform"}},React.createElement("div",{style:{minWidth:"100%",flexShrink:0}},children),React.createElement("div",{onClick:()=>{op.current=false;cx.current=0;if(ref.current){ref.current.style.transition="transform .25s ease";ref.current.style.transform="translateX(0)"}window.__confirm?.(t("¿Eliminar esta partida?"),onDelete)},style:{width:68,flexShrink:0,background:`linear-gradient(135deg,${C.acc},#d63d55)`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}},React.createElement("span",{dangerouslySetInnerHTML:{__html:ic("x",18,"#fff")}}))))}
 function TourneoTab(){
@@ -2072,8 +2096,9 @@ function TourneoTab(){
     if(filteredBks.length>0){const{data:gsMap}=await sb.rpc("booking_game_status_bulk",{p_ids:filteredBks.map(b=>b.id)});filteredBks.forEach(b=>{b.game_status=(gsMap||{})[b.id]||{}})}
     setMyBookings(filteredBks);
     setCourses(c||[]);setFriends(f||[]);if(bk&&!selCourse)setSelCourse(bk.course_id);setView("create")}
-  const maxP=4;
-  const canNext=()=>{if(step===1)return!!gMode;if(step===2)return!!gFmt;if(step===3)return!!tName&&!!selCourse;if(step===4){if(gMode==="teams")return selFr.length===3;return selFr.length>=1}if(step===5){const v=Object.values(teamAssign);return v.filter(x=>x==="A").length>0&&v.filter(x=>x==="B").length>0}return false};
+  // v18.3.5: maxP dinámico — match_play exige 1 oponente (1v1), teams 3 amigos (2v2), individual hasta 4
+  const maxP=gFmt==="match_play"?1:gMode==="teams"?3:4;
+  const canNext=()=>{if(step===1)return!!gMode;if(step===2)return!!gFmt;if(step===3)return!!tName&&!!selCourse;if(step===4){if(gMode==="teams")return selFr.length===3;if(gFmt==="match_play")return selFr.length===1;return selFr.length>=1}if(step===5){const v=Object.values(teamAssign);return v.filter(x=>x==="A").length>0&&v.filter(x=>x==="B").length>0}return false};
   const nextStep=()=>{if(!canNext())return;
     // Si viene de grupo, los miembros ya están heredados — saltar paso 4
     if(step===3&&fromGroupId){if(gMode==="teams"){setTeamAssign({});setStep(5);return}createTorneo();return}
@@ -2243,7 +2268,7 @@ function TourneoTab(){
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0 10px"}}><div style={{flex:1,height:1,background:C.bd}}/><span style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>O ELIGE OTRO CAMPO</span><div style={{flex:1,height:1,background:C.bd}}/></div></>}
       <label style={{fontSize:11,color:C.tm,fontWeight:600}}>{t("CAMPO")}</label><select value={selCourse||""} onChange={x=>{setSelCourse(x.target.value);setSelBkId(null);setBkRef(null);const c=courses.find(cc=>cc.id===x.target.value);if(c&&(!tName||autoFilledName)){setTName(c.course_name);setAutoFilledName(true)}}} style={{...inp0,marginTop:4,marginBottom:4,appearance:"auto"}}><option value="">-- Selecciona campo --</option>{courses.map(c=><option key={c.id} value={c.id}>{c.course_name} - {c.city}</option>)}</select></>}</>}
-    {step===4&&<><div style={{marginBottom:10,padding:"10px 12px",background:gMode==="teams"?(selFr.length===3?C.grn+"15":C.gld+"10"):C.grn+"10",border:"1px solid "+(gMode==="teams"?(selFr.length===3?C.grn+"40":C.gld+"30"):C.grn+"30"),borderRadius:10,fontSize:12,color:C.txt,fontWeight:600,display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic(gMode==="teams"&&selFr.length===3?"check":"users",13,gMode==="teams"?(selFr.length===3?C.grn:C.gld):C.grn)}}/><span>{gMode==="teams"?`Equipos: selecciona exactamente 3 amigos (${selFr.length}/3)`:`Selecciona los amigos a invitar (${selFr.length} seleccionado${selFr.length===1?"":"s"})`}</span></div>{friends.length===0?<p style={{color:C.tm,fontSize:13}}>{t("Sin amigos. Agrega desde la tab Amigos.")}</p>:friends.map(f=>{const sel=selFr.includes(f.friend?.id);const dis=selFr.length>=maxP&&!sel;return<div key={f.friend?.id} onClick={()=>{if(dis)return;setSelFr(pr=>sel?pr.filter(x=>x!==f.friend?.id):[...pr,f.friend?.id])}} style={{display:"flex",alignItems:"center",gap:10,background:sel?C.grn+"12":C.bg,border:"1px solid "+(sel?C.grn:C.bd),borderRadius:10,padding:12,marginBottom:6,cursor:dis?"not-allowed":"pointer",opacity:dis?.4:1}}><div style={{width:32,height:32,borderRadius:14,background:sel?C.grn+"30":C.pri,display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sel?ic("check",14,C.grn):ic("user",14,C.tm)}}/><div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{f.friend?.nickname||f.friend?.full_name}</div><div style={{color:C.gld,fontSize:10,..._s.mono}}>{f.friend?.player_id}</div></div></div>})}</>}
+    {step===4&&<><div style={{marginBottom:10,padding:"10px 12px",background:gMode==="teams"?(selFr.length===3?C.grn+"15":C.gld+"10"):C.grn+"10",border:"1px solid "+(gMode==="teams"?(selFr.length===3?C.grn+"40":C.gld+"30"):C.grn+"30"),borderRadius:10,fontSize:12,color:C.txt,fontWeight:600,display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic(gMode==="teams"&&selFr.length===3?"check":"users",13,gMode==="teams"?(selFr.length===3?C.grn:C.gld):C.grn)}}/><span>{gMode==="teams"?`Equipos: selecciona exactamente 3 amigos (${selFr.length}/3)`:gFmt==="match_play"?`Match Play: selecciona exactamente 1 oponente (${selFr.length}/1)`:`Selecciona los amigos a invitar (${selFr.length} seleccionado${selFr.length===1?"":"s"})`}</span></div>{friends.length===0?<p style={{color:C.tm,fontSize:13}}>{t("Sin amigos. Agrega desde la tab Amigos.")}</p>:friends.map(f=>{const sel=selFr.includes(f.friend?.id);const dis=selFr.length>=maxP&&!sel;return<div key={f.friend?.id} onClick={()=>{if(dis)return;setSelFr(pr=>sel?pr.filter(x=>x!==f.friend?.id):[...pr,f.friend?.id])}} style={{display:"flex",alignItems:"center",gap:10,background:sel?C.grn+"12":C.bg,border:"1px solid "+(sel?C.grn:C.bd),borderRadius:10,padding:12,marginBottom:6,cursor:dis?"not-allowed":"pointer",opacity:dis?.4:1}}><div style={{width:32,height:32,borderRadius:14,background:sel?C.grn+"30":C.pri,display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sel?ic("check",14,C.grn):ic("user",14,C.tm)}}/><div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{f.friend?.nickname||f.friend?.full_name}</div><div style={{color:C.gld,fontSize:10,..._s.mono}}>{f.friend?.player_id}</div></div></div>})}</>}
     {step===5&&<>{(()=>{
       // Cuando viene de grupo, los invitados pueden no ser amigos; usamos groupMembers directo
       const rows=fromGroupId
@@ -2278,9 +2303,51 @@ function TourneoTab(){
       {at.status==="in_progress"&&isCreator&&!allDone&&<button onClick={()=>window.__confirm?.(t("No todos terminaron. ¿Finalizar de todos modos?"),finishMatch)} style={{width:"100%",padding:12,background:"transparent",border:"1px solid "+C.acc+"40",borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:14}}>{t("Finalizar (incompleta)")}</button>}
       {/* TEAM SCORES */}
       {isTeam&&<div style={{..._s.grid2lg,marginBottom:14}}><div style={{background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:14,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:C.gld,..._s.mono}}>{fmt==="stableford"?teamAS+" pts":teamAS||"--"}</div><div style={{fontSize:10,color:C.gld,fontWeight:700,marginTop:2}}>{t("Equipo A")}</div></div><div style={{background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:14,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:C.acc,..._s.mono}}>{fmt==="stableford"?teamBS+" pts":teamBS||"--"}</div><div style={{fontSize:10,color:C.acc,fontWeight:700,marginTop:2}}>{t("Equipo B")}</div></div></div>}
-      {/* LEADERBOARD */}
+      {/* v18.3.5: MATCH PLAY status display (1v1) reemplaza leaderboard tradicional cuando aplica */}
+      {fmt==="match_play"&&players.length===2?(()=>{
+        const me=players.find(pl=>pl.user_id===s.user.id);
+        const opp=players.find(pl=>pl.user_id!==s.user.id);
+        const playerA=me||players[0];
+        const playerB=me?opp:players[1];
+        const mps=matchPlayStatus(playerA,playerB,scores,holes);
+        if(!mps)return null;
+        const isWinDisplay=mps.decided||mps.played===holes.length;
+        return <div style={{marginBottom:14}}>
+          <div style={{background:`linear-gradient(145deg,rgba(12,45,90,.5),rgba(22,37,68,.4),${isWinDisplay?"rgba(255,196,0,.1)":"rgba(0,184,148,.08)"})`,border:"1px solid "+(isWinDisplay?C.gld+"40":"rgba(255,255,255,.1)"),borderRadius:18,padding:"18px 14px",textAlign:"center",marginBottom:10,position:"relative",overflow:"hidden"}}>
+            <div style={{fontSize:9,fontWeight:700,color:C.tm,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>{isWinDisplay?"🏆 Resultado":"Estado del match"}</div>
+            <div style={{fontSize:22,fontWeight:800,color:isWinDisplay?C.gld:C.txt,letterSpacing:"-.02em",lineHeight:1.15}}>{mps.status}</div>
+            <div style={{fontSize:11,color:C.tm,marginTop:6}}>{mps.sub}</div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
+            {[{pl:playerA,isMe:playerA.user_id===s.user.id,won:mps.aWon},{pl:playerB,isMe:playerB.user_id===s.user.id,won:mps.bWon}].map((pp,i)=>
+              <div key={i} style={{padding:11,borderRadius:14,textAlign:"center",background:pp.isMe?"linear-gradient(145deg,rgba(0,184,148,.08),rgba(85,239,196,.04))":"rgba(255,255,255,.025)",border:"1px solid "+(pp.isMe?"rgba(0,184,148,.22)":"rgba(255,255,255,.08)"),display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                <div style={{width:32,height:32,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",background:pp.isMe?`linear-gradient(135deg,${C.grn},#55efc4)`:"linear-gradient(135deg,#3a4a5e,#5a6d82)"}}>{(pp.pl.player_name||"?").charAt(0).toUpperCase()}</div>
+                <div style={{fontSize:10,fontWeight:700,color:pp.isMe?C.grn:C.txt,letterSpacing:".04em"}}>{pp.pl.player_name}{pp.isMe?" · "+t("(Tu)"):""}</div>
+                {pp.pl.player_pid&&<div style={{fontSize:9,color:C.gld,fontWeight:600,letterSpacing:".04em",..._s.mono}}>{pp.pl.player_pid}</div>}
+                <div style={{fontSize:22,fontWeight:800,color:C.txt,lineHeight:1,letterSpacing:"-.02em",..._s.mono}}>{pp.won}</div>
+                <div style={{fontSize:8,color:C.tm,letterSpacing:".06em",textTransform:"uppercase",fontWeight:600}}>hoyos ganados</div>
+              </div>)}
+          </div>
+          {mps.halved>0&&<div style={{textAlign:"center",fontSize:11,color:C.gld,marginBottom:10,fontWeight:600}}>{mps.halved} {mps.halved===1?"hoyo halved":"hoyos halved"}</div>}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+            <span style={{fontSize:10,color:C.txt,letterSpacing:"-.02em",fontWeight:800,textTransform:"uppercase"}}>HOYO A HOYO <span style={{color:C.tm,fontWeight:500}}>· {mps.played}/{holes.length}</span></span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(9,1fr)",gap:3,marginBottom:14}}>
+            {mps.results.map((r,i)=>{
+              const youWon=(r.result==="A"&&playerA.user_id===s.user.id)||(r.result==="B"&&playerB.user_id===s.user.id);
+              const oppWon=r.result&&!youWon&&r.result!=="halved";
+              const halved=r.result==="halved";
+              const bg=youWon?"linear-gradient(135deg,rgba(0,184,148,.16),rgba(85,239,196,.08))":oppWon?"rgba(58,74,94,.4)":halved?"transparent":"rgba(255,255,255,.02)";
+              const bd=youWon?"rgba(0,184,148,.4)":oppWon?"rgba(255,255,255,.15)":halved?C.gld+"66":"rgba(255,255,255,.05)";
+              const cl=youWon?C.grn:oppWon?C.txt:halved?C.gld:C.ts;
+              return <div key={i} style={{aspectRatio:"1",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:cl,background:bg,border:"1px solid "+bd}}>{r.hole}</div>;
+            })}
+          </div>
+          {mps.decided&&mps.played<holes.length&&<div style={{padding:"11px 12px",borderRadius:14,background:"linear-gradient(145deg,rgba(12,45,90,.3),rgba(0,184,148,.06))",border:"1px solid rgba(0,184,148,.18)",fontSize:11,color:C.tm,textAlign:"center",lineHeight:1.45,marginBottom:10}}>El match ya está decidido. <strong style={{color:C.grn,fontWeight:700}}>Completen los hoyos restantes</strong> para registrar el scorecard y handicap WHS.</div>}
+        </div>;
+      })():
       <div style={{marginBottom:14}}><div style={{..._s.section,color:C.txt}} dangerouslySetInnerHTML={{__html:ic("trophy",14,C.gld)+" Leaderboard"}}/>
-      {sorted.map((pl,i)=><div key={pl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:4,background:pl.user_id===s.user.id?C.acc+"08":C.glass||C.w04,border:"1px solid "+(pl.user_id===s.user.id?C.acc+"25":C.glassBd||C.bd),borderRadius:12}}><div style={{width:26,height:26,borderRadius:13,background:i<3&&!isTeam?[C.gld,"#aaa","#CD7F32"][i]+"30":C.w06,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:11,fontWeight:900,color:i<3?[C.gld,"#ccc","#CD7F32"][i]:C.tm,flexShrink:0}}>{isTeam?pl.team:i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:pl.user_id===s.user.id?800:600,color:C.txt}}>{pl.player_name}{pl.user_id===s.user.id?" "+t("(Tu)"):""}</div><div style={{fontSize:10,color:C.tm}}>{pl.played}/{holes.length} hoyos</div></div><div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:900,color:C.txt,..._s.mono}}>{fmt==="stableford"?pl.stabPts:pl.total||"--"}</div>{fmt!=="stableford"&&pl.total>0&&<div style={{fontSize:10,fontWeight:700,color:pl.vsPar>0?C.acc:pl.vsPar<0?C.grn:C.ts}}>{pl.vsPar>0?"+":""}{pl.vsPar}</div>}</div></div>)}</div>
+      {sorted.map((pl,i)=><div key={pl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:4,background:pl.user_id===s.user.id?C.acc+"08":C.glass||C.w04,border:"1px solid "+(pl.user_id===s.user.id?C.acc+"25":C.glassBd||C.bd),borderRadius:12}}><div style={{width:26,height:26,borderRadius:13,background:i<3&&!isTeam?[C.gld,"#aaa","#CD7F32"][i]+"30":C.w06,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:11,fontWeight:900,color:i<3?[C.gld,"#ccc","#CD7F32"][i]:C.tm,flexShrink:0}}>{isTeam?pl.team:i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:pl.user_id===s.user.id?800:600,color:C.txt}}>{pl.player_name}{pl.user_id===s.user.id?" "+t("(Tu)"):""}</div><div style={{fontSize:10,color:C.tm}}>{pl.played}/{holes.length} hoyos</div></div><div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:900,color:C.txt,..._s.mono}}>{fmt==="stableford"?pl.stabPts:pl.total||"--"}</div>{fmt!=="stableford"&&pl.total>0&&<div style={{fontSize:10,fontWeight:700,color:pl.vsPar>0?C.acc:pl.vsPar<0?C.grn:C.ts}}>{pl.vsPar>0?"+":""}{pl.vsPar}</div>}</div></div>)}</div>}
       {/* POST-MATCH STATS */}
       {at.status==="completed"&&holes.length>0&&myPid&&(()=>{const sc=scores[myPid]||{};const played=Object.keys(sc).length;if(played<1)return null;
         let birdies=0,pars=0,bogeys=0,dblPlus=0,bestHole=null,worstHole=null,bestDiff=99,worstDiff=-99;
