@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.6">
+<meta name="version" content="18.3.7">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1880,9 +1880,6 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
 function FriendsTab(){const{s,p}=useA();const[friends,setFriends]=useState([]);const[received,setReceived]=useState([]);const[search,setSearch]=useState("");const dSearch=useDebounce(search,350);const[results,setResults]=useState([]);const[ld,setLd]=useState(true);const[vp,setVp]=useState(null);const[vpStats,setVpStats]=useState(null);const[vpH2h,setVpH2h]=useState(null);
   useEffect(()=>{if(s)loadAll()},[s]);async function loadAll(){setLd(true);const[fr,rc]=await Promise.all([sb.from("friends").select("*,friend:friend_id(id,full_name,email,handicap,player_id,nickname,city,state,points,ranking_position,fav_brand,handedness,birth_date)").eq("user_id",s.user.id).eq("status","accepted"),sb.from("friends").select("*,user:user_id(id,full_name,player_id)").eq("friend_id",s.user.id).eq("status","pending")]);
     const sorted=(fr.data||[]).sort((a,b)=>(a.friend?.full_name||"").localeCompare(b.friend?.full_name||""));setFriends(sorted);setReceived(rc.data||[]);setLd(false)}
-  // v18.3.6: Realtime — solicitudes entrantes y cambios simétricos se reflejan en vivo
-  useRealtime(s?.user?.id?"friends":null,s?.user?.id?("friend_id=eq."+s.user.id):null,()=>{if(s)loadAll()},[s?.user?.id]);
-  useRealtime(s?.user?.id?"friends":null,s?.user?.id?("user_id=eq."+s.user.id):null,()=>{if(s)loadAll()},[s?.user?.id]);
   useEffect(()=>{if(dSearch.length>=3)doSearch()},[dSearch]);
   const doSearch=async()=>{if(!search.trim())return;const{data}=await sb.rpc("search_users_flexible",{search_term:search});const friendIds=new Set(friends.map(f=>f.friend?.id));const pendingSent=new Set();const{data:sent}=await sb.from("friends").select("friend_id").eq("user_id",s.user.id);(sent||[]).forEach(x=>pendingSent.add(x.friend_id));const filtered=(data||[]).filter(u=>!friendIds.has(u.id)&&!pendingSent.has(u.id));setResults(filtered)};
   const addF=async fid=>{try{const{error}=await sb.from("friends").insert({user_id:s.user.id,friend_id:fid,status:"pending"});if(error){if(error.code==="23505")window.__toast?.("Ya enviaste solicitud a este jugador","warn");else window.__toast?.("Error: "+error.message,"error");return}createNotif(fid,"friend_request","Solicitud de amistad",(p?.full_name||"Un jugador")+" quiere ser tu amigo",{action_route:"tab:3",action_label:"Ver solicitud"});setResults(r=>r.filter(x=>x.id!==fid));window.__toast?.("Solicitud enviada!","success");loadAll()}catch(e){window.__toast?.("Error: "+e.message,"error")}};const isBlocked=(uid)=>friends.some(f=>f.friend?.id===uid&&f.status==="blocked");
