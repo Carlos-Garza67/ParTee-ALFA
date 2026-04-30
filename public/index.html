@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.7">
+<meta name="version" content="18.3.8">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1935,10 +1935,12 @@ function matchPlayStatus(playerA,playerB,scoresMap,holes){
     else if(scB<scA){bWon++;results.push({hole:h.hole_number,result:"B"})}
     else{halved++;results.push({hole:h.hole_number,result:"halved"})}
   }
-  const lead=aWon-bWon;const remaining=holes.length-played;const decided=Math.abs(lead)>remaining;
+  const lead=aWon-bWon;const remaining=holes.length-played;
+  // v18.3.8: "decided" SOLO aplica si queda hoyos por jugar; en el hoyo 18 se usa notación "X up"
+  const decided=remaining>0&&Math.abs(lead)>remaining;
   let status,sub,winnerSide=null,winner=null;
-  if(decided){winnerSide=lead>0?"A":"B";winner=lead>0?playerA:playerB;status=`${winner.player_name||"Jugador"} gana ${Math.abs(lead)} & ${remaining}`;sub=`Decidido en el hoyo ${played}`}
-  else if(played===holes.length){if(lead===0){status="All Square";sub="Match terminado igualado"}else{winnerSide=lead>0?"A":"B";winner=lead>0?playerA:playerB;status=`${winner.player_name||"Jugador"} gana ${Math.abs(lead)} up`;sub="Decidido en el hoyo 18"}}
+  if(played===holes.length){if(lead===0){status="All Square";sub="Match terminado igualado"}else{winnerSide=lead>0?"A":"B";winner=lead>0?playerA:playerB;status=`${winner.player_name||"Jugador"} gana ${Math.abs(lead)} up`;sub="Decidido en el hoyo 18"}}
+  else if(decided){winnerSide=lead>0?"A":"B";winner=lead>0?playerA:playerB;status=`${winner.player_name||"Jugador"} gana ${Math.abs(lead)} & ${remaining}`;sub=`Decidido en el hoyo ${played}`}
   else if(lead===0){status=played===0?"Match listo":"All Square";sub=`${remaining} ${remaining===1?"hoyo":"hoyos"} por jugar`}
   else{const leader=lead>0?playerA:playerB;status=`${leader.player_name||"Jugador"} · ${Math.abs(lead)} up`;sub=`${remaining} ${remaining===1?"hoyo":"hoyos"} por jugar`}
   return{aWon,bWon,halved,played,remaining,lead,decided,results,status,sub,winnerSide,winner};
