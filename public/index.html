@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.8">
+<meta name="version" content="18.3.9">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2144,7 +2144,10 @@ function TourneoTab(){
       t=tn;
     }
     const myTeam=gMode==="teams"?"A":null;
-    await sb.from("tournament_players").insert({tournament_id:t.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id,is_creator:true,team:myTeam});
+    // v18.3.9: Scramble — el creator es captain de team A automáticamente; primer invitado en team B será captain
+    const isScramble=gMode==="teams"&&gFmt==="scramble";
+    await sb.from("tournament_players").insert({tournament_id:t.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id,is_creator:true,team:myTeam,is_captain:isScramble});
+    const teamHasCaptain={A:isScramble,B:false};
     // Construir lista de invitados: cuando viene de grupo usamos groupMembers directo (puede incluir no-amigos);
     // cuando es flujo normal, iteramos selFr y resolvemos desde friends.
     const invitees=fromGroupId
@@ -2152,7 +2155,9 @@ function TourneoTab(){
       :selFr.map(fid=>{const f=friends.find(x=>x.friend?.id===fid);return f?{user_id:fid,player_name:f.friend?.nickname||f.friend?.full_name||"",player_pid:f.friend?.player_id}:null}).filter(Boolean);
     for(const inv of invitees){
       const team=gMode==="teams"?(teamAssign[inv.user_id]||"B"):null;
-      await sb.from("tournament_players").insert({tournament_id:t.id,user_id:inv.user_id,player_name:inv.player_name,player_pid:inv.player_pid,team});
+      const invIsCaptain=isScramble&&team&&!teamHasCaptain[team];
+      if(invIsCaptain)teamHasCaptain[team]=true;
+      await sb.from("tournament_players").insert({tournament_id:t.id,user_id:inv.user_id,player_name:inv.player_name,player_pid:inv.player_pid,team,is_captain:invIsCaptain});
       // Título/mensaje específico cuando la partida nace de un grupo existente
       const notifTitle=fromGroupId?"Grupo convertido a partida":"Nueva partida";
       const notifMsg=fromGroupId
@@ -2172,17 +2177,26 @@ function TourneoTab(){
     if(!t){setView("list");setAt(null);return}setAt(t);const tid=t.id;
     const[plR,hR,scR,rxR,bgR]=await Promise.all([sb.from("tournament_players").select("*").eq("tournament_id",tid).order("is_creator",{ascending:false}),sb.from("course_holes").select("*").eq("course_id",t.course_id).order("hole_number"),sb.from("tournament_scores").select("*").eq("tournament_id",tid),sb.from("match_reactions").select("*,user:user_id(full_name,nickname)").eq("tournament_id",tid).order("created_at",{ascending:false}),sb.from("player_badges").select("*").eq("tournament_id",tid)]);
     setPlayers(plR.data||[]);setHoles(hR.data||[]);const sm={};(scR.data||[]).forEach(s=>{if(!sm[s.player_id])sm[s.player_id]={};sm[s.player_id][s.hole_number]=s.strokes});setScores(sm);setReactions(rxR.data||[]);setBadges(bgR.data||[])}
-  async function saveScore(playerId,holeNum,strokes){try{navigator.vibrate?.(15)}catch(e){}const val=parseInt(strokes);if(isNaN(val)||val<1||val>15)return;const tp=players.find(x=>x.id===playerId);if(!tp||tp.user_id!==s.user.id)return;if(at.status==="completed"){const dl=at.edit_deadline?new Date(at.edit_deadline):null;if(dl&&new Date()>dl)return window.__toast?.(t("Edición cerrada"),"warn")}const hole=holes.find(h=>h.hole_number===holeNum);const pts=hole?stablefordPts(val,hole.par):0;
+  async function saveScore(playerId,holeNum,strokes){try{navigator.vibrate?.(15)}catch(e){}const val=parseInt(strokes);if(isNaN(val)||val<1||val>15)return;let tp=players.find(x=>x.id===playerId);if(!tp)return;let targetUserId=s.user.id;
+    // v18.3.9: Scramble — score se persiste bajo el captain del equipo (1 fila por hoyo per team)
+    if(at.game_format==="scramble"&&tp.team){
+      const myTp=players.find(x=>x.user_id===s.user.id);
+      if(!myTp||myTp.team!==tp.team)return;
+      const captain=players.find(x=>x.team===tp.team&&x.is_captain);
+      if(!captain){window.__toast?.("Equipo sin capitán","error");return}
+      tp=captain;playerId=captain.id;targetUserId=captain.user_id;
+    }else if(tp.user_id!==s.user.id)return;
+    if(at.status==="completed"){const dl=at.edit_deadline?new Date(at.edit_deadline):null;if(dl&&new Date()>dl)return window.__toast?.(t("Edición cerrada"),"warn")}const hole=holes.find(h=>h.hole_number===holeNum);const pts=hole?stablefordPts(val,hole.par):0;
     // Update local state immediately (optimistic)
     setScores(prev=>({...prev,[playerId]:{...(prev[playerId]||{}),[holeNum]:val}}));const ps={...(scores[playerId]||{}),[holeNum]:val};const total=Object.values(ps).reduce((s,v)=>s+v,0);const played=Object.keys(ps).length;const totalPar=holes.filter(h=>ps[h.hole_number]).reduce((s,h)=>s+h.par,0);
     // Try online save, fallback to offline queue
     try{
       if(!navigator.onLine)throw new Error("offline");
-      await sb.from("tournament_scores").upsert({tournament_id:at.id,player_id:playerId,user_id:s.user.id,hole_number:holeNum,strokes:val,stableford_points:pts},{onConflict:"tournament_id,player_id,hole_number"});
+      await sb.from("tournament_scores").upsert({tournament_id:at.id,player_id:playerId,user_id:targetUserId,hole_number:holeNum,strokes:val,stableford_points:pts},{onConflict:"tournament_id,player_id,hole_number"});
       await sb.from("tournament_players").update({total_score:total,total_vs_par:total-totalPar,holes_completed:played}).eq("id",playerId);
-      if(hole&&val<hole.par&&at.status==="in_progress"){const label=val<=hole.par-2?"Eagle":"Birdie";for(const pl of players){if(pl.user_id!==s.user.id)createNotif(pl.user_id,"match_update",label+"! 🦅",(p?.nickname||p?.full_name)+" hizo "+label+" en hoyo "+holeNum,{match_id:at.id,action_route:"tab:2",action_label:"Ver partida"})}}
+      if(hole&&val<hole.par&&at.status==="in_progress"){const label=val<=hole.par-2?"Eagle":"Birdie";for(const pl of players){if(pl.user_id!==targetUserId)createNotif(pl.user_id,"match_update",label+"! 🦅",(p?.nickname||p?.full_name)+" hizo "+label+" en hoyo "+holeNum,{match_id:at.id,action_route:"tab:2",action_label:"Ver partida"})}}
     }catch(err){
-      _offlineQ.add({tournament_id:at.id,player_id:playerId,user_id:s.user.id,hole_number:holeNum,strokes:val,stableford_points:pts,total_score:total,total_vs_par:total-totalPar,holes_completed:played});
+      _offlineQ.add({tournament_id:at.id,player_id:playerId,user_id:targetUserId,hole_number:holeNum,strokes:val,stableford_points:pts,total_score:total,total_vs_par:total-totalPar,holes_completed:played});
       setOfflinePending(_offlineQ.count());
     }}
   async function acceptChallenge(ch){
@@ -2281,11 +2295,14 @@ function TourneoTab(){
     <div style={{display:"flex",gap:8,marginTop:16}}><button onClick={nextStep} disabled={!canNext()} style={{flex:1,padding:14,background:canNext()?`linear-gradient(135deg,${C.acc},#d63d55)`:C.bd,border:"none",borderRadius:14,color:"#fff",fontSize:14,fontWeight:700,cursor:canNext()?"pointer":"not-allowed",opacity:canNext()?1:.5}}>{(step===(gMode==="teams"?5:4))||(step===3&&fromGroupId&&gMode==="individual")?t("Crear Partida"):t("Siguiente")}</button></div>
   </div>;
   // ===== DETAIL VIEW =====
-  if(view==="detail"&&at&&players.length===0)return<div className="fi" style={{padding:16}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}><button onClick={()=>{setView("list");setAt(null)}} style={{background:"none",border:"none",cursor:"pointer",color:C.txt}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/><div style={{flex:1}}><h2 style={{margin:0,fontSize:18,fontWeight:800,color:C.txt}}>{at.name}</h2><div style={{fontSize:11,color:C.ts}} dangerouslySetInnerHTML={{__html:ic("golf",11,C.ts)+" "+(at.course_name||"")}}/></div></div><Skeleton w="100%" h={60} mb={10}/><Skeleton w="100%" h={120} mb={10}/><Skeleton w="80%" h={40}/></div>;if(view==="detail"&&at){const isTeam=at.game_mode==="teams";
+  if(view==="detail"&&at&&players.length===0)return<div className="fi" style={{padding:16}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}><button onClick={()=>{setView("list");setAt(null)}} style={{background:"none",border:"none",cursor:"pointer",color:C.txt}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/><div style={{flex:1}}><h2 style={{margin:0,fontSize:18,fontWeight:800,color:C.txt}}>{at.name}</h2><div style={{fontSize:11,color:C.ts}} dangerouslySetInnerHTML={{__html:ic("golf",11,C.ts)+" "+(at.course_name||"")}}/></div></div><Skeleton w="100%" h={60} mb={10}/><Skeleton w="100%" h={120} mb={10}/><Skeleton w="80%" h={40}/></div>;
+  // v18.3.9: UX guard cuando el campo no tiene hoyos configurados
+  if(view==="detail"&&at&&players.length>0&&holes.length===0)return<div className="fi" style={{padding:16}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}><button onClick={()=>{setView("list");setAt(null)}} style={{background:"none",border:"none",cursor:"pointer",color:C.txt}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/><div style={{flex:1}}><h2 style={{margin:0,fontSize:18,fontWeight:800,color:C.txt}}>{at.name}</h2><div style={{fontSize:11,color:C.ts}} dangerouslySetInnerHTML={{__html:ic("golf",11,C.ts)+" "+(at.course_name||"")}}/></div></div><div style={{padding:24,textAlign:"center",background:C.gld+"08",border:"1px solid "+C.gld+"30",borderRadius:18,marginTop:14}}><div style={{fontSize:32,marginBottom:10}}>⛳</div><div style={{fontSize:15,fontWeight:800,color:C.txt,marginBottom:6}}>Campo sin hoyos configurados</div><div style={{fontSize:12,color:C.tm,lineHeight:1.5}}>{(at.course_name||"Este campo")} aún no tiene los 18 hoyos cargados. Contacta soporte o usa otro campo para tu partida.</div></div></div>;
+  if(view==="detail"&&at){const isTeam=at.game_mode==="teams";
     const lb=players.map(pl=>{const sc=scores[pl.id]||{};const total=Object.values(sc).reduce((s,v)=>s+v,0);const played=Object.keys(sc).length;const playedPar=holes.filter(h=>sc[h.hole_number]).reduce((s,h)=>s+h.par,0);const stabPts=fmt==="stableford"?holes.reduce((s,h)=>s+stablefordPts(sc[h.hole_number],h.par),0):0;return{...pl,total,played,vsPar:total-playedPar,stabPts}});
     const sorted=fmt==="stableford"?[...lb].sort((a,b)=>b.stabPts-a.stabPts):[...lb].sort((a,b)=>(a.total||999)-(b.total||999));
     const teamA=sorted.filter(x=>x.team==="A"),teamB=sorted.filter(x=>x.team==="B");
-    const teamScore=(team)=>fmt==="stableford"?team.reduce((s,p)=>s+p.stabPts,0):fmt==="four_ball"?holes.reduce((s,h)=>{const sc_=team.map(p=>(scores[p.id]||{})[h.hole_number]).filter(Boolean);return s+(sc_.length?Math.min(...sc_):0)},0):team.reduce((s,p)=>s+p.total,0);
+    const teamScore=(team)=>fmt==="stableford"?team.reduce((s,p)=>s+p.stabPts,0):fmt==="four_ball"?holes.reduce((s,h)=>{const sc_=team.map(p=>(scores[p.id]||{})[h.hole_number]).filter(Boolean);return s+(sc_.length?Math.min(...sc_):0)},0):fmt==="scramble"?(team.find(p=>p.is_captain)?.total||0):team.reduce((s,p)=>s+p.total,0);
     const teamAS=teamScore(teamA),teamBS=teamScore(teamB);
     const statusLabel={setup:t("Preparación"),in_progress:t("En Juego"),completed:t("Finalizado")}[at.status]||at.status;
     const statusColor={setup:C.gld,in_progress:C.grn,completed:C.ts}[at.status]||C.tm;
@@ -2349,7 +2366,7 @@ function TourneoTab(){
         </div>;
       })():
       <div style={{marginBottom:14}}><div style={{..._s.section,color:C.txt}} dangerouslySetInnerHTML={{__html:ic("trophy",14,C.gld)+" Leaderboard"}}/>
-      {sorted.map((pl,i)=><div key={pl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:4,background:pl.user_id===s.user.id?C.acc+"08":C.glass||C.w04,border:"1px solid "+(pl.user_id===s.user.id?C.acc+"25":C.glassBd||C.bd),borderRadius:12}}><div style={{width:26,height:26,borderRadius:13,background:i<3&&!isTeam?[C.gld,"#aaa","#CD7F32"][i]+"30":C.w06,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:11,fontWeight:900,color:i<3?[C.gld,"#ccc","#CD7F32"][i]:C.tm,flexShrink:0}}>{isTeam?pl.team:i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:pl.user_id===s.user.id?800:600,color:C.txt}}>{pl.player_name}{pl.user_id===s.user.id?" "+t("(Tu)"):""}</div><div style={{fontSize:10,color:C.tm}}>{pl.played}/{holes.length} hoyos</div></div><div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:900,color:C.txt,..._s.mono}}>{fmt==="stableford"?pl.stabPts:pl.total||"--"}</div>{fmt!=="stableford"&&pl.total>0&&<div style={{fontSize:10,fontWeight:700,color:pl.vsPar>0?C.acc:pl.vsPar<0?C.grn:C.ts}}>{pl.vsPar>0?"+":""}{pl.vsPar}</div>}</div></div>)}</div>}
+      {sorted.map((pl,i)=><div key={pl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:4,background:pl.user_id===s.user.id?C.acc+"08":C.glass||C.w04,border:"1px solid "+(pl.user_id===s.user.id?C.acc+"25":C.glassBd||C.bd),borderRadius:12}}><div style={{width:26,height:26,borderRadius:13,background:i<3&&!isTeam?[C.gld,"#aaa","#CD7F32"][i]+"30":C.w06,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:11,fontWeight:900,color:i<3?[C.gld,"#ccc","#CD7F32"][i]:C.tm,flexShrink:0}}>{isTeam?pl.team:i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:pl.user_id===s.user.id?800:600,color:C.txt}}>{pl.player_name}{pl.user_id===s.user.id?" "+t("(Tu)"):""}{fmt==="scramble"&&pl.is_captain&&<span style={{marginLeft:6,fontSize:9,padding:"2px 6px",borderRadius:4,background:C.gld+"20",color:C.gld,fontWeight:700,letterSpacing:".03em"}}>🎖 CAPITÁN</span>}</div><div style={{fontSize:10,color:C.tm}}>{pl.played}/{holes.length} hoyos</div></div><div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:900,color:C.txt,..._s.mono}}>{fmt==="stableford"?pl.stabPts:pl.total||"--"}</div>{fmt!=="stableford"&&pl.total>0&&<div style={{fontSize:10,fontWeight:700,color:pl.vsPar>0?C.acc:pl.vsPar<0?C.grn:C.ts}}>{pl.vsPar>0?"+":""}{pl.vsPar}</div>}</div></div>)}</div>}
       {/* POST-MATCH STATS */}
       {at.status==="completed"&&holes.length>0&&myPid&&(()=>{const sc=scores[myPid]||{};const played=Object.keys(sc).length;if(played<1)return null;
         let birdies=0,pars=0,bogeys=0,dblPlus=0,bestHole=null,worstHole=null,bestDiff=99,worstDiff=-99;
@@ -2386,7 +2403,8 @@ function TourneoTab(){
         const waitLabel=missingNow.length===0?"":missingNow.length===1?missingNow[0]:missingNow.length===2?missingNow.join(" y "):missingNow.slice(0,2).join(", ")+" y "+(missingNow.length-2)+" más";
         const tryAdvance=()=>{if(curHole>=holes.length)return;if(!canAdvance){try{navigator.vibrate?.([20,50,20])}catch(e){}window.__toast?.("Esperando a "+waitLabel+" a que capture su score","warn",3500);return}setCurHole(curHole+1);try{navigator.vibrate?.(10)}catch(e){}};
         return <div style={{marginBottom:16}}>
-        <div style={{..._s.section,color:C.txt}}>Tu Score</div>
+        <div style={{..._s.section,color:C.txt}}>{fmt==="scramble"&&isTeam?"Score del Equipo":"Tu Score"}</div>
+        {fmt==="scramble"&&isTeam&&(()=>{const myTp=players.find(x=>x.user_id===s.user.id);const capt=myTp?players.find(x=>x.team===myTp.team&&x.is_captain):null;return<div style={{fontSize:11,color:C.tm,marginTop:-6,marginBottom:10,padding:"6px 10px",background:C.gld+"08",border:"1px solid "+C.gld+"20",borderRadius:8}}>📋 Capturando para Equipo {myTp?.team||"?"} · capitán: <span style={{color:C.gld,fontWeight:700}}>{capt?.player_name||"?"}</span></div>})()}
         <div style={{background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:16,padding:16,textAlign:"center"}}>
           <div onTouchStart={e=>{if(!e.touches[0])return;panelRef.current={x:e.touches[0].clientX,swiped:false}}} onTouchMove={e=>{if(!panelRef.current||!e.touches[0])return;const dx=e.touches[0].clientX-panelRef.current.x;if(Math.abs(dx)>50&&!panelRef.current.swiped){panelRef.current.swiped=true;if(dx<0&&curHole<holes.length){tryAdvance()}else if(dx>0&&curHole>1){setCurHole(curHole-1);try{navigator.vibrate?.(10)}catch(e){}}}}} onTouchEnd={()=>{panelRef.current=null}} style={{..._s.flexB,marginBottom:12,touchAction:"pan-y"}}>
             <button onClick={()=>{setCurHole(Math.max(1,curHole-1));try{navigator.vibrate?.(10)}catch(e){}}} disabled={curHole<=1} style={{background:"none",border:"none",cursor:"pointer",opacity:curHole<=1?.3:1,padding:8}} dangerouslySetInnerHTML={{__html:ic("left",24,C.txt)}}/>
