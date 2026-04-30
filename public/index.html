@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.3">
+<meta name="version" content="18.3.4">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -3370,21 +3370,15 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
     const completed=(myTp||[]).filter(t=>t.tournaments?.status==="completed"||t.tournaments?.status==="active").map(t=>({id:t.tournaments.id,name:t.tournaments.name,course_name:t.tournaments.course_name,course_id:t.tournaments.course_id,game_format:t.tournaments.game_format,date:t.tournaments.created_at?.slice(0,10)}));
     setMyMatches(completed)}
   async function pickBooking(b){setSelBk(b);const{data:h}=await sb.from("course_holes").select("*").eq("course_id",b.course_id).order("hole_number");setHoles(h||[]);setScores({})}
-  async function saveCard(){if(!selBk||Object.keys(scores).length===0)return;setSaving(true);const totalStr=Object.values(scores).reduce((s2,v)=>s2+v,0);const totalPar=holes.filter(h=>scores[h.hole_number]).reduce((s2,h)=>s2+h.par,0);const playedHoles=Object.keys(scores).length;const courseRating=totalPar*(72/Math.max(totalPar,1));const slopeRating=113;const diff=playedHoles>=14?Math.round(((totalStr-courseRating)*113/slopeRating)*10)/10:null;
-    const{data:sc2}=await sb.from("scorecards").insert({user_id:s.user.id,booking_id:selBk.id,course_id:selBk.course_id,course_name:selBk.course_name,round_date:selBk.booking_date,total_strokes:totalStr,total_par:totalPar,vs_par:totalStr-totalPar,score_differential:diff}).select().single();
+  // v18.3.4 Path A: la DB calcula score_differential (BEFORE INSERT trigger) y handicap (AFTER INSERT trigger).
+  // Single source of truth server-side: WHS oficial (USGA Rule 5.2a). Frontend solo inserta el row básico.
+  async function saveCard(){if(!selBk||Object.keys(scores).length===0)return;setSaving(true);const totalStr=Object.values(scores).reduce((s2,v)=>s2+v,0);const totalPar=holes.filter(h=>scores[h.hole_number]).reduce((s2,h)=>s2+h.par,0);
+    const{data:sc2}=await sb.from("scorecards").insert({user_id:s.user.id,booking_id:selBk.id,course_id:selBk.course_id,course_name:selBk.course_name,round_date:selBk.booking_date,total_strokes:totalStr,total_par:totalPar,vs_par:totalStr-totalPar}).select().single();
     if(sc2){const hd=Object.entries(scores).map(([num,str])=>{const h=holes.find(x=>x.hole_number===parseInt(num));return{scorecard_id:sc2.id,hole_number:parseInt(num),par:h?.par||4,strokes:str}});if(hd.length)await sb.from("scorecard_holes").insert(hd)}
-    const{data:validCourses}=await sb.from("golf_courses").select("id").eq("facility_type","campo");const vcIds=(validCourses||[]).map(c=>c.id);
-    const{data:recent}=await sb.from("scorecards").select("score_differential,course_id").eq("user_id",s.user.id).not("score_differential","is",null).order("round_date",{ascending:false}).limit(20);
-    const validRecent=(recent||[]).filter(r=>vcIds.includes(r.course_id));
-    if(validRecent.length>=3){const diffs=validRecent.map(r=>r.score_differential).sort((a,b)=>a-b);const best=diffs.slice(0,Math.max(1,Math.floor(diffs.length*0.4)));const hcp=Math.round(best.reduce((s2,d)=>s2+d,0)/best.length*10)/10;await sb.from("user_profiles").update({handicap:hcp}).eq("id",s.user.id)}
     setSaving(false);setCreate(false);setSelBk(null);setCreateMode(null);loadAll()}
   async function saveManual(){if(!manualCourse||!manualDate||!manualScore)return;setSaving(true);
-    const totalStr=parseInt(manualScore);const totalPar=manualCourse.total_par||72;const diff=Math.round(((totalStr-totalPar)*113/113)*10)/10;
-    await sb.from("scorecards").insert({user_id:s.user.id,course_id:manualCourse.id,course_name:manualCourse.course_name,round_date:manualDate,total_strokes:totalStr,total_par:totalPar,vs_par:totalStr-totalPar,score_differential:diff,facility_type:"campo"});
-    const{data:validCourses}=await sb.from("golf_courses").select("id").eq("facility_type","campo");const vcIds=(validCourses||[]).map(c=>c.id);
-    const{data:recent}=await sb.from("scorecards").select("score_differential,course_id").eq("user_id",s.user.id).not("score_differential","is",null).order("round_date",{ascending:false}).limit(20);
-    const validRecent=(recent||[]).filter(r=>vcIds.includes(r.course_id));
-    if(validRecent.length>=3){const diffs=validRecent.map(r=>r.score_differential).sort((a,b)=>a-b);const best=diffs.slice(0,Math.max(1,Math.floor(diffs.length*0.4)));const hcp=Math.round(best.reduce((s2,d)=>s2+d,0)/best.length*10)/10;await sb.from("user_profiles").update({handicap:hcp}).eq("id",s.user.id)}
+    const totalStr=parseInt(manualScore);const totalPar=manualCourse.total_par||72;
+    await sb.from("scorecards").insert({user_id:s.user.id,course_id:manualCourse.id,course_name:manualCourse.course_name,round_date:manualDate,total_strokes:totalStr,total_par:totalPar,vs_par:totalStr-totalPar,facility_type:"campo"});
     setSaving(false);setCreate(false);setCreateMode(null);setManualCourse(null);loadAll()}
   const handicap=p?.handicap!=null?Number(p.handicap).toFixed(1):null;
   const hcTrend=hcHistory.length>=2?(hcHistory[hcHistory.length-1].handicap-hcHistory[hcHistory.length-2].handicap):0;
