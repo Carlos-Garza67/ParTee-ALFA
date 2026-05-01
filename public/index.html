@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.13">
+<meta name="version" content="18.3.14">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -679,9 +679,12 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     setLd(false);
     if(data?.user_role==="player")initPush(data.id).catch(()=>{})
   }catch(e){console.error("Profile load error:",e);setLd(false)}}
-  return <Ctx.Provider value={{s,p,ld,setP,recovery,setRecovery,signIn:async(e,pw)=>sb.auth.signInWithPassword({email:e,password:pw}),signInGoogle:async()=>sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin}}),signUp:async(e,pw,nm,role,cid)=>{const{data,error}=await sb.auth.signUp({email:e,password:pw});if(error)return{data,error};
-// v18.3.13: orden reorganizado — signIn primero (para JWT), upsert después, lp() final.
-// Antes el upsert podía correr sin JWT y fallar por RLS, dejando datos solo del trigger.
+  return <Ctx.Provider value={{s,p,ld,setP,recovery,setRecovery,signIn:async(e,pw)=>sb.auth.signInWithPassword({email:e,password:pw}),signInGoogle:async()=>sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin}}),signUp:async(e,pw,nm,role,cid)=>{
+// v18.3.14: pasar full_name + user_role en metadata. Trigger DB handle_new_user los usa directamente.
+// Esto ELIMINA la race condition entre upsert cliente y lp() del SIGNED_IN — single source of truth.
+const{data,error}=await sb.auth.signUp({email:e,password:pw,options:{data:{full_name:nm,user_role:role||'player'}}});
+if(error)return{data,error};
+// Polling signIn para garantizar session (auto-confirm trigger ~150ms)
 let signedIn=!!data?.session;
 if(!signedIn&&data?.user){
   for(let attempt=0;attempt<3;attempt++){
@@ -692,11 +695,8 @@ if(!signedIn&&data?.user){
   }
 }
 if(!signedIn){return{data,error:{message:"No se pudo iniciar sesión automáticamente. Intenta hacer login con tu email y contraseña."}}}
-// Con JWT garantizado, upsert con datos del form (sobrescribe lo que el trigger handle_new_user puso)
-if(data?.user){const upR=await sb.from("user_profiles").upsert({id:data.user.id,email:e,full_name:nm,user_role:role||'player',managed_course_id:cid||null},{onConflict:"id"});if(upR.error)console.error("[signUp] upsert error:",upR.error)}
-// lp() final para que p en React state tenga los datos correctos
-// (el SIGNED_IN del signInWithPassword ya disparó lp() pero pudo leer datos pre-upsert)
-if(data?.user)await lp(data.user.id);
+// Para course_admin con cid, el trigger ya creó user_role='course_admin'; falta agregar managed_course_id
+if(role==='course_admin'&&cid&&data?.user){await sb.from("user_profiles").update({managed_course_id:cid}).eq("id",data.user.id)}
 return{data,error:null}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{await sb.auth.signOut();setS(null);setP(null)},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
 }
 const useA=()=>useContext(Ctx);
@@ -769,7 +769,7 @@ function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[p
     const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:e,course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().single();
     if(ne){setMsg(ne.message);setBusy(false);return}
     const{error}=await signUp(e,pw,nm,"course_admin",nc.id);
-    if(!error){await sb.from("user_profiles").update({user_role:"course_admin",managed_course_id:nc.id,admin_facility_type:facType}).eq("email",e)}
+    if(!error){await sb.from("user_profiles").update({admin_facility_type:facType}).eq("email",e)}
     if(error)setMsg(error.message);else{setMsg("OK:"+t("Confirma tu email"));fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_welcome",to:e,data:{name:nm,course_name:locName,facility_type:facType,city:locCity,state:locState}})}).catch(()=>{})}setBusy(false)}
   const prevMode=()=>{if(mode==="locOnboarding")setMode("pickFacType");else if(mode==="pickFacType")setMode("role");else setMode("register");setMsg("")};
   const inp={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"14px 16px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12};
