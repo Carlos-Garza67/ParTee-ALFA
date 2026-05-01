@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.9">
+<meta name="version" content="18.3.10">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -648,7 +648,15 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
       setS(ss);if(ss){lp(ss.user.id);if(hasOAuthTokens){const clean=window.location.origin+window.location.pathname;window.history.replaceState(null,"",clean)}}else{setP(null);setLd(false)}});
     if(!hasOAuthTokens&&!earlyFlag){sb.auth.getSession().then(({data:{session}})=>{if(recoveryRef.current)return;clearTimeout(authTimeout);if(session){setS(session);lp(session.user.id)}else{setLd(false)}}).catch(()=>{clearTimeout(authTimeout);setLd(false)})}
     return()=>{clearTimeout(authTimeout);subscription.unsubscribe()}},[]);
-  async function lp(uid){try{let{data}=await sb.from("user_profiles").select("*").eq("id",uid).single();if(!data){const{data:u}=await sb.auth.getUser();const meta=u?.user?.user_metadata||{};const gName=meta.full_name||meta.name||(u?.user?.email||"").split("@")[0];const gAvatar=meta.avatar_url||meta.picture||"";await sb.from("user_profiles").insert({id:uid,email:u?.user?.email||"",full_name:gName,avatar_url:gAvatar,user_role:"pending"});({data}=await sb.from("user_profiles").select("*").eq("id",uid).single())}setP(data);setLd(false);if(data?.user_role==="player")initPush(data.id).catch(()=>{})}catch(e){console.error("Profile load error:",e);setLd(false)}}
+  async function lp(uid){try{
+    // v18.3.10: maybeSingle (no throws) + retry + upsert para evitar quedarse atascado en signup
+    let{data,error}=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle();
+    if(error){console.warn("[lp] select error, retrying:",error);await new Promise(r=>setTimeout(r,200));({data,error}=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle());if(error){console.error("[lp] retry failed:",error);setLd(false);return}}
+    if(!data){const{data:u}=await sb.auth.getUser();const meta=u?.user?.user_metadata||{};const gName=meta.full_name||meta.name||(u?.user?.email||"").split("@")[0];const gAvatar=meta.avatar_url||meta.picture||"";await sb.from("user_profiles").upsert({id:uid,email:u?.user?.email||"",full_name:gName,avatar_url:gAvatar,user_role:"pending"},{onConflict:"id"});({data}=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle())}
+    if(data)setP(data);
+    setLd(false);
+    if(data?.user_role==="player")initPush(data.id).catch(()=>{})
+  }catch(e){console.error("Profile load error:",e);setLd(false)}}
   return <Ctx.Provider value={{s,p,ld,setP,recovery,setRecovery,signIn:async(e,pw)=>sb.auth.signInWithPassword({email:e,password:pw}),signInGoogle:async()=>sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin}}),signUp:async(e,pw,nm,role,cid)=>{const{data,error}=await sb.auth.signUp({email:e,password:pw});if(!error&&data.user)await sb.from("user_profiles").upsert({id:data.user.id,email:e,full_name:nm,user_role:role||'player',managed_course_id:cid||null},{onConflict:"id"});return{data,error}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{await sb.auth.signOut();setS(null);setP(null)},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
 }
 const useA=()=>useContext(Ctx);
@@ -4174,7 +4182,7 @@ function PlatformCourseDetail({course,onClose,onRefresh,adminId}){const[counts,s
   </div></div>
 }
 
-function GoogleRoleSelector(){const{s,p,ref,out}=useA();const[step,setStep]=useState("role");const[role,setRole]=useState("");const[facType,setFacType]=useState("");
+function GoogleRoleSelector(){const{s,p,setP,ref,out}=useA();const[step,setStep]=useState("role");const[role,setRole]=useState("");const[facType,setFacType]=useState("");
   const[locName,setLocName]=useState("");const[bizName,setBizName]=useState("");const[locAddress,setLocAddress]=useState("");const[locCity,setLocCity]=useState("");const[locState,setLocState]=useState("");const[locDays,setLocDays]=useState("");const[locHours,setLocHours]=useState("");const[contactName,setContactName]=useState(p?.full_name||"");const[contactRole,setContactRole]=useState("");
   const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);
   const DAYS_OPTIONS=["Lun-Vie","Lun-Sáb","Lun-Dom","Sáb-Dom","Personalizado"];
@@ -4183,7 +4191,7 @@ function GoogleRoleSelector(){const{s,p,ref,out}=useA();const[step,setStep]=useS
   const inpSm={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"12px 14px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:10};
   const selSm={...inpSm,appearance:"auto",color:C.txt,backgroundColor:C.glass||C.w04};
   async function go(){
-    if(step==="role"){if(!role)return setMsg(t("Selecciona tipo"));if(role==="player"){setBusy(true);await sb.from("user_profiles").update({user_role:"player"}).eq("id",s.user.id);fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"welcome",to:s.user.email,data:{name:s.user.user_metadata?.full_name||s.user.email}})}).catch(()=>{});await ref();setBusy(false);return}setStep("pickFacType");setMsg("");return}
+    if(step==="role"){if(!role)return setMsg(t("Selecciona tipo"));if(role==="player"){setBusy(true);const{error:upErr}=await sb.from("user_profiles").update({user_role:"player"}).eq("id",s.user.id);if(upErr){setMsg(upErr.message);setBusy(false);return}fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"welcome",to:s.user.email,data:{name:s.user.user_metadata?.full_name||s.user.email}})}).catch(()=>{});setP(prev=>prev?{...prev,user_role:"player"}:prev);ref().catch(err=>console.error("[role] ref failed:",err));return}setStep("pickFacType");setMsg("");return}
     if(step==="pickFacType"){if(!facType)return setMsg(t("Selecciona tipo"));setStep("locOnboarding");setMsg("");return}
     if(step==="locOnboarding"){if(!locName)return setMsg(t("Nombre obligatorio"));if(!locAddress)return setMsg(t("Dirección obligatoria"));if(!locCity)return setMsg(t("Ciudad obligatoria"));if(!locState)return setMsg("Estado obligatorio");if(!contactName)return setMsg(t("Nombre obligatorio"));
       setBusy(true);setMsg("");
@@ -4227,7 +4235,7 @@ function GoogleRoleSelector(){const{s,p,ref,out}=useA();const[step,setStep]=useS
     {step==="role"&&<p onClick={()=>out()} style={{textAlign:"center",marginTop:14,fontSize:13,color:C.tm,cursor:"pointer"}}>{t("Cerrar Sesión")}</p>}
   </div></div>}
 
-function PlayerOnboarding(){const{s,p,ref}=useA();const[nm,setNm]=useState(p?.full_name||"");const[city,setCity]=useState(p?.city||"");const[st,setSt]=useState(p?.state||"");const[ph,setPh]=useState(p?.phone||"");const[bd,setBd]=useState(p?.birth_date||"");const[hand,setHand]=useState(p?.handedness||"diestro");const[nick,setNick]=useState(p?.nickname||"");const[hc,setHc]=useState(p?.handicap?.toString()||"");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);
+function PlayerOnboarding(){const{s,p,setP,ref}=useA();const[nm,setNm]=useState(p?.full_name||"");const[city,setCity]=useState(p?.city||"");const[st,setSt]=useState(p?.state||"");const[ph,setPh]=useState(p?.phone||"");const[bd,setBd]=useState(p?.birth_date||"");const[hand,setHand]=useState(p?.handedness||"diestro");const[nick,setNick]=useState(p?.nickname||"");const[hc,setHc]=useState(p?.handicap?.toString()||"");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);
   const save=async()=>{if(!nm.trim())return setMsg(t("Nombre obligatorio"));if(!city.trim())return setMsg(t("Ciudad obligatoria"));if(!st.trim())return setMsg("Estado obligatorio");if(!ph.trim())return setMsg(t("Teléfono obligatorio"));if(!bd)return setMsg(t("Fecha de nacimiento obligatoria"));
     // Bug B v18.2.1 — validar que la fecha sea pasada y razonable (defense in depth)
     const bdDate=new Date(bd+"T00:00:00");const today=new Date();today.setHours(23,59,59,999);
@@ -4235,8 +4243,13 @@ function PlayerOnboarding(){const{s,p,ref}=useA();const[nm,setNm]=useState(p?.fu
     const minDate=new Date();minDate.setFullYear(minDate.getFullYear()-120);
     if(bdDate<minDate)return setMsg(t("Fecha de nacimiento inválida"));
     setBusy(true);setMsg("");
-    const{error}=await sb.from("user_profiles").update({full_name:nm.trim(),city:city.trim(),state:st.trim(),phone:ph.trim(),birth_date:bd,handedness:hand,nickname:nick.trim()||null,handicap:hc?parseFloat(hc):null,onboarding_complete:true}).eq("id",s.user.id);
-    if(error){setMsg(error.message);setBusy(false);return}await ref();setBusy(false)};
+    const updateData={full_name:nm.trim(),city:city.trim(),state:st.trim(),phone:ph.trim(),birth_date:bd,handedness:hand,nickname:nick.trim()||null,handicap:hc?parseFloat(hc):null,onboarding_complete:true};
+    const{error}=await sb.from("user_profiles").update(updateData).eq("id",s.user.id);
+    if(error){setMsg(error.message);setBusy(false);return}
+    // v18.3.10: optimistic local update; previene quedarse atascado si lp() falla en background
+    setP(prev=>prev?{...prev,...updateData}:prev);
+    ref().catch(err=>console.error("[save] ref failed:",err));
+    /* No setBusy(false) — el componente desmonta naturalmente cuando Main re-renders con needsOnboarding=false */};
   const inpS={width:"100%",background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"12px 14px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box"};
   return<div className="auth-wrap" style={{background:C.bg}}><div className="fi auth-card" style={{maxWidth:420}}>
     <div style={{textAlign:"center",marginBottom:20}}><div style={{width:64,height:64,borderRadius:32,background:`linear-gradient(135deg,${C.grn}30,${C.acc}20)`,border:"1px solid rgba(255,255,255,.1)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12,boxShadow:"0 0 30px "+C.grn+"15"}}><ParteeMark size={36} color="#e94560"/></div><h2 style={{color:C.txt,fontSize:24,fontWeight:800,letterSpacing:"-0.02em"}}>¡Bienvenido!</h2><p style={{color:C.ts,fontSize:13,marginTop:6}}>{t("Completa tu perfil para comenzar")}</p></div>
