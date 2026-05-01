@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.12">
+<meta name="version" content="18.3.13">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -649,26 +649,55 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     if(!hasOAuthTokens&&!earlyFlag){sb.auth.getSession().then(({data:{session}})=>{if(recoveryRef.current)return;clearTimeout(authTimeout);if(session){setS(session);lp(session.user.id)}else{setLd(false)}}).catch(()=>{clearTimeout(authTimeout);setLd(false)})}
     return()=>{clearTimeout(authTimeout);subscription.unsubscribe()}},[]);
   async function lp(uid){try{
-    // v18.3.10: maybeSingle (no throws) + retry + upsert para evitar quedarse atascado en signup
+    // v18.3.13: BUG FIX CRÍTICO — antes lp() podía PISAR datos correctos del signUp upsert.
+    // Si la primera SELECT retornaba null por timing, lp() hacía upsert con email prefix
+    // (ej. "jugador6" en vez de "Santo cavernario"), sobrescribiendo full_name y user_role.
+    // Fix: retry de SELECT con backoff antes de asumir que el row no existe; si finalmente
+    // toca crear, usar ignoreDuplicates:true para NO sobrescribir cualquier dato existente.
     let{data,error}=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle();
     if(error){console.warn("[lp] select error, retrying:",error);await new Promise(r=>setTimeout(r,200));({data,error}=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle());if(error){console.error("[lp] retry failed:",error);setLd(false);return}}
-    if(!data){const{data:u}=await sb.auth.getUser();const meta=u?.user?.user_metadata||{};const gName=meta.full_name||meta.name||(u?.user?.email||"").split("@")[0];const gAvatar=meta.avatar_url||meta.picture||"";await sb.from("user_profiles").upsert({id:uid,email:u?.user?.email||"",full_name:gName,avatar_url:gAvatar,user_role:"pending"},{onConflict:"id"});({data}=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle())}
+    // Retry hasta 3x con backoff si data es null (puede haber race con trigger handle_new_user o upsert de signUp)
+    let retries=0;
+    while(!data&&retries<3){
+      await new Promise(r=>setTimeout(r,200*(retries+1)));
+      const r2=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle();
+      data=r2.data;
+      if(r2.error){console.warn("[lp] retry",retries+1,"error:",r2.error);break}
+      retries++;
+    }
+    if(!data){
+      // Realmente no existe después de 3 retries; crear con defaults SIN sobrescribir
+      const{data:u}=await sb.auth.getUser();
+      const meta=u?.user?.user_metadata||{};
+      const gName=meta.full_name||meta.name||(u?.user?.email||"").split("@")[0];
+      const gAvatar=meta.avatar_url||meta.picture||"";
+      // ignoreDuplicates: true → NO sobrescribir si por race el row ya existe
+      await sb.from("user_profiles").upsert({id:uid,email:u?.user?.email||"",full_name:gName,avatar_url:gAvatar,user_role:"pending"},{onConflict:"id",ignoreDuplicates:true});
+      ({data}=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle())
+    }
     if(data)setP(data);
     setLd(false);
     if(data?.user_role==="player")initPush(data.id).catch(()=>{})
   }catch(e){console.error("Profile load error:",e);setLd(false)}}
-  return <Ctx.Provider value={{s,p,ld,setP,recovery,setRecovery,signIn:async(e,pw)=>sb.auth.signInWithPassword({email:e,password:pw}),signInGoogle:async()=>sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin}}),signUp:async(e,pw,nm,role,cid)=>{const{data,error}=await sb.auth.signUp({email:e,password:pw});if(error)return{data,error};if(data?.user)await sb.from("user_profiles").upsert({id:data.user.id,email:e,full_name:nm,user_role:role||'player',managed_course_id:cid||null},{onConflict:"id"});
-// v18.3.11: si signUp retorna sin session (email auto-confirm con delay), polling + signIn manual cubre el gap
-if(!data?.session&&data?.user){
+  return <Ctx.Provider value={{s,p,ld,setP,recovery,setRecovery,signIn:async(e,pw)=>sb.auth.signInWithPassword({email:e,password:pw}),signInGoogle:async()=>sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin}}),signUp:async(e,pw,nm,role,cid)=>{const{data,error}=await sb.auth.signUp({email:e,password:pw});if(error)return{data,error};
+// v18.3.13: orden reorganizado — signIn primero (para JWT), upsert después, lp() final.
+// Antes el upsert podía correr sin JWT y fallar por RLS, dejando datos solo del trigger.
+let signedIn=!!data?.session;
+if(!signedIn&&data?.user){
   for(let attempt=0;attempt<3;attempt++){
     await new Promise(r=>setTimeout(r,400+attempt*400));
     const{error:siErr}=await sb.auth.signInWithPassword({email:e,password:pw});
-    if(!siErr){console.log("[signUp] auto-signIn OK attempt",attempt+1);return{data,error:null}}
+    if(!siErr){signedIn=true;console.log("[signUp] signIn OK attempt",attempt+1);break}
     console.warn("[signUp] signIn attempt",attempt+1,"failed:",siErr?.message);
   }
-  return{data,error:{message:"No se pudo iniciar sesión automáticamente. Intenta hacer login con tu email y contraseña."}};
 }
-return{data,error}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{await sb.auth.signOut();setS(null);setP(null)},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
+if(!signedIn){return{data,error:{message:"No se pudo iniciar sesión automáticamente. Intenta hacer login con tu email y contraseña."}}}
+// Con JWT garantizado, upsert con datos del form (sobrescribe lo que el trigger handle_new_user puso)
+if(data?.user){const upR=await sb.from("user_profiles").upsert({id:data.user.id,email:e,full_name:nm,user_role:role||'player',managed_course_id:cid||null},{onConflict:"id"});if(upR.error)console.error("[signUp] upsert error:",upR.error)}
+// lp() final para que p en React state tenga los datos correctos
+// (el SIGNED_IN del signInWithPassword ya disparó lp() pero pudo leer datos pre-upsert)
+if(data?.user)await lp(data.user.id);
+return{data,error:null}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{await sb.auth.signOut();setS(null);setP(null)},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
 }
 const useA=()=>useContext(Ctx);
 
