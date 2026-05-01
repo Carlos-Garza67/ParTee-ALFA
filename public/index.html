@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.14">
+<meta name="version" content="18.3.15">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -4333,6 +4333,8 @@ function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:24}}><div style={{textAlign:"center",maxWidth:420,width:"100%",position:"relative"}}><div style={{position:"absolute",top:"20%",left:"50%",transform:"translate(-50%,-50%)",width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,#e9456012,transparent 70%)",pointerEvents:"none"}}/><ParteeLogo h={55} mc="#e94560" tc={C.txt}/><p style={{fontSize:12,color:C.ts,marginTop:14,letterSpacing:".18em",fontWeight:500}}>FIND · CONNECT · PLAY</p><div style={{display:"flex",gap:4,marginTop:20,justifyContent:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:3,background:C.acc,opacity:.4,animation:"pl 1.2s infinite",animationDelay:i*.2+"s"}}/>)}</div></div></div>;
   if(recovery)return<ResetPasswordForm/>;
   if(!s)return<Login/>;
+  // v18.3.15: si hay sesión pero p aún no carga, mostrar loading en lugar de flashear la app principal
+  if(s&&!p)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:24}}><div style={{textAlign:"center",maxWidth:420,width:"100%",position:"relative"}}><div style={{position:"absolute",top:"20%",left:"50%",transform:"translate(-50%,-50%)",width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,#e9456012,transparent 70%)",pointerEvents:"none"}}/><ParteeLogo h={55} mc="#e94560" tc={C.txt}/><p style={{fontSize:12,color:C.ts,marginTop:14,letterSpacing:".18em",fontWeight:500}}>FIND · CONNECT · PLAY</p><div style={{display:"flex",gap:4,marginTop:20,justifyContent:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:3,background:C.acc,opacity:.4,animation:"pl 1.2s infinite",animationDelay:i*.2+"s"}}/>)}</div></div></div>;
   if(p?.is_deleted)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>{t("Cuenta eliminada")}</h2><button onClick={()=>sb.auth.signOut().then(()=>location.reload())} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Salir")}</button></div></div>;
   if(s&&p&&(p.user_role==="pending"||!p.user_role))return<GoogleRoleSelector/>;
   if(needsOnboarding)return<PlayerOnboarding/>;
