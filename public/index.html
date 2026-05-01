@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.16">
+<meta name="version" content="18.3.17">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2160,9 +2160,9 @@ function TourneoTab(){
   const canNext=()=>{if(step===1)return!!gMode;if(step===2)return!!gFmt;if(step===3)return!!tName&&!!selCourse;if(step===4){if(gMode==="teams")return selFr.length===3;if(gFmt==="match_play")return selFr.length===1;return selFr.length>=1}if(step===5){const v=Object.values(teamAssign);return v.filter(x=>x==="A").length>0&&v.filter(x=>x==="B").length>0}return false};
   const nextStep=()=>{if(!canNext())return;
     // Si viene de grupo, los miembros ya están heredados — saltar paso 4
-    if(step===3&&fromGroupId){if(gMode==="teams"){setTeamAssign({});setStep(5);return}createTorneo();return}
+    if(step===3&&fromGroupId){if(gMode==="teams"){setTeamAssign({[s.user.id]:"A"});setStep(5);return}createTorneo();return}
     if(step===4&&gMode==="individual"){createTorneo();return}
-    if(step===4&&gMode==="teams"){setTeamAssign({});setStep(5);return}
+    if(step===4&&gMode==="teams"){setTeamAssign({[s.user.id]:"A"});setStep(5);return}
     if(step===5){createTorneo();return}
     setStep(step+1)};
   async function createTorneo(){const c=courses.find(x=>x.id===selCourse);
@@ -2200,11 +2200,16 @@ function TourneoTab(){
       }
       t=tn;
     }
-    const myTeam=gMode==="teams"?"A":null;
-    // v18.3.9: Scramble — el creator es captain de team A automáticamente; primer invitado en team B será captain
+    // v18.3.17: respetar la elección del organizador en step 5; default A
+    const myTeam=gMode==="teams"?(teamAssign[s.user.id]||"A"):null;
+    // Scramble — captain por team es el primer miembro asignado a ese team (insertion order)
+    // El organizador se inserta primero, así que es captain de su team. El primer invitado
+    // asignado al team contrario será captain de ese team.
     const isScramble=gMode==="teams"&&gFmt==="scramble";
-    await sb.from("tournament_players").insert({tournament_id:t.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id,is_creator:true,team:myTeam,is_captain:isScramble});
-    const teamHasCaptain={A:isScramble,B:false};
+    const myIsCaptain=isScramble&&!!myTeam;
+    await sb.from("tournament_players").insert({tournament_id:t.id,user_id:s.user.id,player_name:p?.nickname||p?.full_name||"",player_pid:p?.player_id,is_creator:true,team:myTeam,is_captain:myIsCaptain});
+    const teamHasCaptain={A:false,B:false};
+    if(myIsCaptain)teamHasCaptain[myTeam]=true;
     // Construir lista de invitados: cuando viene de grupo usamos groupMembers directo (puede incluir no-amigos);
     // cuando es flujo normal, iteramos selFr y resolvemos desde friends.
     const invitees=fromGroupId
@@ -2343,11 +2348,14 @@ function TourneoTab(){
       <label style={{fontSize:11,color:C.tm,fontWeight:600}}>{t("CAMPO")}</label><select value={selCourse||""} onChange={x=>{setSelCourse(x.target.value);setSelBkId(null);setBkRef(null);const c=courses.find(cc=>cc.id===x.target.value);if(c&&(!tName||autoFilledName)){setTName(c.course_name);setAutoFilledName(true)}}} style={{...inp0,marginTop:4,marginBottom:4,appearance:"auto"}}><option value="">-- Selecciona campo --</option>{courses.map(c=><option key={c.id} value={c.id}>{c.course_name} - {c.city}</option>)}</select></>}</>}
     {step===4&&<><div style={{marginBottom:10,padding:"10px 12px",background:gMode==="teams"?(selFr.length===3?C.grn+"15":C.gld+"10"):C.grn+"10",border:"1px solid "+(gMode==="teams"?(selFr.length===3?C.grn+"40":C.gld+"30"):C.grn+"30"),borderRadius:10,fontSize:12,color:C.txt,fontWeight:600,display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic(gMode==="teams"&&selFr.length===3?"check":"users",13,gMode==="teams"?(selFr.length===3?C.grn:C.gld):C.grn)}}/><span>{gMode==="teams"?`Equipos: selecciona exactamente 3 amigos (${selFr.length}/3)`:gFmt==="match_play"?`Match Play: selecciona exactamente 1 oponente (${selFr.length}/1)`:`Selecciona los amigos a invitar (${selFr.length} seleccionado${selFr.length===1?"":"s"})`}</span></div>{friends.length===0?<p style={{color:C.tm,fontSize:13}}>{t("Sin amigos. Agrega desde la tab Amigos.")}</p>:friends.map(f=>{const sel=selFr.includes(f.friend?.id);const dis=selFr.length>=maxP&&!sel;return<div key={f.friend?.id} onClick={()=>{if(dis)return;setSelFr(pr=>sel?pr.filter(x=>x!==f.friend?.id):[...pr,f.friend?.id])}} style={{display:"flex",alignItems:"center",gap:10,background:sel?C.grn+"12":C.bg,border:"1px solid "+(sel?C.grn:C.bd),borderRadius:10,padding:12,marginBottom:6,cursor:dis?"not-allowed":"pointer",opacity:dis?.4:1}}><div style={{width:32,height:32,borderRadius:14,background:sel?C.grn+"30":C.pri,display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sel?ic("check",14,C.grn):ic("user",14,C.tm)}}/><div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{f.friend?.nickname||f.friend?.full_name}</div><div style={{color:C.gld,fontSize:10,..._s.mono}}>{f.friend?.player_id}</div></div></div>})}</>}
     {step===5&&<>{(()=>{
+      // v18.3.17: incluir al organizador en la lista para que pueda elegir su team
       // Cuando viene de grupo, los invitados pueden no ser amigos; usamos groupMembers directo
-      const rows=fromGroupId
-        ?groupMembers.filter(m=>m.id!==s.user.id).map(m=>({id:m.id,name:m.name||"Jugador"}))
-        :selFr.map(fid=>{const f=friends.find(x=>x.friend?.id===fid);return{id:fid,name:f?.friend?.nickname||f?.friend?.full_name||"Jugador"}});
-      return rows.map(r=>{const ta=teamAssign[r.id]||"";return<div key={r.id} style={{display:"flex",alignItems:"center",gap:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:12,marginBottom:8}}><div style={{flex:1,color:C.txt,fontSize:13,fontWeight:600}}>{r.name}</div><div style={{display:"flex",gap:6}}>{["A","B"].map(team=><button key={team} onClick={()=>setTeamAssign(pr=>({...pr,[r.id]:team}))} style={{padding:"6px 14px",borderRadius:10,border:"2px solid "+(ta===team?(team==="A"?C.gld:C.acc):C.bd),background:ta===team?(team==="A"?C.gld:C.acc)+"15":"transparent",color:ta===team?(team==="A"?C.gld:C.acc):C.tm,fontSize:12,fontWeight:700,cursor:"pointer"}}>Eq {team}</button>)}</div></div>});
+      const meRow={id:s.user.id,name:(p?.nickname||p?.full_name||"Tú"),isMe:true};
+      const otherRows=fromGroupId
+        ?groupMembers.filter(m=>m.id!==s.user.id).map(m=>({id:m.id,name:m.name||"Jugador",isMe:false}))
+        :selFr.map(fid=>{const f=friends.find(x=>x.friend?.id===fid);return{id:fid,name:f?.friend?.nickname||f?.friend?.full_name||"Jugador",isMe:false}});
+      const rows=[meRow,...otherRows];
+      return rows.map(r=>{const ta=teamAssign[r.id]||"";return<div key={r.id} style={{display:"flex",alignItems:"center",gap:10,background:C.cd,border:"1px solid "+(r.isMe?C.acc+"60":C.bd),borderRadius:10,padding:12,marginBottom:8}}><div style={{flex:1,color:C.txt,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:8}}>{r.name}{r.isMe&&<span style={{fontSize:9,padding:"2px 7px",borderRadius:6,background:C.acc+"20",color:C.acc,fontWeight:800,letterSpacing:".5px"}}>TÚ</span>}</div><div style={{display:"flex",gap:6}}>{["A","B"].map(team=><button key={team} onClick={()=>setTeamAssign(pr=>({...pr,[r.id]:team}))} style={{padding:"6px 14px",borderRadius:10,border:"2px solid "+(ta===team?(team==="A"?C.gld:C.acc):C.bd),background:ta===team?(team==="A"?C.gld:C.acc)+"15":"transparent",color:ta===team?(team==="A"?C.gld:C.acc):C.tm,fontSize:12,fontWeight:700,cursor:"pointer"}}>Eq {team}</button>)}</div></div>});
     })()}</>}
     <div style={{display:"flex",gap:8,marginTop:16}}><button onClick={nextStep} disabled={!canNext()} style={{flex:1,padding:14,background:canNext()?`linear-gradient(135deg,${C.acc},#d63d55)`:C.bd,border:"none",borderRadius:14,color:"#fff",fontSize:14,fontWeight:700,cursor:canNext()?"pointer":"not-allowed",opacity:canNext()?1:.5}}>{(step===(gMode==="teams"?5:4))||(step===3&&fromGroupId&&gMode==="individual")?t("Crear Partida"):t("Siguiente")}</button></div>
   </div>;
