@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.17">
+<meta name="version" content="18.3.18">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2372,10 +2372,19 @@ function TourneoTab(){
     const statusLabel={setup:t("Preparación"),in_progress:t("En Juego"),completed:t("Finalizado")}[at.status]||at.status;
     const statusColor={setup:C.gld,in_progress:C.grn,completed:C.ts}[at.status]||C.tm;
     const curH=holes.find(h=>h.hole_number===curHole);
-    const myScores=scores[myPid]||{};
+    // v18.3.18: en Scramble el "score del equipo" se persiste bajo el captain.
+    // - captainPid: ID del captain del team del usuario actual (o myPid si no es scramble)
+    // - validationPlayers: jugadores que efectivamente capturan score (en scramble = solo captains)
+    const isScrambleTeam=at.game_format==="scramble"&&isTeam;
+    const myTpRaw=players.find(x=>x.user_id===s.user.id);
+    const captainPid=isScrambleTeam&&myTpRaw?.team
+      ?(players.find(p=>p.team===myTpRaw.team&&p.is_captain)?.id||myPid)
+      :myPid;
+    const validationPlayers=isScrambleTeam?players.filter(p=>p.is_captain):players;
+    const myScores=scores[captainPid]||{};
     const myTotal=Object.values(myScores).reduce((s,v)=>s+v,0);
     const myPlayed=Object.keys(myScores).length;
-    const allDone=players.every(pl=>Object.keys(scores[pl.id]||{}).length>=holes.length)&&holes.length>0;
+    const allDone=validationPlayers.every(pl=>Object.keys(scores[pl.id]||{}).length>=holes.length)&&holes.length>0;
     const myBadges=badges.filter(b=>b.user_id===s.user.id);
     const REMOJI=[{e:"🔥",k:"fire"},{e:"👏",k:"clap"},{e:"🏆",k:"trophy"},{e:"👍",k:"thumbsup"},{e:"😂",k:"laugh"}];
     return<div className="fi" style={{padding:16}}>
@@ -2462,11 +2471,12 @@ function TourneoTab(){
         // Un jugador puede retroceder libremente (fix scores anteriores) pero para AVANZAR
         // del hoyo N al N+1, todos los players del match deben haber capturado score en N.
         // Solo se evalúa contra players que están en el match (tournament_players).
-        const missingOnHole=(h)=>players.filter(pl=>!scores[pl.id]||!scores[pl.id][h]).map(pl=>pl.player_name||"Sin nombre");
+        // v18.3.18: en Scramble validamos contra captains (1 score per team), mostrando "Equipo X"
+        const missingOnHole=(h)=>validationPlayers.filter(pl=>!scores[pl.id]||!scores[pl.id][h]).map(pl=>isScrambleTeam?("Equipo "+pl.team):(pl.player_name||"Sin nombre"));
         const missingNow=missingOnHole(curHole);
-        const canAdvance=players.length<=1||missingNow.length===0;
+        const canAdvance=validationPlayers.length<=1||missingNow.length===0;
         const waitLabel=missingNow.length===0?"":missingNow.length===1?missingNow[0]:missingNow.length===2?missingNow.join(" y "):missingNow.slice(0,2).join(", ")+" y "+(missingNow.length-2)+" más";
-        const tryAdvance=()=>{if(curHole>=holes.length)return;if(!canAdvance){try{navigator.vibrate?.([20,50,20])}catch(e){}window.__toast?.("Esperando a "+waitLabel+" a que capture su score","warn",3500);return}setCurHole(curHole+1);try{navigator.vibrate?.(10)}catch(e){}};
+        const tryAdvance=()=>{if(curHole>=holes.length)return;if(!canAdvance){try{navigator.vibrate?.([20,50,20])}catch(e){}window.__toast?.((isScrambleTeam?"Esperando que ":"Esperando a ")+waitLabel+(isScrambleTeam?" capture":" a que capture su score"),"warn",3500);return}setCurHole(curHole+1);try{navigator.vibrate?.(10)}catch(e){}};
         return <div style={{marginBottom:16}}>
         <div style={{..._s.section,color:C.txt}}>{fmt==="scramble"&&isTeam?"Score del Equipo":"Tu Score"}</div>
         {fmt==="scramble"&&isTeam&&(()=>{const myTp=players.find(x=>x.user_id===s.user.id);const capt=myTp?players.find(x=>x.team===myTp.team&&x.is_captain):null;return<div style={{fontSize:11,color:C.tm,marginTop:-6,marginBottom:10,padding:"6px 10px",background:C.gld+"08",border:"1px solid "+C.gld+"20",borderRadius:8}}>📋 Capturando para Equipo {myTp?.team||"?"} · capitán: <span style={{color:C.gld,fontWeight:700}}>{capt?.player_name||"?"}</span></div>})()}
@@ -2477,13 +2487,13 @@ function TourneoTab(){
             <button onClick={tryAdvance} disabled={curHole>=holes.length} style={{background:"none",border:"none",cursor:"pointer",opacity:curHole>=holes.length?.3:(canAdvance?1:.5),padding:8}} dangerouslySetInnerHTML={{__html:ic("right",24,canAdvance?C.txt:C.gld)}}/>
           </div>
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:20,marginBottom:12}}>
-            <button onClick={()=>{const cur=myScores[curHole]||curH?.par||4;if(cur>1){saveScore(myPid,curHole,cur-1);try{navigator.vibrate?.(15)}catch(e){}}}} style={{width:48,height:48,borderRadius:24,background:C.acc+"20",border:"2px solid "+C.acc+"40",color:C.acc,fontSize:24,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+            <button onClick={()=>{const cur=myScores[curHole]||curH?.par||4;if(cur>1){saveScore(captainPid,curHole,cur-1);try{navigator.vibrate?.(15)}catch(e){}}}} style={{width:48,height:48,borderRadius:24,background:C.acc+"20",border:"2px solid "+C.acc+"40",color:C.acc,fontSize:24,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
             <div style={{width:80,textAlign:"center"}}><div className={myScores[curHole]?"score-flash":""} key={myScores[curHole]||"empty"} style={{fontSize:48,fontWeight:900,color:C.txt,..._s.mono,lineHeight:1}}>{myScores[curHole]||"-"}</div>{myScores[curHole]&&curH&&<div style={{fontSize:14,fontWeight:700,marginTop:4,color:myScores[curHole]-curH.par>0?C.acc:myScores[curHole]-curH.par<0?C.grn:C.ts}}>{myScores[curHole]-curH.par>0?"+"+(myScores[curHole]-curH.par):myScores[curHole]-curH.par<0?(myScores[curHole]-curH.par):"E"}</div>}</div>
-            <button onClick={()=>{const wasEmpty=!myScores[curHole];const cur=myScores[curHole]||curH?.par||4;saveScore(myPid,curHole,Math.min(15,cur+1));try{navigator.vibrate?.(15)}catch(e){}if(wasEmpty&&curHole<holes.length){setTimeout(()=>{const stillMissing=players.filter(pl=>pl.id!==myPid&&(!scores[pl.id]||!scores[pl.id][curHole])).map(pl=>pl.player_name||"Sin nombre");if(players.length<=1||stillMissing.length===0){setCurHole(h=>Math.min(holes.length,h+1))}else{const lbl=stillMissing.length===1?stillMissing[0]:stillMissing.length===2?stillMissing.join(" y "):stillMissing.slice(0,2).join(", ")+" y "+(stillMissing.length-2)+" más";window.__toast?.("Esperando a "+lbl+" a que capture su score","warn",3500)}},1200)}}} style={{width:48,height:48,borderRadius:24,background:C.grn+"20",border:"2px solid "+C.grn+"40",color:C.grn,fontSize:24,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+            <button onClick={()=>{const wasEmpty=!myScores[curHole];const cur=myScores[curHole]||curH?.par||4;saveScore(captainPid,curHole,Math.min(15,cur+1));try{navigator.vibrate?.(15)}catch(e){}if(wasEmpty&&curHole<holes.length){setTimeout(()=>{const stillMissing=validationPlayers.filter(pl=>pl.id!==captainPid&&(!scores[pl.id]||!scores[pl.id][curHole])).map(pl=>isScrambleTeam?("Equipo "+pl.team):(pl.player_name||"Sin nombre"));if(validationPlayers.length<=1||stillMissing.length===0){setCurHole(h=>Math.min(holes.length,h+1))}else{const lbl=stillMissing.length===1?stillMissing[0]:stillMissing.length===2?stillMissing.join(" y "):stillMissing.slice(0,2).join(", ")+" y "+(stillMissing.length-2)+" más";window.__toast?.((isScrambleTeam?"Esperando que ":"Esperando a ")+lbl+(isScrambleTeam?" capture":" a que capture su score"),"warn",3500)}},1200)}}} style={{width:48,height:48,borderRadius:24,background:C.grn+"20",border:"2px solid "+C.grn+"40",color:C.grn,fontSize:24,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
           </div>
-          {!myScores[curHole]&&<button onClick={()=>saveScore(myPid,curHole,curH?.par||4)} style={{padding:"8px 20px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:10,color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer"}}>Par ({curH?.par})</button>}
-          {players.length>1&&missingNow.length>0&&<div style={{marginTop:12,padding:"10px 12px",background:C.gld+"12",border:"1px solid "+C.gld+"30",borderRadius:10,display:"flex",alignItems:"center",gap:8,textAlign:"left"}}><span style={{fontSize:16}}>⏳</span><div style={{flex:1,fontSize:11,color:C.ts,lineHeight:1.4}}>Esperando a <strong style={{color:C.gld}}>{waitLabel}</strong> a que capture{missingNow.length>1?"n":""} su score</div></div>}
-          <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:14}}>{holes.map(h=>{const isCompleteForAll=players.length<=1||missingOnHole(h.hole_number).length===0;const canClick=h.hole_number<=curHole||isCompleteForAll||(h.hole_number===curHole+1&&canAdvance);return <div key={h.hole_number} onClick={()=>{if(h.hole_number<=curHole){setCurHole(h.hole_number);return}if(canClick){setCurHole(h.hole_number);return}const m=missingOnHole(curHole);const lbl=m.length===1?m[0]:m.length===2?m.join(" y "):m.slice(0,2).join(", ")+" y "+(m.length-2)+" más";window.__toast?.("Esperando a "+lbl+" a que capture su score","warn",3500);try{navigator.vibrate?.([20,50,20])}catch(e){}}} style={{width:8,height:8,borderRadius:4,background:h.hole_number===curHole?C.acc:myScores[h.hole_number]?C.grn:(canClick?C.bd:C.bd+"50"),cursor:"pointer",transition:"all .2s",opacity:canClick?1:.5}}/>})}</div>
+          {!myScores[curHole]&&<button onClick={()=>saveScore(captainPid,curHole,curH?.par||4)} style={{padding:"8px 20px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:10,color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer"}}>Par ({curH?.par})</button>}
+          {validationPlayers.length>1&&missingNow.length>0&&<div style={{marginTop:12,padding:"10px 12px",background:C.gld+"12",border:"1px solid "+C.gld+"30",borderRadius:10,display:"flex",alignItems:"center",gap:8,textAlign:"left"}}><span style={{fontSize:16}}>⏳</span><div style={{flex:1,fontSize:11,color:C.ts,lineHeight:1.4}}>{isScrambleTeam?<>Esperando que <strong style={{color:C.gld}}>{waitLabel}</strong> capture{missingNow.length>1?"n":""} el score</>:<>Esperando a <strong style={{color:C.gld}}>{waitLabel}</strong> a que capture{missingNow.length>1?"n":""} su score</>}</div></div>}
+          <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:14}}>{holes.map(h=>{const isCompleteForAll=validationPlayers.length<=1||missingOnHole(h.hole_number).length===0;const canClick=h.hole_number<=curHole||isCompleteForAll||(h.hole_number===curHole+1&&canAdvance);return <div key={h.hole_number} onClick={()=>{if(h.hole_number<=curHole){setCurHole(h.hole_number);return}if(canClick){setCurHole(h.hole_number);return}const m=missingOnHole(curHole);const lbl=m.length===1?m[0]:m.length===2?m.join(" y "):m.slice(0,2).join(", ")+" y "+(m.length-2)+" más";window.__toast?.((isScrambleTeam?"Esperando que ":"Esperando a ")+lbl+(isScrambleTeam?" capture":" a que capture su score"),"warn",3500);try{navigator.vibrate?.([20,50,20])}catch(e){}}} style={{width:8,height:8,borderRadius:4,background:h.hole_number===curHole?C.acc:myScores[h.hole_number]?C.grn:(canClick?C.bd:C.bd+"50"),cursor:"pointer",transition:"all .2s",opacity:canClick?1:.5}}/>})}</div>
           <div style={{fontSize:11,color:C.ts,marginTop:8}}>{myPlayed}/{holes.length} completados · Total: {myTotal||"--"}{!isOnline&&<span style={{color:C.gld,marginLeft:6}}>⚡ Offline</span>}{offlinePending>0&&<span style={{color:C.gld,marginLeft:6}}>☁ {offlinePending} por sincronizar</span>}</div>{offlinePending>0&&isOnline&&<button onClick={async()=>{const n=await syncOfflineScores();setOfflinePending(_offlineQ.count());if(n>0)openDetail(at)}} style={{marginTop:6,padding:"6px 14px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:8,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer",width:"100%"}}>☁ Sincronizar {offlinePending} scores</button>}
         </div>
       </div>})()}
