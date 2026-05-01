@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.10">
+<meta name="version" content="18.3.11">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -657,7 +657,18 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     setLd(false);
     if(data?.user_role==="player")initPush(data.id).catch(()=>{})
   }catch(e){console.error("Profile load error:",e);setLd(false)}}
-  return <Ctx.Provider value={{s,p,ld,setP,recovery,setRecovery,signIn:async(e,pw)=>sb.auth.signInWithPassword({email:e,password:pw}),signInGoogle:async()=>sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin}}),signUp:async(e,pw,nm,role,cid)=>{const{data,error}=await sb.auth.signUp({email:e,password:pw});if(!error&&data.user)await sb.from("user_profiles").upsert({id:data.user.id,email:e,full_name:nm,user_role:role||'player',managed_course_id:cid||null},{onConflict:"id"});return{data,error}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{await sb.auth.signOut();setS(null);setP(null)},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{s,p,ld,setP,recovery,setRecovery,signIn:async(e,pw)=>sb.auth.signInWithPassword({email:e,password:pw}),signInGoogle:async()=>sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin}}),signUp:async(e,pw,nm,role,cid)=>{const{data,error}=await sb.auth.signUp({email:e,password:pw});if(error)return{data,error};if(data?.user)await sb.from("user_profiles").upsert({id:data.user.id,email:e,full_name:nm,user_role:role||'player',managed_course_id:cid||null},{onConflict:"id"});
+// v18.3.11: si signUp retorna sin session (email auto-confirm con delay), polling + signIn manual cubre el gap
+if(!data?.session&&data?.user){
+  for(let attempt=0;attempt<3;attempt++){
+    await new Promise(r=>setTimeout(r,400+attempt*400));
+    const{error:siErr}=await sb.auth.signInWithPassword({email:e,password:pw});
+    if(!siErr){console.log("[signUp] auto-signIn OK attempt",attempt+1);return{data,error:null}}
+    console.warn("[signUp] signIn attempt",attempt+1,"failed:",siErr?.message);
+  }
+  return{data,error:{message:"No se pudo iniciar sesión automáticamente. Intenta hacer login con tu email y contraseña."}};
+}
+return{data,error}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{await sb.auth.signOut();setS(null);setP(null)},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
 }
 const useA=()=>useContext(Ctx);
 
@@ -712,12 +723,13 @@ function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[p
     // Bug A v18.2.1 — durante signUp player, Supabase auto-loguea y triggers re-render del padre.
     // El "Confirma tu email" no aplica porque el user ya está logueado (va directo a onboarding).
     // Solo mostramos error si hubo problema. Si OK, dejamos que el padre cambie de vista (Login → Main → PlayerOnboarding).
+    // v18.3.11: signUp ahora hace polling de signIn para cubrir gap de auto-confirm trigger (~150ms)
     const{error}=await signUp(e,pw,nm,"player",null);
     if(error){setMsg(error.message);setBusy(false);return}
     fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"welcome",to:e,data:{name:nm}})}).catch(()=>{});
     // NO setBusy(false) — mantenemos busy para que el botón se muestre disabled mientras el padre cambia de vista
-    // Si por alguna razón no cambia (race condition), después de 3s liberamos el state
-    setTimeout(()=>setBusy(false),3000);
+    // Si por alguna razón no cambia (race condition), después de 6s liberamos el state
+    setTimeout(()=>setBusy(false),6000);
   }
   async function doRegLoc(){setBusy(true);setMsg("");
     const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:e,course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().single();
