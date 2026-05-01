@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.18">
+<meta name="version" content="18.3.19">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2394,8 +2394,8 @@ function TourneoTab(){
       {at.status==="setup"&&isCreator&&<button onClick={()=>window.__confirm?.(t("¿Iniciar la partida?"),startMatch)} style={{width:"100%",padding:14,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:14,boxShadow:C.shGrn}}>▶ {t("Iniciar Partida")}</button>}
       {at.status==="in_progress"&&isCreator&&allDone&&<button onClick={()=>window.__confirm?.(t("¿Finalizar la partida? Los scores se pueden editar por 24h."),finishMatch)} style={{width:"100%",padding:14,background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:14,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:14,boxShadow:C.shAcc}}>🏁 {t("Finalizar Partida")}</button>}
       {at.status==="in_progress"&&isCreator&&!allDone&&<button onClick={()=>window.__confirm?.(t("No todos terminaron. ¿Finalizar de todos modos?"),finishMatch)} style={{width:"100%",padding:12,background:"transparent",border:"1px solid "+C.acc+"40",borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:14}}>{t("Finalizar (incompleta)")}</button>}
-      {/* TEAM SCORES */}
-      {isTeam&&<div style={{..._s.grid2lg,marginBottom:14}}><div style={{background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:14,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:C.gld,..._s.mono}}>{fmt==="stableford"?teamAS+" pts":teamAS||"--"}</div><div style={{fontSize:10,color:C.gld,fontWeight:700,marginTop:2}}>{t("Equipo A")}</div></div><div style={{background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:14,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:C.acc,..._s.mono}}>{fmt==="stableford"?teamBS+" pts":teamBS||"--"}</div><div style={{fontSize:10,color:C.acc,fontWeight:700,marginTop:2}}>{t("Equipo B")}</div></div></div>}
+      {/* TEAM SCORES (oculto para scramble — la info está más rica en las team cards del leaderboard) */}
+      {isTeam&&fmt!=="scramble"&&<div style={{..._s.grid2lg,marginBottom:14}}><div style={{background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:14,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:C.gld,..._s.mono}}>{fmt==="stableford"?teamAS+" pts":teamAS||"--"}</div><div style={{fontSize:10,color:C.gld,fontWeight:700,marginTop:2}}>{t("Equipo A")}</div></div><div style={{background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:14,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:C.acc,..._s.mono}}>{fmt==="stableford"?teamBS+" pts":teamBS||"--"}</div><div style={{fontSize:10,color:C.acc,fontWeight:700,marginTop:2}}>{t("Equipo B")}</div></div></div>}
       {/* v18.3.5: MATCH PLAY status display (1v1) reemplaza leaderboard tradicional cuando aplica */}
       {fmt==="match_play"&&players.length===2?(()=>{
         const me=players.find(pl=>pl.user_id===s.user.id);
@@ -2440,7 +2440,46 @@ function TourneoTab(){
         </div>;
       })():
       <div style={{marginBottom:14}}><div style={{..._s.section,color:C.txt}} dangerouslySetInnerHTML={{__html:ic("trophy",14,C.gld)+" Leaderboard"}}/>
-      {sorted.map((pl,i)=><div key={pl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:4,background:pl.user_id===s.user.id?C.acc+"08":C.glass||C.w04,border:"1px solid "+(pl.user_id===s.user.id?C.acc+"25":C.glassBd||C.bd),borderRadius:12}}><div style={{width:26,height:26,borderRadius:13,background:i<3&&!isTeam?[C.gld,"#aaa","#CD7F32"][i]+"30":C.w06,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:11,fontWeight:900,color:i<3?[C.gld,"#ccc","#CD7F32"][i]:C.tm,flexShrink:0}}>{isTeam?pl.team:i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:pl.user_id===s.user.id?800:600,color:C.txt}}>{pl.player_name}{pl.user_id===s.user.id?" "+t("(Tu)"):""}{fmt==="scramble"&&pl.is_captain&&<span style={{marginLeft:6,fontSize:9,padding:"2px 6px",borderRadius:4,background:C.gld+"20",color:C.gld,fontWeight:700,letterSpacing:".03em"}}>🎖 CAPITÁN</span>}</div><div style={{fontSize:10,color:C.tm}}>{pl.played}/{holes.length} hoyos</div></div><div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:900,color:C.txt,..._s.mono}}>{fmt==="stableford"?pl.stabPts:pl.total||"--"}</div>{fmt!=="stableford"&&pl.total>0&&<div style={{fontSize:10,fontWeight:700,color:pl.vsPar>0?C.acc:pl.vsPar<0?C.grn:C.ts}}>{pl.vsPar>0?"+":""}{pl.vsPar}</div>}</div></div>)}</div>}
+      {/* v18.3.19: Scramble usa 2 team cards (no scores individuales) */}
+      {fmt==="scramble"&&isTeam?
+        ["A","B"].map(teamLetter=>{
+          const teamPlayers=sorted.filter(x=>x.team===teamLetter);
+          const capt=teamPlayers.find(x=>x.is_captain);
+          const others=teamPlayers.filter(x=>!x.is_captain);
+          const teamScoreVal=capt?.total||0;
+          const teamVsPar=capt?.vsPar||0;
+          const teamPlayed=capt?.played||0;
+          const isMyTeam=teamPlayers.some(x=>x.user_id===s.user.id);
+          const accent=teamLetter==="A"?C.gld:C.acc;
+          return <div key={teamLetter} style={{marginBottom:10,padding:14,borderRadius:14,background:`linear-gradient(145deg,${accent}10,${accent}04)`,border:"1px solid "+accent+(isMyTeam?"40":"22")}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:32,height:32,borderRadius:16,background:accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:accent}}>{teamLetter}</div>
+                <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{t("Equipo")} {teamLetter}{isMyTeam&&<span style={{marginLeft:6,fontSize:9,padding:"2px 6px",borderRadius:4,background:accent+"20",color:accent,fontWeight:800,letterSpacing:".5px"}}>TU EQUIPO</span>}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:22,fontWeight:900,color:C.txt,..._s.mono,lineHeight:1}}>{teamScoreVal||"--"}</div>
+                {teamScoreVal>0&&<div style={{fontSize:11,fontWeight:700,marginTop:2,color:teamVsPar>0?C.acc:teamVsPar<0?C.grn:C.ts}}>{teamVsPar>0?"+":""}{teamVsPar||"E"}</div>}
+              </div>
+            </div>
+            {capt&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:10,background:C.gld+"08",border:"1px solid "+C.gld+"22",marginBottom:6}}>
+              <div style={{width:28,height:28,borderRadius:14,background:`linear-gradient(135deg,${C.gld},#d4a017)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff"}}>🎖</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:9,color:C.gld,fontWeight:800,letterSpacing:".5px",marginBottom:1}}>CAPITÁN</div>
+                <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{capt.player_name}{capt.user_id===s.user.id?" "+t("(Tu)"):""}</div>
+              </div>
+            </div>}
+            {others.map(o=><div key={o.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",marginBottom:4}}>
+              <div style={{width:24,height:24,borderRadius:12,background:C.w06,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.tm}}>{(o.player_name||"?").charAt(0).toUpperCase()}</div>
+              <div style={{flex:1,fontSize:12,color:C.tm,fontWeight:600}}>{o.player_name}{o.user_id===s.user.id?" "+t("(Tu)"):""}</div>
+            </div>)}
+            <div style={{fontSize:11,color:C.ts,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd+"50"}}>{teamPlayed}/{holes.length} {t("hoyos")}</div>
+          </div>
+        })
+      :
+      sorted.map((pl,i)=><div key={pl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:4,background:pl.user_id===s.user.id?C.acc+"08":C.glass||C.w04,border:"1px solid "+(pl.user_id===s.user.id?C.acc+"25":C.glassBd||C.bd),borderRadius:12}}><div style={{width:26,height:26,borderRadius:13,background:i<3&&!isTeam?[C.gld,"#aaa","#CD7F32"][i]+"30":C.w06,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:11,fontWeight:900,color:i<3?[C.gld,"#ccc","#CD7F32"][i]:C.tm,flexShrink:0}}>{isTeam?pl.team:i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:pl.user_id===s.user.id?800:600,color:C.txt}}>{pl.player_name}{pl.user_id===s.user.id?" "+t("(Tu)"):""}</div><div style={{fontSize:10,color:C.tm}}>{pl.played}/{holes.length} hoyos</div></div><div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:900,color:C.txt,..._s.mono}}>{fmt==="stableford"?pl.stabPts:pl.total||"--"}</div>{fmt!=="stableford"&&pl.total>0&&<div style={{fontSize:10,fontWeight:700,color:pl.vsPar>0?C.acc:pl.vsPar<0?C.grn:C.ts}}>{pl.vsPar>0?"+":""}{pl.vsPar}</div>}</div></div>)
+      }
+      </div>}
       {/* POST-MATCH STATS */}
       {at.status==="completed"&&holes.length>0&&myPid&&(()=>{const sc=scores[myPid]||{};const played=Object.keys(sc).length;if(played<1)return null;
         let birdies=0,pars=0,bogeys=0,dblPlus=0,bestHole=null,worstHole=null,bestDiff=99,worstDiff=-99;
