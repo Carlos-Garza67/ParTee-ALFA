@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.19">
+<meta name="version" content="18.3.20">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -504,15 +504,15 @@ async function syncOfflineScores(){
   let synced=0;
   for(const item of q){
     try{
-      await sb.from("tournament_scores").upsert({
-        tournament_id:item.tournament_id,player_id:item.player_id,
-        user_id:item.user_id,hole_number:item.hole_number,
-        strokes:item.strokes,stableford_points:item.stableford_points
-      },{onConflict:"tournament_id,player_id,hole_number"});
-      await sb.from("tournament_players").update({
-        total_score:item.total_score,total_vs_par:item.total_vs_par,
-        holes_completed:item.holes_completed
-      }).eq("id",item.player_id);
+      // v18.3.20: usar la RPC atómica también en sync — consistencia con saveScore online.
+      // El server recalcula totales basándose en el estado actual, ignorando los del item
+      // (que pudieron quedarse stale si otro device del mismo player editó mientras tanto).
+      const{error}=await sb.rpc("save_score_atomic",{
+        p_tournament_id:item.tournament_id,p_player_id:item.player_id,
+        p_user_id:item.user_id,p_hole_number:item.hole_number,
+        p_strokes:item.strokes,p_stableford_points:item.stableford_points
+      });
+      if(error)throw error;
       _offlineQ.remove(item.ts);
       synced++;
     }catch(e){break}
@@ -2254,8 +2254,12 @@ function TourneoTab(){
     // Try online save, fallback to offline queue
     try{
       if(!navigator.onLine)throw new Error("offline");
-      await sb.from("tournament_scores").upsert({tournament_id:at.id,player_id:playerId,user_id:targetUserId,hole_number:holeNum,strokes:val,stableford_points:pts},{onConflict:"tournament_id,player_id,hole_number"});
-      await sb.from("tournament_players").update({total_score:total,total_vs_par:total-totalPar,holes_completed:played}).eq("id",playerId);
+      // v18.3.20: una sola RPC atómica reemplaza 2 escrituras separadas; si falla la red entre
+      // tournament_scores y tournament_players quedaba inconsistencia visible en leaderboard.
+      // Server recalcula totales y los retorna; ignoramos el cálculo local del cliente para esos campos.
+      const{error:rpcErr}=await sb.rpc("save_score_atomic",{p_tournament_id:at.id,p_player_id:playerId,p_user_id:targetUserId,p_hole_number:holeNum,p_strokes:val,p_stableford_points:pts});
+      if(rpcErr)throw rpcErr;
+      // Notifs birdie/eagle son fire-and-forget (no críticas, fuera de la transacción)
       if(hole&&val<hole.par&&at.status==="in_progress"){const label=val<=hole.par-2?"Eagle":"Birdie";for(const pl of players){if(pl.user_id!==targetUserId)createNotif(pl.user_id,"match_update",label+"! 🦅",(p?.nickname||p?.full_name)+" hizo "+label+" en hoyo "+holeNum,{match_id:at.id,action_route:"tab:2",action_label:"Ver partida"})}}
     }catch(err){
       _offlineQ.add({tournament_id:at.id,player_id:playerId,user_id:targetUserId,hole_number:holeNum,strokes:val,stableford_points:pts,total_score:total,total_vs_par:total-totalPar,holes_completed:played});
