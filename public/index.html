@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.27">
+<meta name="version" content="18.3.29">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -972,7 +972,7 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
   </div>
 }
 
-const VAPID_PUB="BDB0DG-cSt-uK1nOLHx1_g6zjC8jY_jz9qNuXNMwB8DUUeyExkFq12H3Y_7_3eO5e6CAQvh9gjQ97f1OOvaRbUM";
+const VAPID_PUB="BJJoLdYKO-ohrIb8cvBti9oqPZdjeALe_d-OPemipdEcjv7agMP_qOVfQQEHf6QaA5xHW0pRwBpyw6agLm-SbuI";
 function urlB64ToUint8(b64){const p="=".repeat((4-b64.length%4)%4);const b=(b64+p).replace(/-/g,"+").replace(/_/g,"/");const r=atob(b);return Uint8Array.from(r,c=>c.charCodeAt(0))}
 async function initPush(userId){
   if(!("serviceWorker" in navigator)||!("PushManager" in window))return;
@@ -3565,7 +3565,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
     const[{data:bks},{data:validC},{data:campos},{data:myTp}]=await Promise.all([
       sb.from("bookings").select("*").eq("user_id",s.user.id).eq("status","confirmed").lte("booking_date",td).not("course_id","is",null).order("booking_date",{ascending:false}).limit(40),
       sb.from("golf_courses").select("id,facility_type").in("facility_type",["campo","simulador"]),
-      sb.from("golf_courses").select("id,course_name,city,hole_count,total_par").eq("status","active").eq("listing_status","active").eq("facility_type","campo").order("course_name"),
+      sb.from("golf_courses").select("id,course_name,city,hole_count,total_par,holes_per_round").eq("status","active").eq("listing_status","active").eq("facility_type","campo").order("course_name"),
       sb.from("tournament_players").select("*,tournaments(id,name,course_name,course_id,game_format,status,created_at)").eq("user_id",s.user.id)
     ]);
     const validIds=new Set((validC||[]).map(c=>c.id));
