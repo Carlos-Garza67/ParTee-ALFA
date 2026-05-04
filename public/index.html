@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.5">
+<meta name="version" content="19.6">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -3197,7 +3197,7 @@ function NotificationPrefs(){const{s}=useA();const[ld,setLd]=useState(true);cons
     {k:"friend_achievements",l:t("Logros de amigos"),sub:t("Cuando tus amigos juegan o ganan"),icon:"heart",color:C.acc},
   ];
   if(ld)return<div style={{padding:8}}><Skeleton w="100%" h={60} mb={10}/><Skeleton w="100%" h={60} mb={10}/><Skeleton w="100%" h={60}/></div>;
-  const sw=(on,key,onClick)=><button onClick={onClick} disabled={saving!==null} style={{width:42,height:24,borderRadius:12,border:"none",background:on?C.grn:C.bd,cursor:saving===null?"pointer":"wait",position:"relative",transition:"background .2s",flexShrink:0,opacity:saving&&saving!==key?.5:1}}><div style={{width:18,height:18,borderRadius:9,background:"#fff",position:"absolute",top:3,left:on?21:3,transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/></button>;
+  const sw=(on,key,onClick)=><button onClick={onClick} disabled={saving!==null} style={{width:46,height:26,minHeight:0,padding:0,borderRadius:13,border:"none",background:on?C.grn:C.bd,cursor:saving===null?"pointer":"wait",position:"relative",transition:"background .2s",flexShrink:0,opacity:saving&&saving!==key?.5:1}}><div style={{width:20,height:20,borderRadius:10,background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/></button>;
   return<div>
     {/* v19.2: Banner estado del permiso del navegador. Solo visible si NO unsupported y NO granted. */}
     {browserPerm==="default"&&<div style={{background:C.gld+"12",border:"1px solid "+C.gld+"40",borderRadius:12,padding:12,marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
@@ -3247,7 +3247,7 @@ function PushToggle(){const[enabled,setEnabled]=useState(false);const[loading,se
   // v18.0.22 fix: era const{s}=sb.auth (destructuring imposible). Cambiado por getSession() directo.
   const toggle=async()=>{if(enabled){setEnabled(false);return}setLoading(true);try{const perm=await Notification.requestPermission();setEnabled(perm==="granted");if(perm==="granted"){const sess=await sb.auth.getSession();if(sess.data.session)await initPush(sess.data.session.user.id);window.__toast?.(t("Notificaciones activadas"),"success")}else if(perm==="denied"){window.__toast?.(t("Permiso denegado en el navegador"),"warn")}}catch(e){console.error("[PushToggle]",e);window.__toast?.(t("No se pudieron activar"),"error")}finally{setLoading(false)}};
   if(!("Notification" in window))return null;
-  return<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><div style={{fontSize:13,fontWeight:600,color:C.txt}}>{t("Notificaciones Push")}</div><div style={{fontSize:11,color:C.tm}}>{t("Reservas, amigos y partidas")}</div></div><button onClick={toggle} disabled={loading} style={{width:50,height:28,borderRadius:14,border:"none",background:enabled?C.grn:C.bd,cursor:"pointer",position:"relative",transition:"background .2s"}}><div style={{width:22,height:22,borderRadius:10,background:"#fff",position:"absolute",top:3,left:enabled?25:3,transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/></button></div>}
+  return<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><div style={{fontSize:13,fontWeight:600,color:C.txt}}>{t("Notificaciones Push")}</div><div style={{fontSize:11,color:C.tm}}>{t("Reservas, amigos y partidas")}</div></div><button onClick={toggle} disabled={loading} style={{width:50,height:28,minHeight:0,padding:0,borderRadius:14,border:"none",background:enabled?C.grn:C.bd,cursor:"pointer",position:"relative",transition:"background .2s"}}><div style={{width:22,height:22,borderRadius:10,background:"#fff",position:"absolute",top:3,left:enabled?25:3,transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/></button></div>}
 
 function PaymentCard({userId,email,cardLast4:initLast4,cardBrand:initBrand}){const[last4,setLast4]=useState(initLast4||"");const[brand,setBrand]=useState(initBrand||"");const hasCard=last4&&last4.length>=2;
   const removeCard=()=>{const go=async()=>{await sb.from("user_profiles").update({card_last4:null,card_brand:null,stripe_customer_id:null}).eq("id",userId);setLast4("");setBrand("")};if(window.__confirm)window.__confirm("¿Eliminar método de pago?",go);else if(confirm("¿Eliminar método de pago?"))go()};
@@ -4679,4 +4679,3 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 </script>
 </body>
 </html>
-
