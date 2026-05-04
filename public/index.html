@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.31">
+<meta name="version" content="18.3.32">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2903,8 +2903,10 @@ function PaymentAndMovementsSection(){
       const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
       const r=await fetch(SB_FN_URL+"/create-connect-account",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({return_url:location.origin+"/?connect=ok",refresh_url:location.origin+"/?connect=refresh"})});
       const d=await r.json();
-      if(d?.onboarding_url){location.href=d.onboarding_url;return}
-      window.__toast?.(d?.error||"No se pudo iniciar onboarding","error");
+      if(d?.already_verified){window.__toast?.("Tu cuenta ya está verificada","success");return}
+      const url=d?.url||d?.onboarding_url;
+      if(url){location.href=url;return}
+      window.__toast?.(d?.message||d?.error||"No se pudo iniciar onboarding","error");
     }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
     finally{setBusy(false)}
   };
