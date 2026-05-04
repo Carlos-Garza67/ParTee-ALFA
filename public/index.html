@@ -2,12 +2,15 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.2">
+<meta name="version" content="19.3">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -29,10 +32,10 @@
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Partee Golf","url":"https://www.partee.com.mx","description":"Reserva tee times en los mejores campos de golf de México","applicationCategory":"SportsApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"MXN"},"author":{"@type":"Organization","name":"Partee Golf","url":"https://www.partee.com.mx"}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png?v=19.3">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=19.3">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=19.3">
+<link rel="manifest" href="/manifest.json?v=19.3">
 <meta name="theme-color" content="#080810">
 <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
@@ -251,7 +254,6 @@ select,select option{background:var(--card-bg,#12121f);color:var(--txt,#f4f4f6)}
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-0BQWH11JPN"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-0BQWH11JPN")</script>
 <script src="https://js.stripe.com/v3/"></script>
-<link rel="manifest" href="/manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -989,6 +991,12 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
 
 const VAPID_PUB="BJJoLdYKO-ohrIb8cvBti9oqPZdjeALe_d-OPemipdEcjv7agMP_qOVfQQEHf6QaA5xHW0pRwBpyw6agLm-SbuI";
 function urlB64ToUint8(b64){const p="=".repeat((4-b64.length%4)%4);const b=(b64+p).replace(/-/g,"+").replace(/_/g,"/");const r=atob(b);return Uint8Array.from(r,c=>c.charCodeAt(0))}
+
+// v19.3: Auto-update del Service Worker. Si ya está registrado, pide update y al
+// detectar uno nuevo en estado 'installed' con 'waiting', recarga silenciosamente.
+// Esto evita que el SW siga sirviendo HTML cacheado viejo entre deploys.
+(function(){if(!("serviceWorker" in navigator))return;navigator.serviceWorker.getRegistration().then(reg=>{if(!reg)return;reg.update().catch(()=>{});reg.addEventListener("updatefound",()=>{const nw=reg.installing;if(!nw)return;nw.addEventListener("statechange",()=>{if(nw.state==="installed"&&navigator.serviceWorker.controller){const k="partee_sw_reloaded_"+(document.querySelector('meta[name=\"version\"]')?.content||"x");if(!sessionStorage.getItem(k)){try{sessionStorage.setItem(k,"1")}catch(e){}location.reload()}}})})}).catch(()=>{})})();
+
 async function initPush(userId){
   if(!("serviceWorker" in navigator)||!("PushManager" in window))return;
   try{
