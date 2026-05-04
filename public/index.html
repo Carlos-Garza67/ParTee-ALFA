@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.30">
+<meta name="version" content="18.3.31">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1775,8 +1775,8 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
   async function load(){
     setLd(true);
     const td=new Date().toISOString().split("T")[0];
-    const ownedQ=(()=>{let q=sb.from("bookings").select("*").eq("user_id",s.user.id);if(tab==="up")q=q.gte("booking_date",td).neq("status","cancelled");else q=q.lt("booking_date",td);return q})();
-    const partQ=sb.from("booking_participants").select("booking:booking_id(*)").eq("user_id",s.user.id).in("status",["accepted","accepted_pending_payment"]);
+    const ownedQ=(()=>{let q=sb.from("bookings").select("*,golf_courses(facility_type)").eq("user_id",s.user.id);if(tab==="up")q=q.gte("booking_date",td).neq("status","cancelled");else q=q.lt("booking_date",td);return q})();
+    const partQ=sb.from("booking_participants").select("booking:booking_id(*,golf_courses(facility_type))").eq("user_id",s.user.id).in("status",["accepted","accepted_pending_payment"]);
     const[ownedRes,partRes]=await Promise.all([ownedQ,partQ]);
     const owned=ownedRes.data||[];
     const partBk=(partRes.data||[]).map(r=>r.booking).filter(b=>b&&b.id);
@@ -1821,8 +1821,8 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         const isCreator=detail.user_id===s?.user?.id;
         // canIncrease también requiere payment_mode != 'solo' (RPC lo rechaza si no, ver Bug B2)
         const canIncrease=isCreator&&isOver24h&&detail.status==="confirmed"&&(detail.party_size||1)<4&&detail.payment_mode!=="solo";
-        const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode;
-        const canConvertPartida=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasPartidaMode&&!hasGroupMode;
+        const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type==="campo";
+        const canConvertPartida=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasPartidaMode&&!hasGroupMode&&course?.facility_type==="campo";
         const pendingParts=detail._pendingCount||0; // best-effort: la banner en ParticipantsSection ya lo calcula con DB
         const showCloseListHere=isIn2to24&&detail.status==="confirmed"; // banner principal vive en ParticipantsSection
         const increaseBooking=async()=>{
@@ -1929,7 +1929,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       </div>;
     })}{acceptingInv&&<AcceptInvitationModal invitation={acceptingInv} onClose={()=>setAcceptingInv(null)} onResponded={()=>{setAcceptingInv(null);loadInvitations();load();}}/>}</>}
     {tab!=="requests"&&<div style={{background:"transparent",marginLeft:-16,marginRight:-16,padding:"6px 20px 0",borderRadius:0,minHeight:200}}>{ld?<div><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70}/></div>:bs.length===0?<EmptyState icon="calendar" iconColor={C.grn} title={t("Sin reservas")} sub={t("Explora campos y reserva tu primer tee time")}/>:bs.map(b=>{const st=stc[b.status]||{l:b.status,c:C.gld};const isPast=new Date(b.booking_date)<new Date();return<div key={b.id} onClick={()=>openDetail(b)} style={{background:C.glass||C.w04,borderRadius:16,padding:0,marginBottom:10,border:"1px solid "+(C.glassBd||C.bd),boxShadow:C.shCard||"none",cursor:"pointer",display:"flex",overflow:"hidden",opacity:isPast?.6:1}}><div style={{width:4,background:st.c,flexShrink:0,borderRadius:"16px 0 0 16px"}}/><div style={{flex:1,padding:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{b.course_name}</h4><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"3px 10px",borderRadius:8,fontWeight:700}}>{st.l}</span></div>
-      {b.booking_code&&<div style={{fontSize:10,..._s.mono,color:C.tm,letterSpacing:1,marginBottom:3}}>{b.booking_code}</div>}<div style={{display:"flex",gap:12,fontSize:12,color:C.ts,alignItems:"center"}}><span dangerouslySetInnerHTML={{__html:ic("calendar",13,C.txt)}}/><span>{b.booking_date}</span><span dangerouslySetInnerHTML={{__html:ic("clock",13,C.txt)}}/><span>{b.booking_time?.slice(0,5)}</span><span dangerouslySetInnerHTML={{__html:ic("user",13,C.txt)}}/><span>{b.party_size}</span></div><div style={{display:"flex",justifyContent:"space-between",marginTop:6}}><span style={{fontSize:14,fontWeight:800,color:C.grn}}>${fm(b.total_cost)} MXN</span><div style={{display:"flex",gap:4,alignItems:"center"}}>{isPast&&b.status==="confirmed"&&<span onClick={e=>{e.stopPropagation();setCourse(null);openDetail(b)}} style={{fontSize:9,color:C.gld,background:C.gld+"12",border:"1px solid "+C.gld+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>⭐ Calificar</span>}{!isPast&&b.status==="confirmed"&&<span onClick={e=>{e.stopPropagation();window.__createMatchFromBooking={id:b.id,course_id:b.course_id,course_name:b.course_name,date:b.booking_date,time:b.booking_time};window.__navigate?.("tab:2")}} style={{fontSize:9,color:C.grn,background:C.grn+"12",border:"1px solid "+C.grn+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>+ {t("Partida")}</span>}<span style={{color:C.ts,fontSize:14}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div></div></div></div>})}</div>}
+      {b.booking_code&&<div style={{fontSize:10,..._s.mono,color:C.tm,letterSpacing:1,marginBottom:3}}>{b.booking_code}</div>}<div style={{display:"flex",gap:12,fontSize:12,color:C.ts,alignItems:"center"}}><span dangerouslySetInnerHTML={{__html:ic("calendar",13,C.txt)}}/><span>{b.booking_date}</span><span dangerouslySetInnerHTML={{__html:ic("clock",13,C.txt)}}/><span>{b.booking_time?.slice(0,5)}</span><span dangerouslySetInnerHTML={{__html:ic("user",13,C.txt)}}/><span>{b.party_size}</span></div><div style={{display:"flex",justifyContent:"space-between",marginTop:6}}><span style={{fontSize:14,fontWeight:800,color:C.grn}}>${fm(b.total_cost)} MXN</span><div style={{display:"flex",gap:4,alignItems:"center"}}>{isPast&&b.status==="confirmed"&&<span onClick={e=>{e.stopPropagation();setCourse(null);openDetail(b)}} style={{fontSize:9,color:C.gld,background:C.gld+"12",border:"1px solid "+C.gld+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>⭐ Calificar</span>}{!isPast&&b.status==="confirmed"&&b.golf_courses?.facility_type==="campo"&&<span onClick={e=>{e.stopPropagation();window.__createMatchFromBooking={id:b.id,course_id:b.course_id,course_name:b.course_name,date:b.booking_date,time:b.booking_time};window.__navigate?.("tab:2")}} style={{fontSize:9,color:C.grn,background:C.grn+"12",border:"1px solid "+C.grn+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>+ {t("Partida")}</span>}<span style={{color:C.ts,fontSize:14}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div></div></div></div>})}</div>}
   </div>;
 }
 
@@ -3773,7 +3773,7 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
   useRealtime(view==="create"?"match_requests":null,null,(payload)=>{const bkId=payload.new?.booking_id||payload.old?.booking_id;if(bkId&&myBkIdsRef.current.includes(bkId))refreshBkGameStatus()},[view]);
   // tournaments: alguien creó/canceló/completó una partida sobre uno de mis bookings → refresca badges del wizard
   useRealtime(view==="create"?"tournaments":null,null,(payload)=>{const bkId=payload.new?.booking_id||payload.old?.booking_id;if(bkId&&myBkIdsRef.current.includes(bkId))refreshBkGameStatus()},[view]);
-  async function loadCourses(){const{data}=await sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("listing_status","active").in("facility_type",["campo","simulador"]).order("course_name");setCourses(data||[])}
+  async function loadCourses(){const{data}=await sb.from("golf_courses").select("id,course_name,city,facility_type").eq("status","active").eq("listing_status","active").eq("facility_type","campo").order("course_name");setCourses(data||[])}
   async function loadBookings(){const today=new Date().toISOString().slice(0,10);const{data}=await sb.from("bookings").select("id,course_id,course_name,booking_date,booking_time,party_size").eq("user_id",s.user.id).eq("status","confirmed").gte("booking_date",today).order("booking_date",{ascending:true}).limit(10);const bks=data||[];if(bks.length>0){const{data:gsMap}=await sb.rpc("booking_game_status_bulk",{p_ids:bks.map(b=>b.id)});bks.forEach(b=>{b.game_status=(gsMap||{})[b.id]||{}})}setMyBookings(bks)}
   async function load(){
     if(!s?.user?.id){setLd(false);return}
