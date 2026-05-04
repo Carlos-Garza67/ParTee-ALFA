@@ -1,10 +1,34 @@
-const CACHE_NAME = 'partee-v16';
+// Partee Service Worker v19.3 (may/2026)
+//
+// Cambios vs v16:
+//   - CACHE_NAME bumpeado: 'partee-v19.3'. Al activar, borra todos los caches anteriores.
+//   - HTML / navegación → network-first con timeout 3s + fetch({cache:'no-cache'}).
+//     Esto evita servir HTML viejo del HTTP cache del browser entre deploys.
+//   - HTML ya NO se precachea en 'install'. Se cachea on-demand, así el primer
+//     load siempre es fresh (la cache solo sirve como fallback offline).
+//   - Storage de Supabase (fotos de campos) → cache-first explícito.
+//   - Soporte para mensaje 'SKIP_WAITING' desde el HTML (compat con auto-update).
+//
+// Estrategia por tipo de recurso:
+//   HTML / navegación              → network-first 3s timeout, fallback cache
+//   Assets propios (css, js, img)  → network-first 5s timeout, fallback cache
+//   CDN (React, Babel, fonts)      → cache-first (URLs versionadas, inmutables)
+//   Storage Supabase (fotos)       → cache-first (cambian raramente)
+//   API (Supabase, Stripe, Google) → network-only (no interceptar)
+
+const VERSION = '19.3';
+const CACHE_NAME = `partee-v${VERSION}`;
+const HTML_TIMEOUT_MS = 3000;
+const ASSET_TIMEOUT_MS = 5000;
+
+// Solo assets de baja rotación que conviene precachear para offline.
+// HTML NO se precachea — siempre se busca en red primero.
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icon-192.png',
-  '/icon-512.png'
+  '/icon-512.png',
+  '/favicon.png',
+  '/apple-touch-icon.png'
 ];
 
 const CDN_ASSETS = [
@@ -15,85 +39,140 @@ const CDN_ASSETS = [
   'https://js.stripe.com/v3/'
 ];
 
-// Install: cache static assets
+// ─── Install: precache assets estáticos (NO HTML) ────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(STATIC_ASSETS).catch(err => {
-        console.warn('SW: Some static assets failed to cache:', err);
+        console.warn('[SW v19.3] precache parcial:', err);
       });
     })
   );
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// ─── Activate: limpiar TODOS los caches que no sean el actual ────────────────
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => {
+          console.log(`[SW v19.3] borrando cache vieja: ${k}`);
+          return caches.delete(k);
+        })
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for assets
-self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function isHTMLRequest(req) {
+  return req.mode === 'navigate' ||
+         req.destination === 'document' ||
+         (req.headers.get('accept') || '').includes('text/html');
+}
 
-  // Skip non-GET requests
+function isAPIRequest(url) {
+  // Supabase REST/RPC, auth, realtime — NO el storage (eso lo manejamos aparte)
+  if (url.hostname.includes('supabase.co') && !url.pathname.includes('/storage/v1/object/')) {
+    return true;
+  }
+  return url.hostname.includes('stripe.com') ||
+         url.hostname.includes('googleapis.com/auth');
+}
+
+function isStorageRequest(url) {
+  return url.hostname.includes('supabase.co') && url.pathname.includes('/storage/v1/object/');
+}
+
+function isCDNAsset(url) {
+  return url.hostname.includes('cdnjs.cloudflare.com') ||
+         url.hostname.includes('fonts.googleapis.com') ||
+         url.hostname.includes('fonts.gstatic.com') ||
+         url.hostname.includes('js.stripe.com');
+}
+
+// ─── Estrategia: Network-first con timeout y fallback a cache ────────────────
+async function networkFirst(req, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // {cache: 'no-cache'} fuerza al browser a NO usar su HTTP cache.
+    // Esto es crítico para evitar que el SW reciba HTML viejo del browser cache.
+    const response = await fetch(req, {
+      cache: 'no-cache',
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (response.ok && req.url.startsWith(self.location.origin)) {
+      const clone = response.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put(req, clone)).catch(() => {});
+    }
+    return response;
+  } catch (err) {
+    clearTimeout(timer);
+    const cached = await caches.match(req);
+    if (cached) return cached;
+    // Fallback final: para navegación, intentar shell desde cache
+    if (req.mode === 'navigate') {
+      const shell = await caches.match('/') || await caches.match('/index.html');
+      if (shell) return shell;
+    }
+    return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+  }
+}
+
+// ─── Estrategia: Cache-first ─────────────────────────────────────────────────
+async function cacheFirst(req) {
+  const cached = await caches.match(req);
+  if (cached) return cached;
+  try {
+    const response = await fetch(req);
+    if (response.ok) {
+      const clone = response.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put(req, clone)).catch(() => {});
+    }
+    return response;
+  } catch {
+    return new Response('Offline', { status: 503 });
+  }
+}
+
+// ─── Fetch handler: routing por tipo de recurso ──────────────────────────────
+self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
-  // Skip Supabase API calls and Stripe - always network
-  if (url.hostname.includes('supabase.co') ||
-      url.hostname.includes('stripe.com') ||
-      url.hostname.includes('googleapis.com/auth')) {
+  const url = new URL(event.request.url);
+
+  // API Supabase/Stripe/Google: NO interceptar (siempre van a red)
+  if (isAPIRequest(url)) return;
+
+  // Storage Supabase (fotos de campos): cache-first
+  if (isStorageRequest(url)) {
+    event.respondWith(cacheFirst(event.request));
     return;
   }
 
-  // CDN assets: cache-first (they're versioned)
-  if (url.hostname.includes('cdnjs.cloudflare.com') ||
-      url.hostname.includes('fonts.googleapis.com') ||
-      url.hostname.includes('fonts.gstatic.com')) {
-    event.respondWith(
-      caches.match(event.request).then(cached => {
-        if (cached) return cached;
-        return fetch(event.request).then(response => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          }
-          return response;
-        });
-      })
-    );
+  // CDN versionado (React, Babel, fonts, Stripe): cache-first
+  if (isCDNAsset(url)) {
+    event.respondWith(cacheFirst(event.request));
     return;
   }
 
-  // App assets: network-first with cache fallback
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if (response.ok && url.origin === self.location.origin) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      })
-      .catch(() => {
-        return caches.match(event.request).then(cached => {
-          if (cached) return cached;
-          // Offline fallback for navigation requests
-          if (event.request.mode === 'navigate') {
-            return caches.match('/');
-          }
-          return new Response('Offline', { status: 503 });
-        });
-      })
-  );
+  // HTML / navegación: network-first con timeout 3s
+  if (isHTMLRequest(event.request)) {
+    event.respondWith(networkFirst(event.request, HTML_TIMEOUT_MS));
+    return;
+  }
+
+  // Resto de assets propios (CSS, JS, imágenes): network-first con timeout 5s
+  if (url.origin === self.location.origin) {
+    event.respondWith(networkFirst(event.request, ASSET_TIMEOUT_MS));
+    return;
+  }
 });
 
-// Push notifications
+// ─── Push notifications (sin cambios funcionales vs v16) ─────────────────────
 self.addEventListener('push', event => {
   let data = { title: 'Partee Golf', body: 'Tienes una notificación', tag: 'general' };
 
@@ -126,21 +205,25 @@ self.addEventListener('push', event => {
   );
 });
 
-// Notification click: open app
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const url = event.notification.data?.url || 'https://www.partee.com.mx';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      // Focus existing window if open
       for (const client of clients) {
         if (client.url.includes('partee.com.mx') && 'focus' in client) {
           return client.focus();
         }
       }
-      // Open new window
       return self.clients.openWindow(url);
     })
   );
+});
+
+// ─── Mensaje SKIP_WAITING desde el cliente (compat futura) ───────────────────
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
