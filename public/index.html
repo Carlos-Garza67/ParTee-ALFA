@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.4.3">
+<meta name="version" content="19.0">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -4134,6 +4134,121 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
     {selDate!==today&&<button onClick={()=>setSelDate(today)} style={{width:"100%",padding:10,marginTop:10,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Ir a hoy</button>}
   </div>}
 
+// AdminPayouts (v19.0): panel de pagos para course_admin con filtro, banner Stripe Connect y toggle payout_method
+function AdminPayouts({course,onRefresh}){const[payouts,setPayouts]=useState([]);const[ld,setLd]=useState(true);const[filter,setFilter]=useState("all");const[exp,setExp]=useState(null);const[connectLd,setConnectLd]=useState(false);const[toggleLd,setToggleLd]=useState(false);
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);const{data}=await sb.from("course_payouts").select("*,booking:bookings(booking_code,booking_date,booking_time,course_name)").eq("course_id",course.id).order("created_at",{ascending:false});setPayouts(data||[]);setLd(false)}
+  const cs=course.stripe_connect_status||"not_started";const cVerified=cs==="verified"&&course.stripe_connect_payouts_enabled;const pm=course.payout_method||"manual_spei";
+  async function openConnect(){setConnectLd(true);try{const{data,error}=await sb.functions.invoke("create-course-connect-account",{body:{course_id:course.id}});if(error)throw error;if(data?.already_verified){window.__toast?.("Tu cuenta ya está verificada","success");onRefresh?.();return}if(data?.url){window.location.href=data.url;return}window.__toast?.("No se obtuvo URL de Stripe","error")}catch(e){window.__toast?.("Error: "+(e.message||e),"error")}finally{setConnectLd(false)}}
+  async function togglePayoutMethod(newMode){if(toggleLd||newMode===pm)return;if(!cVerified&&newMode==="auto_via_connect"){window.__toast?.("Primero verifica tu cuenta Stripe Connect","warn");return}setToggleLd(true);const{error}=await sb.from("golf_courses").update({payout_method:newMode}).eq("id",course.id);setToggleLd(false);if(error){window.__toast?.("Error: "+error.message,"error");return}window.__toast?.("Método actualizado","success");onRefresh?.()}
+  // Stats del mes
+  const monthStart=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString();
+  const settledThisMonth=payouts.filter(p=>(p.status==="settled_auto"||p.status==="settled_manual")&&p.created_at>=monthStart);
+  const monthTotal=settledThisMonth.reduce((s,p)=>s+Number(p.amount_to_course||0),0);
+  const PEND=["awaiting_claim_window","pending_settlement","awaiting_course_connect","transferring"];
+  const pending=payouts.filter(p=>PEND.includes(p.status));const pendingTotal=pending.reduce((s,p)=>s+Number(p.amount_to_course||0),0);
+  // Filtros
+  const FILT={all:()=>true,pending:p=>PEND.includes(p.status),settled:p=>p.status==="settled_auto"||p.status==="settled_manual",other:p=>p.status==="refunded"||p.status==="failed"};
+  const filtered=payouts.filter(FILT[filter]||FILT.all);
+  // Status visual
+  const ST={awaiting_claim_window:{l:"Ventana 48h",c:C.gld,desc:"Esperando ventana de cancelación"},pending_settlement:{l:"Pendiente",c:C.gld,desc:"Listo para liquidar"},awaiting_course_connect:{l:"Connect pendiente",c:C.acc,desc:"Configura Stripe Connect para liquidar"},transferring:{l:"Transfiriendo",c:C.gld,desc:"En proceso"},settled_auto:{l:"Pagado",c:C.grn,desc:"Liquidado vía Stripe"},settled_manual:{l:"Pagado SPEI",c:C.grn,desc:"Liquidado vía SPEI manual"},refunded:{l:"Reembolsado",c:C.tm,desc:"Booking cancelado"},failed:{l:"Falló",c:C.acc,desc:"Error - revisar"}};
+  return<div className="fi">
+    {/* Hero stats */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>RECIBIDO ESTE MES</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.grn,marginTop:6}}>${fm(monthTotal)}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{settledThisMonth.length} {settledThisMonth.length===1?"pago":"pagos"}</div>
+      </div>
+      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>POR LIQUIDAR</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.gld,marginTop:6}}>${fm(pendingTotal)}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{pending.length} {pending.length===1?"pago":"pagos"}</div>
+      </div>
+    </div>
+    {/* Banner Stripe Connect */}
+    {cs==="not_started"&&<div style={{padding:14,borderRadius:14,background:C.acc+"08",border:"1px solid "+C.acc+"30",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+        <div style={{width:36,height:36,borderRadius:12,background:C.acc+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("dollar",18,C.acc)}}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Activa pagos automáticos</div>
+          <div style={{fontSize:12,color:C.ts,marginTop:4,lineHeight:1.4}}>Configura Stripe Connect y recibe tus pagos directo en tu cuenta bancaria, sin esperar SPEI manual.</div>
+          <button onClick={openConnect} disabled={connectLd} style={{marginTop:10,padding:"10px 16px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:connectLd?"wait":"pointer",opacity:connectLd?.7:1}}>{connectLd?"Cargando...":"Configurar Stripe Connect"}</button>
+        </div>
+      </div>
+    </div>}
+    {cs==="onboarding"&&<div style={{padding:14,borderRadius:14,background:C.gld+"08",border:"1px solid "+C.gld+"30",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+        <div style={{width:36,height:36,borderRadius:12,background:C.gld+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("clock",18,C.gld)}}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Completa tu configuración</div>
+          <div style={{fontSize:12,color:C.ts,marginTop:4,lineHeight:1.4}}>Tu cuenta Stripe Connect está pendiente. Completa los pasos para activar pagos automáticos.</div>
+          <button onClick={openConnect} disabled={connectLd} style={{marginTop:10,padding:"10px 16px",background:C.gld,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:connectLd?"wait":"pointer",opacity:connectLd?.7:1}}>{connectLd?"Cargando...":"Continuar configuración"}</button>
+        </div>
+      </div>
+    </div>}
+    {cs==="restricted"&&<div style={{padding:14,borderRadius:14,background:C.acc+"08",border:"1px solid "+C.acc+"30",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+        <div style={{width:36,height:36,borderRadius:12,background:C.acc+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("alert",18,C.acc)}}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Tu cuenta requiere atención</div>
+          <div style={{fontSize:12,color:C.ts,marginTop:4,lineHeight:1.4}}>Stripe necesita información adicional para procesar pagos. Resuelve los pendientes en tu dashboard.</div>
+          <button onClick={openConnect} disabled={connectLd} style={{marginTop:10,padding:"10px 16px",background:C.acc,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:connectLd?"wait":"pointer",opacity:connectLd?.7:1}}>{connectLd?"Cargando...":"Resolver en Stripe"}</button>
+        </div>
+      </div>
+    </div>}
+    {cs==="verified"&&<div style={{padding:14,borderRadius:14,background:C.grn+"08",border:"1px solid "+C.grn+"30",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <div style={{width:36,height:36,borderRadius:12,background:C.grn+"15",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("check",18,C.grn)}}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Stripe Connect verificado</div>
+          <div style={{fontSize:11,color:C.ts,marginTop:2}}>Puedes recibir pagos automáticos</div>
+        </div>
+      </div>
+      <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em",marginBottom:8}}>MÉTODO DE PAGO</div>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={()=>togglePayoutMethod("manual_spei")} disabled={toggleLd} style={{flex:1,padding:10,borderRadius:10,border:"2px solid "+(pm==="manual_spei"?C.grn:C.bd),background:pm==="manual_spei"?C.grn+"15":"transparent",color:pm==="manual_spei"?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:toggleLd?"wait":"pointer"}}>SPEI Manual</button>
+        <button onClick={()=>togglePayoutMethod("auto_via_connect")} disabled={toggleLd} style={{flex:1,padding:10,borderRadius:10,border:"2px solid "+(pm==="auto_via_connect"?C.grn:C.bd),background:pm==="auto_via_connect"?C.grn+"15":"transparent",color:pm==="auto_via_connect"?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:toggleLd?"wait":"pointer"}}>Automático</button>
+      </div>
+    </div>}
+    {/* Filtros */}
+    <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto"}}>
+      {[{k:"all",l:"Todos"},{k:"pending",l:"Pendientes"},{k:"settled",l:"Pagados"},{k:"other",l:"Otros"}].map(f=>
+        <button key={f.k} onClick={()=>setFilter(f.k)} style={{padding:"7px 12px",borderRadius:10,border:"1px solid "+(filter===f.k?C.grn:C.bd),background:filter===f.k?C.grn+"15":"transparent",color:filter===f.k?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{f.l}</button>
+      )}
+    </div>
+    {/* Lista */}
+    {ld?<Skeleton w="100%" h={70}/>:filtered.length===0?
+      <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>Sin pagos en esta categoría</div>
+      :filtered.map(po=>{const st=ST[po.status]||{l:po.status,c:C.tm,desc:""};const bk=po.booking;const isExp=exp===po.id;return(
+        <div key={po.id} onClick={()=>setExp(isExp?null:po.id)} style={{padding:12,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,marginBottom:8,cursor:"pointer"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:14,fontWeight:800,color:C.txt}}>${fm(po.amount_to_course)}</span>
+                <span style={{padding:"2px 8px",borderRadius:6,background:st.c+"15",color:st.c,fontSize:9,fontWeight:700,letterSpacing:".05em"}}>{st.l.toUpperCase()}</span>
+              </div>
+              <div style={{fontSize:11,color:C.ts,marginTop:3}}>{bk?.booking_code||"—"} · {bk?.booking_date?new Date(bk.booking_date+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"}):""}</div>
+            </div>
+            <div style={{transform:isExp?"rotate(180deg)":"rotate(0deg)",transition:"transform .2s",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/>
+          </div>
+          {isExp&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd}}>
+            <div style={{fontSize:11,color:C.ts,marginBottom:8,lineHeight:1.5}}>{st.desc}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
+              <div><span style={{color:C.tm}}>Total cobrado: </span><span style={{color:C.txt,fontWeight:600}}>${fm(po.total_collected)}</span></div>
+              <div><span style={{color:C.tm}}>Comisión: </span><span style={{color:C.txt,fontWeight:600}}>${fm(po.platform_fee_amount)}</span></div>
+              {po.release_at&&<div><span style={{color:C.tm}}>Disponible: </span><span style={{color:C.txt,fontWeight:600}}>{new Date(po.release_at).toLocaleDateString("es-MX",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span></div>}
+              {po.transferred_at&&<div><span style={{color:C.tm}}>Transferido: </span><span style={{color:C.txt,fontWeight:600}}>{new Date(po.transferred_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
+              {po.manual_spei_paid_at&&<div><span style={{color:C.tm}}>SPEI: </span><span style={{color:C.txt,fontWeight:600}}>{new Date(po.manual_spei_paid_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
+              {po.manual_spei_reference&&<div style={{gridColumn:"span 2"}}><span style={{color:C.tm}}>Ref: </span><span style={{color:C.txt,fontWeight:600}}>{po.manual_spei_reference}</span></div>}
+              <div><span style={{color:C.tm}}>Método: </span><span style={{color:C.txt,fontWeight:600}}>{po.payout_method==="auto_via_connect"?"Stripe Connect":"SPEI"}</span></div>
+            </div>
+            {po.last_error&&<div style={{marginTop:8,padding:8,background:C.acc+"10",borderRadius:8,fontSize:10,color:C.acc}}>⚠ {po.last_error}</div>}
+          </div>}
+        </div>
+      )})}
+  </div>}
+
 function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);
   const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).single().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
   useEffect(()=>{loadC()},[p]);const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};
@@ -4141,11 +4256,11 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
   const clearAutoEdit=()=>{setAutoEdit(false);setFocusField(null)};
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Cerrar Sesión")}</button></div></div>;
-  const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Dashboard"},{i:ic("calendar",20,C.txt),l:"Reservas"},{i:ic("clock",20,C.txt),l:"Slots"},{i:ic("tag",20,C.txt),l:"Promos"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Perfil"}];
+  const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Dashboard"},{i:ic("calendar",20,C.txt),l:"Reservas"},{i:ic("clock",20,C.txt),l:"Slots"},{i:ic("tag",20,C.txt),l:"Promos"},{i:ic("dollar",20,C.txt),l:"Pagos"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Perfil"}];
   const lst=course.listing_status||"draft";const LST={draft:{l:"BORRADOR",c:C.acc},pending_review:{l:"EN REVISIÓN",c:C.gld},active:{l:"PUBLICADO",c:C.grn},suspended:{l:"SUSPENDIDO",c:C.acc}}[lst]||{l:"BORRADOR",c:C.acc};
   return<div className="admin-container" style={{background:C.bg}}>
     <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div onClick={()=>setTab(0)} style={{padding:"3px 9px",borderRadius:7,background:LST.c+"15",border:"1px solid "+LST.c+"35",cursor:lst==="active"?"default":"pointer"}} title={lst==="active"?"":"Ver detalles en Dashboard"}><span style={{fontSize:9,fontWeight:700,color:LST.c,letterSpacing:".05em"}}>{LST.l}</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
-    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<PremiumInsights course={course}/>}{tab===5&&<AdminProfile course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit}/>}</div>
+    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<AdminPayouts course={course} onRefresh={loadC}/>}{tab===5&&<PremiumInsights course={course}/>}{tab===6&&<AdminProfile course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit}/>}</div>
     <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
   </div>}
 
