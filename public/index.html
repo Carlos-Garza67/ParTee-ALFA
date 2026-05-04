@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="18.3.32">
+<meta name="version" content="18.4.1">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2788,10 +2788,7 @@ function PaymentAndMovementsSection(){
   const[ld,setLd]=useState(true);
   const[busy,setBusy]=useState(false);
   const[showAll,setShowAll]=useState(false);
-  // v18.0.10 — Bug fix: column names. user_profiles tiene stripe_connect_* (no stripe_account_*).
-  // Source of truth: stripe_connect_status (verified/restricted/onboarding) escrito por connect-webhook.
-  const hasConnect=pr?.stripe_connect_status==="verified";
-  const pendingConnect=!!pr?.stripe_connect_account_id&&pr?.stripe_connect_status!=="verified";
+  // v18.4.0 Modelo A: hasConnect/pendingConnect eliminados. Jugadores no necesitan Stripe Connect — solo course admins.
   useEffect(()=>{
     if(!s?.user?.id)return;
     let alive=true;
@@ -2897,19 +2894,7 @@ function PaymentAndMovementsSection(){
   // Ordenar cronológicamente desc
   movements.sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
   const visibleMov=showAll?movements:movements.slice(0,15);
-  const startConnect=async()=>{
-    setBusy(true);
-    try{
-      const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
-      const r=await fetch(SB_FN_URL+"/create-connect-account",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({return_url:location.origin+"/?connect=ok",refresh_url:location.origin+"/?connect=refresh"})});
-      const d=await r.json();
-      if(d?.already_verified){window.__toast?.("Tu cuenta ya está verificada","success");return}
-      const url=d?.url||d?.onboarding_url;
-      if(url){location.href=url;return}
-      window.__toast?.(d?.message||d?.error||"No se pudo iniciar onboarding","error");
-    }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
-    finally{setBusy(false)}
-  };
+  // v18.4.0 Modelo A: startConnect handler eliminado. Connect onboarding ahora vive en panel admin del campo (create-course-connect-account).
   const movMeta={
     charge:{label:t("Cargo"),color:C.acc,sign:"-",icon:"down"},
     refund:{label:t("Reembolso"),color:C.ts,sign:"+",icon:"check"},
@@ -2922,18 +2907,7 @@ function PaymentAndMovementsSection(){
       <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>{t("Tarjeta guardada")}</div>
       <PaymentCard userId={s.user.id} email={s.user.email} cardLast4={pr?.card_last4} cardBrand={pr?.card_brand}/>
     </div>
-    {/* Bloque 2: Saldo por Cobrar (solo si hay cobros recibidos o cuenta Connect) */}
-    {(earnGroups.length>0||hasConnect||pendingConnect)&&<div style={{background:`linear-gradient(135deg,${C.gld}22,${C.grn}12)`,borderRadius:14,padding:14,marginBottom:14,border:"1px solid "+C.gld+"30"}}>
-      <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>{t("Saldo por Cobrar")}</div>
-      <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
-        <span style={{fontSize:26,fontWeight:900,color:C.gld,..._s.mono,letterSpacing:"-0.02em"}}>${fm(totalPending)}</span>
-        <span style={{fontSize:12,color:C.tm,fontWeight:700}}>MXN</span>
-      </div>
-      {totalTransferred>0&&<div style={{fontSize:11,color:C.grn,marginTop:4}}><span dangerouslySetInnerHTML={{__html:ic("check",11,C.grn)}}/> ${fm(totalTransferred)} {t("ya transferido")}</div>}
-      {!hasConnect&&!pendingConnect&&totalPending>0&&<button onClick={startConnect} disabled={busy} style={{width:"100%",marginTop:10,padding:12,background:`linear-gradient(135deg,${C.gld},#f59e0b)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("dollar",14,"#fff")}}/>{busy?t("Abriendo Stripe..."):t("Configurar cuenta para cobrar")}</button>}
-      {pendingConnect&&<button onClick={startConnect} disabled={busy} style={{width:"100%",marginTop:10,padding:11,background:C.gld+"18",border:"1px solid "+C.gld+"40",borderRadius:12,color:C.gld,fontSize:12,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>{busy?t("Abriendo..."):t("Continuar verificación Stripe")} →</button>}
-      {hasConnect&&<div style={{marginTop:10,padding:"8px 12px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:10,display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("check",12,C.grn)}}/><span style={{fontSize:11,fontWeight:700,color:C.grn}}>{t("Cuenta Stripe verificada")}</span></div>}
-    </div>}
+    {/* v18.4.0 Modelo A: bloque "Saldo por Cobrar" eliminado. Jugadores no reciben dinero por splits — los pagos van directo a Partee y se liquidan al campo. */}
     {/* Bloque 3: Movimientos */}
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -3047,17 +3021,16 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
         // 3. Typing confirmation "BORRAR" para friction
         // 4. Edge function delete-account hace la orquestación real
         const today=new Date().toISOString().slice(0,10);
-        const[bksRes,payoutsRes,tourRes]=await Promise.all([
+        // v18.4.0 Modelo A: pending_payouts ya no es bloqueador (jugadores no reciben dinero por splits, ese flow se removió)
+        const[bksRes,tourRes]=await Promise.all([
           sb.from("bookings").select("id").eq("user_id",s.user.id).eq("status","confirmed").gte("booking_date",today),
-          sb.from("pending_payouts").select("id,amount").eq("creator_user_id",s.user.id).in("status",["pending","pending_connect"]),
           sb.from("tournament_players").select("tournament_id,tournaments!inner(status)").eq("user_id",s.user.id).eq("tournaments.status","in_progress"),
         ]);
         const blockers=[];
         if((bksRes.data||[]).length>0)blockers.push((bksRes.data.length)+" "+t("reserva")+(bksRes.data.length!==1?"s":"")+" "+t("activa")+(bksRes.data.length!==1?"s":""));
-        if((payoutsRes.data||[]).length>0){const pendingTotal=(payoutsRes.data||[]).reduce((s,p)=>s+Number(p.amount||0),0);blockers.push("$"+fm(pendingTotal)+" "+t("saldo por cobrar"))}
         if((tourRes.data||[]).length>0)blockers.push((tourRes.data.length)+" "+t("partida")+(tourRes.data.length!==1?"s":"")+" "+t("en progreso"));
         if(blockers.length>0){
-          const msg=t("No puedes eliminar tu cuenta porque tienes")+":\n\n• "+blockers.join("\n• ")+"\n\n"+t("Cancela tus reservas y finaliza tus partidas primero. Si tienes saldo por cobrar, configura tu cuenta de Stripe Connect para retirarlo.");
+          const msg=t("No puedes eliminar tu cuenta porque tienes")+":\n\n• "+blockers.join("\n• ")+"\n\n"+t("Cancela tus reservas y finaliza tus partidas primero.");
           if(window.__confirm)window.__confirm(msg,null,null,{singleButton:true,confirmLabel:t("Entendido"),confirmStyle:"info"});
           else alert(msg);
           return;
@@ -4395,8 +4368,10 @@ function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,
   const{toast:_t,confirm:_c}=useToast();
   useEffect(()=>{window.__toast=_t;window.__confirm=_c;window.__navigate=(target)=>{if(!target)return;const parts=target.split(":");if(parts[0]==="tab"){const tabIdx=parseInt(parts[1]);if(!isNaN(tabIdx)){setTab(tabIdx);setScr("home")}if(parts[2]==="requests")setTimeout(()=>{const evt=new CustomEvent("partee:subtab",{detail:{tab:"requests"}});window.dispatchEvent(evt)},100)}};return()=>{delete window.__toast;delete window.__confirm;delete window.__navigate}},[_t,_c]);
   useEffect(()=>{try{const url=new URL(location.href);const pay=url.searchParams.get("payment");if(pay)setPayResult(pay);if(pay){url.searchParams.delete("payment");url.searchParams.delete("booking_id");url.searchParams.delete("plan");history.replaceState(null,"",url.pathname)}}catch(e){}},[]);
-  // v18.0.7 — Stripe Connect onboarding return flow: ?connect=ok (verificado) | ?connect=refresh (reintentar)
-  useEffect(()=>{try{const url=new URL(location.href);const cn=url.searchParams.get("connect");if(!cn)return;if(cn==="ok"){window.__toast?.("¡Cuenta Stripe verificada! Ya puedes recibir transferencias","success");setTab(4);setScr("home")}else if(cn==="refresh"){window.__toast?.(t("Completa la verificación en Stripe para recibir pagos"),"info");setTab(4);setScr("home")}url.searchParams.delete("connect");history.replaceState(null,"",url.pathname+url.search)}catch(e){}},[]);
+  // v18.4.0 Modelo A — Stripe Connect return flow.
+  //   ?connect=ok|refresh: legacy creator path (deprecated, mantener por si un user_profile legacy regresa)
+  //   ?course_connect=ok|refresh: new course admin path (Modelo A)
+  useEffect(()=>{try{const url=new URL(location.href);const cn=url.searchParams.get("connect");const cc=url.searchParams.get("course_connect");if(!cn&&!cc)return;if(cn==="ok"||cc==="ok"){window.__toast?.("¡Cuenta Stripe verificada!","success");setTab(4);setScr("home")}else if(cn==="refresh"||cc==="refresh"){window.__toast?.(t("Completa la verificación en Stripe para recibir pagos"),"info");setTab(4);setScr("home")}url.searchParams.delete("connect");url.searchParams.delete("course_connect");history.replaceState(null,"",url.pathname+url.search)}catch(e){}},[]);
   if(payResult)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}}><div className={"success-check"+(payResult!=="cancelled"?" glow-ring":"")} style={{width:90,height:90,borderRadius:50,background:payResult==="cancelled"?"linear-gradient(135deg,#e74c3c,#c0392b)":`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24}}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">{payResult==="cancelled"?<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>:<path d="M20 6L9 17l-5-5"/>}</svg></div><h2 className="success-text" style={{fontSize:24,fontWeight:800,color:C.txt,marginBottom:8}}>{payResult==="success"?t("¡Pago Exitoso!"):payResult==="premium_success"?t("¡Premium Activado!"):t("Pago Cancelado")}</h2><p className="success-text" style={{fontSize:13,color:C.ts,marginBottom:24,maxWidth:300}}>{payResult==="success"?t("Tu reserva está confirmada."):payResult==="premium_success"?t("Acceso completo a inteligencia de mercado."):t("El pago fue cancelado.")}</p><button className="success-actions" onClick={()=>setPayResult(null)} style={{padding:"14px 40px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}}>{payResult==="cancelled"?t("Volver"):t("Continuar")}</button></div>;
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:24}}><div style={{textAlign:"center",maxWidth:420,width:"100%",position:"relative"}}><div style={{position:"absolute",top:"20%",left:"50%",transform:"translate(-50%,-50%)",width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,#e9456012,transparent 70%)",pointerEvents:"none"}}/><ParteeLogo h={55} mc="#e94560" tc={C.txt}/><p style={{fontSize:12,color:C.ts,marginTop:14,letterSpacing:".18em",fontWeight:500}}>FIND · CONNECT · PLAY</p><div style={{display:"flex",gap:4,marginTop:20,justifyContent:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:3,background:C.acc,opacity:.4,animation:"pl 1.2s infinite",animationDelay:i*.2+"s"}}/>)}</div></div></div>;
   if(recovery)return<ResetPasswordForm/>;
