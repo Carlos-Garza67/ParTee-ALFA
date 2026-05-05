@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.6">
+<meta name="version" content="19.9">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -847,7 +847,7 @@ function Home({onPick}){const{s,p}=useA();const[cs,setCs]=useState([]);const[ld,
   const[geoOn,setGeoOn]=useState(()=>{try{return localStorage.getItem("partee_geo_enabled")==="1"}catch{return false}});
   const[geoLd,setGeoLd]=useState(false);const[nearbyList,setNearbyList]=useState([]);
   // requestGeo: pide permiso al browser, llama RPC nearby_courses, persiste el toggle.
-  const requestGeo=()=>{if(!navigator.geolocation){window.__toast?.(t("Geolocalización no disponible en tu navegador"),"error");return}setGeoLd(true);navigator.geolocation.getCurrentPosition(async(pos)=>{const{latitude,longitude}=pos.coords;const{data,error}=await sb.rpc("nearby_courses",{user_lat:latitude,user_lng:longitude,radius_km:500,max_results:30});if(error){window.__toast?.(t("No se pudo obtener campos cercanos"),"error");setGeoLd(false);return}setNearbyList(data||[]);setGeoOn(true);try{localStorage.setItem("partee_geo_enabled","1")}catch{}setGeoLd(false)},(err)=>{const msg=err.code===1?t("Permiso de ubicación denegado"):err.code===2?t("Ubicación no disponible"):err.code===3?t("Tiempo de espera agotado"):t("Error de ubicación");window.__toast?.(msg,"warn");setGeoOn(false);try{localStorage.setItem("partee_geo_enabled","0")}catch{}setGeoLd(false)},{timeout:10000,maximumAge:60000,enableHighAccuracy:false})};
+  const requestGeo=()=>{if(!navigator.geolocation){window.__toast?.(t("Geolocalización no disponible en tu navegador"),"error");return}setGeoLd(true);navigator.geolocation.getCurrentPosition(async(pos)=>{const{latitude,longitude}=pos.coords;const{data,error}=await sb.rpc("nearby_courses",{user_lat:latitude,user_lng:longitude,radius_km:200,max_results:30});if(error){window.__toast?.(t("No se pudo obtener campos cercanos"),"error");setGeoLd(false);return}setNearbyList(data||[]);setGeoOn(true);try{localStorage.setItem("partee_geo_enabled","1")}catch{}setGeoLd(false)},(err)=>{const msg=err.code===1?t("Permiso de ubicación denegado"):err.code===2?t("Ubicación no disponible"):err.code===3?t("Tiempo de espera agotado"):t("Error de ubicación");window.__toast?.(msg,"warn");setGeoOn(false);try{localStorage.setItem("partee_geo_enabled","0")}catch{}setGeoLd(false)},{timeout:10000,maximumAge:60000,enableHighAccuracy:false})};
   const toggleGeo=()=>{if(geoLd)return;if(geoOn){setGeoOn(false);setNearbyList([]);try{localStorage.setItem("partee_geo_enabled","0")}catch{}}else{requestGeo()}};
   // Auto-rehydrate geo si fue activado previamente (solo una vez al mount)
   useEffect(()=>{if(geoOn&&nearbyList.length===0&&!geoLd)requestGeo();/* eslint-disable-next-line */},[]);
@@ -872,7 +872,7 @@ function Home({onPick}){const{s,p}=useA();const[cs,setCs]=useState([]);const[ld,
   const distMap=React.useMemo(()=>{const m={};nearbyList.forEach(n=>{m[n.id]=n.distance_km});return m},[nearbyList]);
   const enrichC=c=>({...c,_avg:ratings[c.id]?.avg||0,_cnt:ratings[c.id]?.cnt||0,_dist:distMap[c.id]});
   const mQ=c=>!q||[c.course_name,c.city,c.state].some(v=>(v||"").toLowerCase().includes(q.toLowerCase()));
-  const mF=c=>{const locOk=fLoc==="all"||(c.facility_type||"campo")===fLoc;const accOk=fAcc==="all"||c.course_type===fAcc;const dealOk=!fDeal||offers.includes(c.course_name);return locOk&&accOk&&dealOk&&mQ(c)};
+  const mF=c=>{const locOk=fLoc==="all"||(c.facility_type||"campo")===fLoc;const accOk=fAcc==="all"||c.course_type===fAcc;const dealOk=!fDeal||offers.includes(c.course_name);const geoOk=!geoOn||distMap[c.id]!=null;return locOk&&accOk&&dealOk&&geoOk&&mQ(c)};
   const FT={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};const FL={campo:t("Campo"),plataforma:t("Plataforma"),simulador:t("Simulador")};
   const feat=cs.filter(c=>c.is_featured&&mF(c)).map(enrichC);const ofC=cs.filter(c=>offers.includes(c.course_name)&&mF(c)).map(enrichC);const reC=cs.filter(c=>rebook.includes(c.id)&&mF(c)).map(enrichC);const all=cs.filter(mF).map(enrichC);
   // v19.0: Lista "Cerca de ti" — courses dentro del radio, ordenados por distancia. Respeta filtros activos.
