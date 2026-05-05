@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.24">
+<meta name="version" content="19.25">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1502,19 +1502,59 @@ function ParticipantsSection({booking,isOwner,onChanged}){
         )}
       </div>;
     })}
-    {canReduce&&<div style={{background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:10,padding:10,marginTop:10}}>
-      <div style={{fontSize:12,color:C.txt,fontWeight:600,marginBottom:4}}>{rejectedParts.length} {rejectedParts.length===1?t("jugador rechazó"):t("jugadores rechazaron")}</div>
-      <div style={{fontSize:11,color:C.ts,marginBottom:8}}>{t("Puedes reducir el tamaño de la reserva. Se notificará al campo y recibirás refund por los espacios liberados.")}</div>
-      <button onClick={()=>setReduceDlg(true)} style={{width:"100%",padding:8,background:C.gld+"20",border:"1px solid "+C.gld+"40",borderRadius:8,color:C.gld,fontSize:12,fontWeight:700,cursor:"pointer"}}>{t("Reducir reserva")} → {booking.party_size-rejectedParts.length} {t("jugadores")}</button>
-    </div>}
-    {/* v18.0.7 — Banner de pendientes con "Cerrar lista ahora" (force_close_list) */}
+    {/* v19.25 — Banner unificado contextual: combina rechazos + pendientes con mensajes según horas restantes */}
     {(()=>{
-      if(!isOwner||hoursLeft<=2)return null;
+      if(!isOwner||hoursLeft<=2)return null; // <2h usa "Cerrar lista ahora" del banner clásico
       const pendings=parts.filter(x=>x.status==="invited"||x.status==="accepted_pending_payment");
-      if(pendings.length===0)return null;
       const invitedCt=pendings.filter(x=>x.status==="invited").length;
       const pendingPayCt=pendings.filter(x=>x.status==="accepted_pending_payment").length;
-      const closeNow=()=>{
+      const hasRejected=rejectedParts.length>0&&booking.party_size>1;
+      const hasPendings=pendings.length>0;
+      if(!hasRejected&&!hasPendings)return null;
+      
+      // Determinar severidad y color según horas restantes
+      const isUrgent=hoursLeft<6;        // <6h: rojo
+      const isWarning=hoursLeft<12;      // 6-12h: naranja  
+      const tone=isUrgent?C.acc:isWarning?"#f59e0b":C.gld; // rojo/naranja/dorado
+      
+      // Construir título según escenario
+      let titleText="";
+      if(hasRejected&&hasPendings){
+        titleText=rejectedParts.length+" "+(rejectedParts.length===1?t("rechazó"):t("rechazaron"))+" · "+pendings.length+" "+t("pendiente"+(pendings.length>1?"s":""));
+      }else if(hasRejected){
+        titleText=rejectedParts.length+" "+(rejectedParts.length===1?t("jugador rechazó"):t("jugadores rechazaron"));
+      }else{
+        const parts2=[];
+        if(invitedCt>0)parts2.push(invitedCt+" "+t("sin responder"));
+        if(pendingPayCt>0)parts2.push(pendingPayCt+" "+t("sin pagar"));
+        titleText=parts2.join(" · ");
+      }
+      
+      // Construir mensaje contextual según horas restantes
+      let contextMsg="";
+      if(isUrgent){
+        // <6h
+        if(hasRejected&&hasPendings)contextMsg=t("Cierre próximo. Reduce ahora o cierra lista para liberar pendientes.");
+        else if(hasRejected)contextMsg=t("Cierre próximo en")+" "+Math.floor(hoursLeft)+"h. "+t("Reduce el tamaño antes de que se libere automáticamente.");
+        else contextMsg=t("Cierre próximo en")+" "+Math.floor(hoursLeft)+"h. "+t("Considera cerrar la lista para liberar a quienes no respondieron.");
+      }else if(isWarning){
+        // 6-12h
+        if(hasRejected&&hasPendings)contextMsg=t("Cierre automático en")+" "+Math.floor(hoursLeft)+"h. "+t("Reduce ahora o espera al cierre.");
+        else if(hasRejected)contextMsg=t("Puedes reducir el tamaño ahora o esperar el cierre automático.");
+        else contextMsg=t("Aún hay tiempo. Si nadie responde, los pendientes se removerán al cierre.");
+      }else if(hoursLeft<24){
+        // 12-24h
+        if(hasRejected&&hasPendings)contextMsg=t("Cierre automático en")+" "+Math.floor(hoursLeft)+"h. "+t("Reduce ahora o invita a otro amigo.");
+        else if(hasRejected)contextMsg=t("Cierre automático en")+" "+Math.floor(hoursLeft)+"h. "+t("Puedes reducir el tamaño o invitar a otro amigo.");
+        else contextMsg=t("Esperando respuesta. Cierre automático en")+" "+Math.floor(hoursLeft)+"h.";
+      }else{
+        // >24h
+        if(hasRejected&&hasPendings)contextMsg=t("Tienes tiempo de invitar a otros o reducir ahora.");
+        else if(hasRejected)contextMsg=t("Puedes reducir el tamaño o invitar a otro amigo desde abajo.");
+        else contextMsg=t("Esperando respuesta de tus invitados.");
+      }
+      
+      const closeListNow=()=>{
         const go=async()=>{
           try{
             const{data,error}=await sb.rpc("force_close_list",{p_booking_id:booking.id});
@@ -1524,7 +1564,6 @@ function ParticipantsSection({booking,isOwner,onChanged}){
             window.__toast?.("Lista cerrada · "+removed+" "+(removed===1?"jugador removido":"jugadores removidos"),"success");
             load();onChanged?.();
           }catch(e){
-            // v18.0.10 — error strings alineados al RPC real force_close_list
             const msg=e.message||"";
             if(msg.includes("frozen_window"))window.__toast?.("Menos de 2h al tee time, ya no se puede modificar","warn");
             else if(msg.includes("only_creator_can_force_close"))window.__toast?.("Solo el creador puede cerrar la lista","error");
@@ -1535,20 +1574,19 @@ function ParticipantsSection({booking,isOwner,onChanged}){
         const confirmMsg="¿Cerrar lista ahora?\n\n"+pendings.length+" jugador(es) pendiente(s) serán removidos. Si hicieron pago con split, se reembolsará automáticamente.";
         if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go();
       };
-      return<div style={{background:C.gld+"12",border:"1px solid "+C.gld+"40",borderRadius:10,padding:12,marginTop:10}}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:8}}>
-          <span dangerouslySetInnerHTML={{__html:ic("alert",16,C.gld)}}/>
+      
+      return<div style={{background:tone+"12",border:"1px solid "+tone+"40",borderRadius:10,padding:12,marginTop:10}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
+          <span dangerouslySetInnerHTML={{__html:ic(isUrgent?"alert":"clock",16,tone)}}/>
           <div style={{flex:1}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.gld,marginBottom:2}}>{t("Jugadores pendientes")}</div>
-            <div style={{fontSize:11,color:C.ts,lineHeight:1.4}}>
-              {invitedCt>0&&<span>{invitedCt} {t("sin responder")}</span>}
-              {invitedCt>0&&pendingPayCt>0&&" · "}
-              {pendingPayCt>0&&<span>{pendingPayCt} {t("sin pagar")}</span>}
-              {" · "}{Math.floor(hoursLeft)}h {t("al tee time")}
-            </div>
+            <div style={{fontSize:12,fontWeight:700,color:tone,marginBottom:3}}>{titleText}</div>
+            <div style={{fontSize:11,color:C.ts,lineHeight:1.45}}>{contextMsg}</div>
           </div>
         </div>
-        <button onClick={closeNow} style={{width:"100%",padding:9,background:`linear-gradient(135deg,${C.gld},#f59e0b)`,border:"none",borderRadius:8,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("check",13,"#fff")}}/>{t("Cerrar lista ahora")}</button>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {hasRejected&&<button onClick={()=>setReduceDlg(true)} style={{flex:"1 1 auto",minWidth:130,padding:9,background:tone+"22",border:"1px solid "+tone+"50",borderRadius:8,color:tone,fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("minus",12,tone)}}/>{t("Reducir a")} {booking.party_size-rejectedParts.length} {t("jug.")}</button>}
+          {hasPendings&&<button onClick={closeListNow} style={{flex:"1 1 auto",minWidth:130,padding:9,background:`linear-gradient(135deg,${tone},${isUrgent?"#d63d55":isWarning?"#ea580c":"#f59e0b"})`,border:"none",borderRadius:8,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("check",12,"#fff")}}/>{t("Cerrar lista")}</button>}
+        </div>
       </div>;
     })()}
     {reduceDlg&&<ReduceBookingDialog booking={booking} rejectedParts={rejectedParts} onClose={()=>setReduceDlg(false)} onReduced={()=>{setReduceDlg(false);load();onChanged?.();}}/>}
