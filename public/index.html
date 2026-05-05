@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.21">
+<meta name="version" content="19.22">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -992,7 +992,29 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
     const{error:pmErr,paymentMethod}=await stripeRef.current.createPaymentMethod({type:"card",card:cardRef.current});
     if(pmErr){setError(pmErr.message);setPaying(false);return}
     const{error:err,paymentIntent}=await stripeRef.current.confirmCardPayment(secretRef.current,{payment_method:paymentMethod.id});
-    if(err){setError(err.message);setPaying(false);return}
+    if(err){
+      // v19.22 — Fallback defensivo: si Stripe reporta error pero el PaymentIntent
+      // ya completó exitosamente (race condition o error transitorio), verificar estado
+      // real antes de mostrar el mensaje al usuario. Previene falsos negativos donde
+      // el cobro pasó pero el frontend muestra "error de procesamiento".
+      try{
+        const{paymentIntent:piCheck}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
+        if(piCheck?.status==="succeeded"){
+          const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
+          setPaying(false);onSuccess?.(piCheck.id,cardDetails);return
+        }
+        if(piCheck?.status==="processing"){
+          // Stripe procesando; esperar 1.5s y reintentar verificación
+          await new Promise(r=>setTimeout(r,1500));
+          const{paymentIntent:piRetry}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
+          if(piRetry?.status==="succeeded"){
+            const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
+            setPaying(false);onSuccess?.(piRetry.id,cardDetails);return
+          }
+        }
+      }catch(checkErr){console.warn("[StripePayment] PI verification failed:",checkErr)}
+      setError(err.message);setPaying(false);return
+    }
     if(paymentIntent?.status==="succeeded"){
       const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
       setPaying(false);onSuccess?.(paymentIntent.id,cardDetails)
@@ -1613,7 +1635,18 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
         if(!window.Stripe){setError("Stripe no disponible");setProcessing(false);return}
         const stripe=window.Stripe(STRIPE_PK);
         const{error:stripeErr,paymentIntent}=await stripe.confirmCardPayment(data.client_secret);
-        if(stripeErr){setError(stripeErr.message);setProcessing(false);return}
+        if(stripeErr){
+          // v19.22 — Fallback: verificar status real del PI antes de mostrar error
+          try{
+            const{paymentIntent:piCheck}=await stripe.retrievePaymentIntent(data.client_secret);
+            if(piCheck?.status==="succeeded"){
+              await completeRpc({paymentIntentId:piCheck.id,last4:p?.card_last4,brand:p?.card_brand,customerId:p?.stripe_customer_id||data.customer_id});
+              window.__toast?.(t("¡Pagado! Tu lugar está asegurado"),"success");
+              onResponded?.();onClose?.();return
+            }
+          }catch(checkErr){console.warn("[split-3ds] PI verification failed:",checkErr)}
+          setError(stripeErr.message);setProcessing(false);return
+        }
         if(paymentIntent?.status==="succeeded"){
           await completeRpc({paymentIntentId:paymentIntent.id,last4:p?.card_last4,brand:p?.card_brand,customerId:p?.stripe_customer_id||data.customer_id});
           window.__toast?.(t("¡Pagado! Tu lugar está asegurado"),"success");
@@ -1647,9 +1680,17 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
         piId=data.payment_intent_id||data.payment_intent;
       }else if(data.requires_action&&data.client_secret){
         const{error:cErr,paymentIntent}=await stripeRef.current.confirmCardPayment(data.client_secret,{payment_method:paymentMethod.id});
-        if(cErr)throw new Error(cErr.message);
-        if(paymentIntent?.status!=="succeeded")throw new Error("Estado: "+(paymentIntent?.status||"desconocido"));
-        piId=paymentIntent.id;
+        if(cErr){
+          // v19.22 — Fallback: verificar status real antes de fallar
+          try{
+            const{paymentIntent:piCheck}=await stripeRef.current.retrievePaymentIntent(data.client_secret);
+            if(piCheck?.status==="succeeded"){piId=piCheck.id}
+            else throw new Error(cErr.message);
+          }catch(checkErr){throw new Error(cErr.message)}
+        }else{
+          if(paymentIntent?.status!=="succeeded")throw new Error("Estado: "+(paymentIntent?.status||"desconocido"));
+          piId=paymentIntent.id;
+        }
       }else{
         throw new Error(data.message||data.error||"Error al procesar pago");
       }
