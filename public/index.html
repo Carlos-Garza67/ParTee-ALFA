@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.20">
+<meta name="version" content="19.21">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -476,7 +476,7 @@ function ToastProvider({children}){const[toasts,setToasts]=useState([]);const[cD
     </div>)}</div>
     {cDialog&&<div key={cDialog.msg.slice(0,20)} className="confirm-overlay" onClick={cDialog.onNo}><div className="confirm-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}>
       <div dangerouslySetInnerHTML={{__html:ic("alert",28,cDialog.opts.confirmStyle==="info"?C.grn:C.acc)}} style={{marginBottom:12}}/>
-      <p style={{color:C.txt,fontSize:14,fontWeight:500,marginBottom:20,whiteSpace:"pre-wrap",textAlign:"left"}}>{cDialog.msg}</p>
+      <p style={{color:C.txt,fontSize:14,fontWeight:500,marginBottom:20,whiteSpace:"pre-wrap",textAlign:"center"}}>{cDialog.msg}</p>
       <div style={{display:"flex",gap:10}}>{!cDialog.opts.singleButton&&<button onClick={cDialog.onNo} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.bd,borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>}
       <button onClick={cDialog.opts.singleButton?cDialog.onNo:cDialog.onYes} style={{flex:1,padding:12,background:cDialog.opts.singleButton?C.cd:(cDialog.opts.confirmStyle==="info"?`linear-gradient(135deg,${C.grn},#00cec9)`:`linear-gradient(135deg,${C.acc},#d63d55)`),border:cDialog.opts.singleButton?"1px solid "+C.bd:"none",borderRadius:14,color:cDialog.opts.singleButton?C.txt:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>{cDialog.opts.confirmLabel||t("Confirmar")}</button></div>
     </div></div>}
