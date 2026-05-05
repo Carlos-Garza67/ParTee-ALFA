@@ -1315,11 +1315,13 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   // Si social_mode='grupo', el booking ya tiene >=1 joiners y no aplica el banner "individual".
   const isSoloBooking=(bookingPaymentMode==="solo"&&booking?.social_mode!=="grupo"&&booking?.social_mode!=="partida")||booking?.party_size===1;
   const withSplit=bookingPaymentMode==="split";
-  const suggestedSplitAmount=booking?.total_cost&&booking?.party_size?Math.round((Number(booking.total_cost)/Number(booking.party_size))*100)/100:0;
-  const[splitPerPerson,setSplitPerPerson]=useState(String(suggestedSplitAmount||""));
+  // v19.32: splitPerPerson ahora se inicializa vacío; un useEffect de abajo lo sincroniza con
+  // suggestedSplitAmount (que ya es reactivo a finalPartySize) cuando el usuario no lo ha editado manualmente.
+  const[splitPerPerson,setSplitPerPerson]=useState("");
+  const[userEditedSplit,setUserEditedSplit]=useState(false);
   const[search,setSearch]=useState("");
   const[processing,setProcessing]=useState(false);
-  // v19.31 — activeCount cuenta participantes activos NO-creator; totalActiveCount añade +1 por el creator.
+  // v19.32 — activeCount cuenta participantes activos NO-creator; totalActiveCount añade +1 por el creator.
   // El cap real ya no es booking.party_size sino 4 (max party_size global): la edge function expand-and-invite
   // expande la reserva automáticamente si seleccionas más invitados que espacios actuales.
   const[activeCount,setActiveCount]=useState(0);
@@ -1332,6 +1334,19 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   const atLimit=selFr.length>=maxInvitable;
   const finalPartySize=Math.max(booking?.party_size||1,totalActiveCount+selFr.length);
   const willExpand=finalPartySize>(booking?.party_size||1);
+  // v19.32: isFullAtCurrent indica que la reserva ya está al tope con su party_size actual,
+  // pero todavía puede expandirse hasta 4. Lo usa el banner para mostrar mensajería precisa.
+  const isFullAtCurrent=totalActiveCount>=(booking?.party_size||1)&&maxInvitable>0;
+  // v19.32: suggestedSplitAmount es REACTIVO a finalPartySize. Si el usuario selecciona más amigos
+  // y la reserva se expande (ej: party_size 2→4), el sugerido se recalcula automáticamente
+  // ($1600/4=$400) en vez de quedarse en $1600/2=$800. Esto resuelve la inconsistencia donde
+  // el UI mostraba $800 pero el backend recibía un valor distinto.
+  const suggestedSplitAmount=booking?.total_cost&&finalPartySize?Math.round((Number(booking.total_cost)/finalPartySize)*100)/100:0;
+  // v19.32: Auto-sync del input al sugerido. Solo cuando el usuario NO ha editado manualmente
+  // (userEditedSplit=false). Si edita, respetamos su valor sin sobreescribir.
+  useEffect(()=>{
+    if(withSplit&&!userEditedSplit)setSplitPerPerson(String(suggestedSplitAmount||""));
+  },[suggestedSplitAmount,withSplit,userEditedSplit]);
   const toggleFr=fid=>setSelFr(prev=>{
     if(prev.includes(fid))return prev.filter(x=>x!==fid);
     if(prev.length>=maxInvitable){
@@ -1354,12 +1369,10 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
     }
     setProcessing(true);
     try{
-      // v19.31 — Endpoint atómico: expande party_size si es necesario, cobra delta al creator
-      // (si compartir), itera invite_booking_participant por cada invitado, dispara notify-booking-change.
-      // En caso de falla parcial hace rollback completo (refund Stripe + reduce party_size + cancel participants).
+      // v19.32 — Enviar creatorAmount (valor del input visible). suggestedSplitAmount ya
+      // es dinámico contra finalPartySize y el input se auto-sincroniza, así que UI y payload coinciden.
+      // Si el usuario editó manualmente, respetamos su valor (sin override).
       const{data:sess}=await sb.auth.getSession();
-      // Split por persona se calcula sobre el party_size FINAL (post-expansión)
-      const perPerson=withSplit?Math.round((Number(booking.total_cost)/finalPartySize)*100)/100:null;
       const r=await fetch(SB_FN_URL+"/expand-and-invite",{
         method:"POST",
         headers:{
@@ -1369,7 +1382,7 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
         },
         body:JSON.stringify({
           booking_id:booking.id,
-          invitees:selFr.map(uid=>({user_id:uid,split_amount:perPerson}))
+          invitees:selFr.map(uid=>({user_id:uid,split_amount:withSplit?creatorAmount:null}))
         })
       });
       const d=await r.json().catch(()=>({}));
@@ -1398,14 +1411,25 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
       <div style={{fontSize:13,fontWeight:700,color:C.acc,marginBottom:4}}>{t("Reserva individual")}</div>
       <div style={{fontSize:11,color:C.ts,lineHeight:1.5}}>{t("Esta reserva es para 1 jugador. Para invitar amigos primero debes aumentar el tamaño de la reserva desde la sección Modalidad.")}</div>
     </div>:<>
-      {/* v19.31 — Banner refactor: el cap es 4 jugadores totales. Si seleccionas más de los espacios actuales,
-           la reserva se expande automáticamente (la edge function expand-and-invite cobra el delta al creator). */}
-      <div style={{background:maxInvitable===0?C.acc+"15":C.grn+"10",border:"1px solid "+(maxInvitable===0?C.acc+"30":C.grn+"25"),borderRadius:10,padding:"10px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
-        <span dangerouslySetInnerHTML={{__html:ic(maxInvitable===0?"alert":"users",16,maxInvitable===0?C.acc:C.grn)}}/>
+      {/* v19.32 — Banner con 3 estados:
+           (a) maxInvitable===0 → reserva al cap absoluto (4 jugadores)
+           (b) isFullAtCurrent → reserva ocupada al party_size actual, pero puede expandirse
+           (c) hay espacios libres dentro del party_size actual */}
+      <div style={{background:maxInvitable===0?C.acc+"15":(isFullAtCurrent?C.gld+"12":C.grn+"10"),border:"1px solid "+(maxInvitable===0?C.acc+"30":(isFullAtCurrent?C.gld+"35":C.grn+"25")),borderRadius:10,padding:"10px 12px",marginBottom:10,display:"flex",alignItems:"flex-start",gap:10}}>
+        <span style={{marginTop:1}} dangerouslySetInnerHTML={{__html:ic(maxInvitable===0?"alert":(isFullAtCurrent?"alert":"users"),16,maxInvitable===0?C.acc:(isFullAtCurrent?C.gld:C.grn))}}/>
         <div style={{flex:1}}>
-          <div style={{fontSize:13,fontWeight:700,color:maxInvitable===0?C.acc:C.txt}}>{maxInvitable===0?t("Reserva llena (4 jugadores)"):t("Puedes invitar hasta")+" "+maxInvitable+" "+(maxInvitable===1?t("amigo"):t("amigos"))}</div>
-          <div style={{fontSize:11,color:C.ts,marginTop:1}}>{t("Actualmente")}: {totalActiveCount} {t("jugadores")} ({t("tú")} + {activeCount}) · {t("Reserva")}: {booking.party_size}</div>
-          {willExpand&&selFr.length>0&&<div style={{fontSize:11,color:C.gld,marginTop:3,fontWeight:600}}>↑ {t("La reserva se expandirá a")} {finalPartySize} {t("jugadores")}</div>}
+          <div style={{fontSize:13,fontWeight:700,color:maxInvitable===0?C.acc:C.txt}}>{
+            maxInvitable===0
+              ?t("Reserva al máximo (4 jugadores)")
+              :isFullAtCurrent
+                ?t("Reserva al tope — invitar más expandirá automáticamente")
+                :t("Puedes invitar hasta")+" "+maxInvitable+" "+(maxInvitable===1?t("amigo"):t("amigos"))
+          }</div>
+          <div style={{fontSize:11,color:C.ts,marginTop:2}}>{t("Actualmente")}: {totalActiveCount}/{booking.party_size} ({t("tú")} + {activeCount}) · {t("Cap")}: 4 {t("jugadores")}</div>
+          {willExpand&&selFr.length>0&&<div style={{fontSize:11,color:C.gld,marginTop:4,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+            <span>↑</span>
+            <span>{t("Se expandirá a")} {finalPartySize} {t("jugadores")}{withSplit?" · "+t("Split nuevo")+": $"+fm(suggestedSplitAmount)+" "+t("c/u"):""}</span>
+          </div>}
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:(withSplit?C.grn:C.gld)+"12",border:"1px solid "+(withSplit?C.grn:C.gld)+"35",borderRadius:10,marginBottom:10}}>
@@ -1418,8 +1442,11 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
       </div>
       {withSplit&&<div style={{background:C.grn+"10",border:"1px solid "+C.grn+"30",borderRadius:10,padding:12,marginBottom:12}}>
         <label style={{fontSize:11,color:C.tm,marginBottom:4,display:"block"}}>{t("Monto por persona (MXN)")}</label>
-        <input type="number" value={splitPerPerson} onChange={e=>setSplitPerPerson(e.target.value)} placeholder={String(suggestedSplitAmount||500)} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px",fontSize:15,color:C.grn,fontWeight:700,outline:"none"}}/>
-        <div style={{fontSize:10,color:C.tm,marginTop:4}}>{t("Sugerido")}: ${fm(suggestedSplitAmount)} ({t("total de reserva entre party_size")})</div>
+        <input type="number" value={splitPerPerson} onChange={e=>{setUserEditedSplit(true);setSplitPerPerson(e.target.value);}} placeholder={String(suggestedSplitAmount||500)} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px",fontSize:15,color:C.grn,fontWeight:700,outline:"none"}}/>
+        <div style={{fontSize:10,color:C.tm,marginTop:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          <span>{t("Sugerido")}: ${fm(suggestedSplitAmount)} ({t("total entre")} {finalPartySize} {t("jugadores")})</span>
+          {userEditedSplit&&Number(splitPerPerson||0)!==suggestedSplitAmount&&<button onClick={()=>{setUserEditedSplit(false);setSplitPerPerson(String(suggestedSplitAmount||""));}} style={{background:"transparent",border:"1px solid "+C.bd,color:C.grn,fontSize:10,padding:"2px 6px",borderRadius:4,cursor:"pointer"}}>{t("Restaurar sugerido")}</button>}
+        </div>
         {selFr.length>0&&creatorAmount>0&&<div style={{marginTop:10,fontSize:12,color:C.ts,lineHeight:1.7}}>
           <div>{t("Tu parte")}: <strong style={{color:C.txt}}>${fm(creatorAmount)}</strong></div>
           <div>{selFr.length} {t("invitado(s)")}: <strong style={{color:C.txt}}>${fm(creatorAmount)} c/u</strong></div>
@@ -1927,9 +1954,12 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 }
 
 // v19.30: Componente Collapsible reutilizable. Estilo "frosted card" con header tappable,
-// v19.31: InvitePlayersSheet ahora invoca edge function expand-and-invite (atómico:
-// expande party_size + crea participants + cobra delta + rollback en falla). El cap es 4
-// jugadores totales; la reserva se expande sola cuando hay menos espacios que invitados.
+// v19.32: InvitePlayersSheet ahora invoca edge function expand-and-invite (atómico: expande
+// party_size + crea participants + cobra delta + rollback en falla). El cap es 4 jugadores
+// totales; la reserva se expande sola cuando hay menos espacios que invitados. Sugerido del
+// split es reactivo a finalPartySize, input auto-sincronizado con flag userEditedSplit para
+// respetar override manual, payload usa creatorAmount (lo que el usuario ve = lo que se manda).
+// Banner con 3 estados: espacios libres (verde) / al tope expandible (dorado) / cap absoluto (rojo).
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
