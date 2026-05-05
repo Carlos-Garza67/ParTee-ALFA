@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.25">
+<meta name="version" content="19.26">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1815,7 +1815,13 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
   const[processing,setProcessing]=useState(false);
   const newSize=Math.max(1,booking.party_size-rejectedParts.length);
   const pricePerPlayer=Number(booking.total_cost||0)/Math.max(booking.party_size,1);
-  const refundAmount=Math.round(pricePerPlayer*rejectedParts.length*100)/100;
+  // v19.26: Refund = suma de split_amount de participants removidos que YA PAGARON
+  // (en split, los rechazados nunca pagan, así que refund típicamente es $0)
+  const paidRemovedAmt=rejectedParts.reduce((sum,p)=>{
+    const wasPaid=p.payment_status==="paid"||p.payment_status==="paid_held"||p.payment_status==="paid_transferred";
+    return sum+(wasPaid?Number(p.split_amount||0):0);
+  },0);
+  const refundAmount=Math.round(paidRemovedAmt*100)/100;
   const confirm=async()=>{
     setProcessing(true);
     try{
@@ -1832,7 +1838,7 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
         fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:booking.id,partial_amount:data.refund_amount,reason:"size_reduced"})}).catch(()=>{});
       }
       fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"booking_size_reduced",data:{booking_code:data.booking_code,course_name:data.course_name,course_id:data.course_id,date:data.booking_date,time:data.booking_time?.slice(0,5),old_party_size:data.old_party_size,new_party_size:data.new_party_size,refund_amount:data.refund_amount}})}).catch(()=>{});
-      window.__toast?.(t("Reserva reducida a")+" "+newSize+" jugadores · Refund $"+fm(data.refund_amount),"success");
+      window.__toast?.(data.refund_amount>0?t("Reserva reducida a")+" "+newSize+" jugadores · Refund $"+fm(data.refund_amount):t("Reserva reducida a")+" "+newSize+" jugadores · Espacios liberados","success");
       onReduced?.();
     }catch(e){
       const msg=e.message||"";
@@ -1845,9 +1851,9 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
     <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}><span style={{color:C.ts}}>{t("Jugadores")}</span><span style={{color:C.txt,fontWeight:700}}>{booking.party_size} → {newSize}</span></div>
       <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}><span style={{color:C.ts}}>{t("Total")}</span><span style={{color:C.txt,fontWeight:700}}>${fm(booking.total_cost)} → ${fm(booking.total_cost-refundAmount)}</span></div>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:14,paddingTop:8,borderTop:"1px dashed "+C.bd}}><span style={{color:C.grn,fontWeight:700}}>{t("Refund")}</span><span style={{color:C.grn,fontWeight:800}}>${fm(refundAmount)} MXN</span></div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:14,paddingTop:8,borderTop:"1px dashed "+C.bd}}><span style={{color:refundAmount>0?C.grn:C.tm,fontWeight:700}}>{t("Refund")}</span><span style={{color:refundAmount>0?C.grn:C.tm,fontWeight:800}}>${fm(refundAmount)} MXN</span></div>
     </div>
-    <p style={{fontSize:11,color:C.ts,lineHeight:1.6,marginBottom:12}}>{t("Se liberarán los espacios, se procesará el refund a tu tarjeta y se notificará al campo del cambio.")}</p>
+    <p style={{fontSize:11,color:C.ts,lineHeight:1.6,marginBottom:12}}>{refundAmount>0?t("Se liberarán los espacios, se procesará el refund a tu tarjeta y se notificará al campo del cambio."):t("Se liberarán los espacios y se notificará al campo. No hay refund porque los jugadores removidos no completaron el pago.")}</p>
     <div style={{display:"flex",gap:8}}>
       <button onClick={confirm} disabled={processing} style={{flex:2,padding:12,background:processing?C.cd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:processing?"default":"pointer"}}>{processing?t("Procesando..."):t("Confirmar")}</button>
       <button onClick={onClose} disabled={processing} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>
