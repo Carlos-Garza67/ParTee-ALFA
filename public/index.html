@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.27">
+<meta name="version" content="19.28">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1850,8 +1850,7 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
   return<div className="modal-bg" onClick={processing?null:onClose}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:420}}>
     <h3 style={{color:C.txt,fontSize:16,fontWeight:800,margin:"0 0 10px"}}>{t("Reducir reserva")}</h3>
     <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:12}}>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}><span style={{color:C.ts}}>{t("Jugadores")}</span><span style={{color:C.txt,fontWeight:700}}>{booking.party_size} → {newSize}</span></div>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.ts}}>{t("Total")}</span><span style={{color:C.txt,fontWeight:700}}>${fm(booking.total_cost)} → ${fm(booking.total_cost-refundAmount)}</span></div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.ts}}>{t("Jugadores")}</span><span style={{color:C.txt,fontWeight:700}}>{booking.party_size} → {newSize}</span></div>
     </div>
     <p style={{fontSize:11,color:C.ts,lineHeight:1.6,marginBottom:12}}>{t("Se liberarán los espacios y se notificará al campo. Solo los jugadores que aún no pagaron pueden ser removidos sin cargo.")}</p>
     <div style={{display:"flex",gap:8}}>
