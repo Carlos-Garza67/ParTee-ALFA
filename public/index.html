@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.14">
+<meta name="version" content="19.15">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -230,10 +230,10 @@ select,select option{background:var(--card-bg,#12121f);color:var(--txt,#f4f4f6)}
 /* Press feedback for interactive cards */
 .pressable{transition:transform .15s ease,box-shadow .15s ease;cursor:pointer}
 .pressable:active{transform:scale(.97)!important;box-shadow:none!important}
-.chip-f{font-size:11px;display:inline-flex;align-items:center;justify-content:center;gap:4px;flex-shrink:0}
+.chip-f{font-size:11px;display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:0}
 .chip-f svg{vertical-align:middle;flex-shrink:0}
-.chips-row{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:0 12px}
-@media(max-width:374px){.chip-f{font-size:10px}}
+.chips-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px;padding:0 12px}
+@media(max-width:374px){.chip-f{font-size:10px} .chips-row{grid-template-columns:repeat(auto-fit,minmax(75px,1fr))}}
 @media(min-width:375px) and (max-width:413px){.chip-f{font-size:11px}}
 
 /* Smooth number counter */
