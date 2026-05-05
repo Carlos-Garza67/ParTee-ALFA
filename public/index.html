@@ -1325,9 +1325,16 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   // El cap real ya no es booking.party_size sino 4 (max party_size global): la edge function expand-and-invite
   // expande la reserva automáticamente si seleccionas más invitados que espacios actuales.
   const[activeCount,setActiveCount]=useState(0);
+  // v19.37 fix UX: además del count, traemos los user_ids activos para poder
+  // deshabilitar la selección de amigos que ya son participantes (status invited/accepted).
+  // El backend ya rechaza con 'already_participant' pero la UI debe filtrarlo antes.
+  const[activeUserIds,setActiveUserIds]=useState([]);
   useEffect(()=>{
     if(!booking?.id)return;
-    sb.from("booking_participants").select("id",{count:"exact",head:true}).eq("booking_id",booking.id).eq("is_creator_proportional",false).in("status",["invited","accepted","accepted_pending_payment"]).then(({count})=>setActiveCount(count||0));
+    sb.from("booking_participants").select("user_id,status").eq("booking_id",booking.id).eq("is_creator_proportional",false).in("status",["invited","accepted","accepted_pending_payment"]).then(({data})=>{
+      setActiveCount(data?.length||0);
+      setActiveUserIds((data||[]).map(p=>p.user_id).filter(Boolean));
+    });
   },[booking?.id]);
   const totalActiveCount=activeCount+1; // creator + non-creator activos
   const maxInvitable=Math.max(0,4-totalActiveCount); // hasta 4 jugadores totales
@@ -1351,6 +1358,9 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   },[suggestedSplitAmount,withSplit,userEditedSplit]);
   const toggleFr=fid=>setSelFr(prev=>{
     if(prev.includes(fid))return prev.filter(x=>x!==fid);
+    // v19.37: defensa contra selección de amigos ya participantes (la UI los muestra
+    // deshabilitados pero esto blinda el state contra cualquier ruta de programa).
+    if(activeUserIds.includes(fid))return prev;
     if(prev.length>=maxInvitable){
       window.__toast?.(t("Máximo 4 jugadores por reserva"),"warn");
       return prev;
@@ -1464,9 +1474,13 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
       <div style={{maxHeight:240,overflowY:"auto",marginBottom:12}}>
         {visibleFriends.length===0?<p style={{color:C.tm,fontSize:12,textAlign:"center",padding:16}}>{friends.length===0?t("Agrega amigos primero"):t("Sin resultados")}</p>:visibleFriends.map(f=>{
           const sel=selFr.includes(f.friend?.id);
-          return<div key={f.friend?.id} onClick={()=>toggleFr(f.friend?.id)} style={{display:"flex",alignItems:"center",gap:10,background:sel?C.grn+"12":C.bg,border:"1px solid "+(sel?C.grn:C.bd),borderRadius:10,padding:10,marginBottom:5,cursor:"pointer"}}>
-            <div style={{width:28,height:28,borderRadius:14,background:sel?C.grn+"30":C.pri,display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sel?ic("check",14,C.grn):ic("user",14,C.tm)}}/>
+          // v19.37 fix UX: si el amigo ya es participante activo (invited/accepted), se muestra
+          // pero deshabilitado con badge claro. Backend igualmente bloquea con 'already_participant'.
+          const isAlreadyIn=activeUserIds.includes(f.friend?.id);
+          return<div key={f.friend?.id} onClick={isAlreadyIn?undefined:()=>toggleFr(f.friend?.id)} style={{display:"flex",alignItems:"center",gap:10,background:isAlreadyIn?C.cd:(sel?C.grn+"12":C.bg),border:"1px solid "+(isAlreadyIn?C.bd:(sel?C.grn:C.bd)),borderRadius:10,padding:10,marginBottom:5,cursor:isAlreadyIn?"not-allowed":"pointer",opacity:isAlreadyIn?.55:1}}>
+            <div style={{width:28,height:28,borderRadius:14,background:isAlreadyIn?C.tm+"30":(sel?C.grn+"30":C.pri),display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:isAlreadyIn?ic("check",14,C.tm):(sel?ic("check",14,C.grn):ic("user",14,C.tm))}}/>
             <div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{f.friend?.full_name}</div>{f.friend?.nickname&&<div style={{color:C.gld,fontSize:10}}>"{f.friend.nickname}"</div>}</div>
+            {isAlreadyIn&&<span style={{fontSize:10,fontWeight:700,color:C.tm,background:C.bd,padding:"3px 8px",borderRadius:6,textTransform:"uppercase",letterSpacing:".03em"}}>{t("Ya en la reserva")}</span>}
           </div>;
         })}
       </div>
@@ -1993,6 +2007,21 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 // Frontend cambios:
 //   • canShare y canMakeSpaceToInvite: removida la condición `social_mode!=='grupo'`.
 //   • sendInvites: removido el toast obsoleto que detectaba "grupo"/"versus" en mensajes de error.
+// v19.37 (refund-aware trigger + UX fix invite sheet):
+// Backend:
+//   • Trigger auto_reduce_booking_on_participant_inactive ahora distingue 3 ramas de refund:
+//     compartir → refund al creator (slot_price); split + invitee había pagado → marca
+//     pending_payouts.refunded + participant.payment_status='refund_pending' + dispatcha;
+//     split + invitee NO pagó → solo accounting, sin refund inapropiado.
+//   • Nuevo valor 'refund_pending' en booking_participants.payment_status (CHECK actualizado).
+//     Estado intermedio: el slot se liberó pero el Stripe refund aún no se procesa.
+//   • TODO v19.38: build process-partial-refund Edge fn que lea participants con
+//     payment_status='refund_pending' y procese stripe.refunds.create.
+// Frontend:
+//   • InvitePlayersSheet ahora carga activeUserIds (no solo el count) y muestra los amigos
+//     ya participantes deshabilitados con badge "YA EN LA RESERVA". toggleFr defendido contra
+//     state corruption. Solo bloquea statuses activos (invited/accepted) — rejected sigue
+//     siendo seleccionable para re-invitación.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
