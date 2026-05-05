@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.28">
+<meta name="version" content="19.30">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1914,7 +1914,21 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
   </div></div>;
 }
 
-function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);
+// v19.30: Componente Collapsible reutilizable. Estilo "frosted card" con header tappable,
+// flecha animada y body con borde superior. Estado controlado externamente para persistir
+// entre renders del padre.
+function Collapsible({title,icon,open,onToggle,children}){
+  return<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
+    <button onClick={onToggle} style={{width:"100%",padding:"13px 14px",background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:10,color:C.txt,textAlign:"left"}}>
+      {icon&&<span dangerouslySetInnerHTML={{__html:ic(icon,15,C.pri)}}/>}
+      <span style={{flex:1,fontSize:13,fontWeight:700,letterSpacing:"-0.01em"}}>{title}</span>
+      <span style={{fontSize:11,color:C.tm,transition:"transform 0.2s",display:"inline-block",transform:open?"rotate(180deg)":"none"}} dangerouslySetInnerHTML={{__html:ic("down",12,C.tm)}}/>
+    </button>
+    {open&&<div style={{padding:"10px 14px 14px",borderTop:"1px solid "+C.bd}}>{children}</div>}
+  </div>;
+}
+
+function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);const[detailsOpen,setDetailsOpen]=useState(false);const[layoutOpen,setLayoutOpen]=useState(false);
   useEffect(()=>{if(s){load();loadInvitations();sb.from("friends").select("*,friend:friend_id(id,full_name,player_id,nickname)").eq("user_id",s.user.id).eq("status","accepted").then(({data})=>setFriends(data||[]))}},[s,tab]);
   useEffect(()=>{const h=e=>{if(e.detail?.tab)setTab(e.detail.tab)};window.addEventListener("partee:subtab",h);return()=>window.removeEventListener("partee:subtab",h)},[]);
   // v18.0.5: UNION de bookings del usuario (como creator) + bookings donde soy participante aceptado.
@@ -1940,131 +1954,180 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
   useRealtime(s?.user?.id?"booking_participants":null,s?.user?.id?("user_id=eq."+s.user.id):null,()=>loadInvitations(),[s?.user?.id]);
   const openDetail=async(b)=>{setDetail(b);if(b.course_id){const{data:c}=await sb.from("golf_courses").select("*").eq("id",b.course_id).single();setCourse(c)}else{setCourse({course_name:b.course_name,city:"",state:"",photo_urls:[]})}const{data:ex}=await sb.from("booking_extras").select("*,extras_catalog(name,icon,price)").eq("booking_id",b.id);setBkExtras(ex||[])};
   const stc={confirmed:{l:t("Confirmada"),c:C.grn},cancelled:{l:t("Cancelada"),c:C.acc},pending:{l:t("Pendiente"),c:C.gld}};
+  // v19.29: increaseBooking extraído al scope del componente para unificar con "Invitar a jugar".
+  // Param autoOpenInvite=true salta el confirm y abre el modal de invitar al terminar.
+  const increaseBooking=async(autoOpenInvite=false)=>{
+    if(!detail)return;
+    const newSize=(detail.party_size||1)+1;
+    const go=async()=>{
+      setBusyAction(true);
+      try{
+        const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+        const r=await fetch(SB_FN_URL+"/increase-booking-size",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id,new_party_size:newSize})});
+        const d=await r.json();
+        if(!r.ok||d?.success===false){window.__toast?.(d?.error||"No se pudo aumentar","error");return}
+        window.__toast?.(t("Reserva aumentada a")+" "+newSize+" "+(newSize===1?t("jugador"):t("jugadores")),"success");
+        const{data:fresh}=await sb.from("bookings").select("*").eq("id",detail.id).single();
+        if(fresh){setDetail(fresh);if(autoOpenInvite)setInvModal(fresh);}
+        load();
+      }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
+      finally{setBusyAction(false)}
+    };
+    if(autoOpenInvite){go();return}
+    const msg=t("¿Aumentar a ")+newSize+t(" jugador(es)?\n\nSe reserva 1 cupo adicional al campo. Si el pago excede lo ya pagado, se te cobrará la diferencia.");
+    if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
+  };
+  // v19.30: convertPartida también extraída a nivel componente (para Opción C colapsable)
+  const convertPartida=()=>{
+    if(!detail)return;
+    window.__createMatchFromBooking={id:detail.id,course_id:detail.course_id,course_name:detail.course_name,date:detail.booking_date,time:detail.booking_time};
+    window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));
+    window.__navigate?.("tab:2");
+  };
   if(detail){return<div className="fi" style={{paddingBottom:20}}>
     <div style={{display:"flex",alignItems:"center",gap:10,padding:16,paddingBottom:0}}><button onClick={()=>{setDetail(null);setCourse(null)}} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/><h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>{t("Detalle de Reserva")}</h2></div>
     {course&&<div style={{padding:16}}><div style={{borderRadius:16,overflow:"hidden",border:"1px solid "+(C.glassBd||C.bd),marginBottom:14,boxShadow:C.shCard||"none"}}><Img imgs={course.photo_urls} h={130}/><div style={{background:C.glass||C.w04,padding:14}}><h3 style={{fontSize:15,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>{course.course_name}</h3><p style={{fontSize:12,color:C.ts,marginTop:2}}>{course.city}, {course.state}</p></div></div>
       {detail.booking_code&&<div style={{background:`linear-gradient(135deg,${C.grn},#00cec9)`,borderRadius:14,padding:14,marginBottom:14,textAlign:"center"}}><div style={{fontSize:9,textTransform:"uppercase",letterSpacing:2,color:"rgba(255,255,255,.6)",marginBottom:2}}>{t("CÓDIGO DE RESERVACIÓN")}</div><div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:3,..._s.mono}}>{detail.booking_code}</div></div>}
-      <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14,..._s.grid2lg}}>
-        <div><div style={{fontSize:10,color:C.tm}}>{t("Fecha").toUpperCase()}</div><div style={{fontSize:13,color:C.txt,fontWeight:700,marginTop:3}}>{detail.booking_date}</div></div>
-        <div><div style={{fontSize:10,color:C.tm}}>{t("Hora").toUpperCase()}</div><div style={{fontSize:13,color:C.txt,fontWeight:700,marginTop:3}}>{detail.booking_time?.slice(0,5)}{course?.timezone&&<span style={{fontSize:9,color:C.tm,fontWeight:500,marginLeft:4}}>({tzShort(course.timezone)})</span>}</div>{(()=>{const ctz=course?.timezone||"America/Mexico_City";const utz=p?.timezone||detectTz();if(ctz===utz)return null;const localTime=fmtInTz(detail.booking_date,detail.booking_time||"00:00",ctz,utz);return<div style={{fontSize:10,color:C.gld,marginTop:2}}>{localTime} tu hora ({tzShort(utz)})</div>})()}</div>
-        <div><div style={{fontSize:10,color:C.tm}}>{t("Jugadores").toUpperCase()}</div><div style={{fontSize:13,color:C.txt,fontWeight:700,marginTop:3}}>{detail.party_size}</div></div>
-        <div><div style={{fontSize:10,color:C.tm}}>{t("Estado").toUpperCase()}</div><div style={{fontSize:13,color:stc[detail.status]?.c||C.gld,fontWeight:700,marginTop:3}}>{stc[detail.status]?.l||detail.status}</div></div>
-      </div>
-      <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}>
-        {bkExtras.length>0&&bkExtras.map((ex,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}><span style={{color:C.ts}}>{ex.extras_catalog?.icon} {ex.extras_catalog?.name} x{ex.quantity}</span><span style={{color:C.txt}}>${fm(ex.total_price)}</span></div>)}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid "+C.bd,paddingTop:10,marginTop:bkExtras.length>0?8:0}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>{t("Total")}</span><div style={{textAlign:"right"}}><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(detail.total_cost)} MXN</span>{detail.total_cost>0&&detail.stripe_payment_intent&&<div style={{display:"inline-flex",alignItems:"center",gap:4,marginLeft:8,padding:"2px 8px",borderRadius:6,background:(detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"?C.acc:detail.payment_status==="no_show_fee"?C.acc:C.gld)+"15"}}><span dangerouslySetInnerHTML={{__html:ic(detail.payment_status==="paid"?"check":detail.payment_status==="refunded"?"undo":detail.payment_status==="no_show_fee"?"alert":"clock",10,detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"?C.acc:detail.payment_status==="no_show_fee"?C.acc:C.gld)}}/><span style={{fontSize:10,fontWeight:700,color:detail.payment_status==="paid"?C.grn:detail.payment_status==="refunded"||detail.payment_status==="no_show_fee"?C.acc:C.gld}}>{detail.payment_status==="paid"?t("Cobrado"):detail.payment_status==="refunded"?t("Reembolsado"):detail.payment_status==="no_show_fee"?"No-Show Fee":t("Pendiente")}</span></div>}</div></div>
-      </div>
-      {/* v18.0.7 — Modalidad: sección unificada con badges payment_mode/social_mode + countdown + acciones contextuales */}
+      {/* v19.30 (Opción C): Card combinado — fecha/hora/estado + chips de jugadores/modalidad/total */}
       {(()=>{
-        const teeDateTime=new Date((detail.booking_date||"")+"T"+((detail.booking_time||"12:00").slice(0,5)));
-        const hoursToTee=(teeDateTime.getTime()-Date.now())/3600000;
-        const isOver24h=hoursToTee>24;
-        const isIn2to24=hoursToTee>2&&hoursToTee<=24;
-        const hasGroupMode=detail.social_mode==="grupo";
-        const hasPartidaMode=detail.social_mode==="partida";
-        const hasPaymentMode=detail.payment_mode&&detail.payment_mode!=="solo";
-        // v18.0.11 — todos los CTA de Modalidad son solo para el creator del booking
-        const isCreator=detail.user_id===s?.user?.id;
-        // canIncrease también requiere payment_mode != 'solo' (RPC lo rechaza si no, ver Bug B2)
-        const canIncrease=isCreator&&isOver24h&&detail.status==="confirmed"&&(detail.party_size||1)<4&&detail.payment_mode!=="solo";
-        const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type==="campo";
-        const canConvertPartida=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasPartidaMode&&!hasGroupMode&&course?.facility_type==="campo";
-        const pendingParts=detail._pendingCount||0; // best-effort: la banner en ParticipantsSection ya lo calcula con DB
-        const showCloseListHere=isIn2to24&&detail.status==="confirmed"; // banner principal vive en ParticipantsSection
-        const increaseBooking=async()=>{
-          const newSize=(detail.party_size||1)+1;
-          const go=async()=>{
-            setBusyAction(true);
-            try{
-              const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
-              const r=await fetch(SB_FN_URL+"/increase-booking-size",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id,new_party_size:newSize})});
-              const d=await r.json();
-              if(!r.ok||d?.success===false){window.__toast?.(d?.error||"No se pudo aumentar","error");return}
-              window.__toast?.(t("Reserva aumentada a")+" "+newSize+" jugadores","success");
-              const{data:fresh}=await sb.from("bookings").select("*").eq("id",detail.id).single();
-              if(fresh)setDetail(fresh);
-              load();
-            }catch(e){window.__toast?.("Error: "+(e.message||"network"),"error")}
-            finally{setBusyAction(false)}
-          };
-          const msg=t("¿Aumentar a ")+newSize+t(" jugador(es)?\n\nSe reserva 1 cupo adicional al campo. Si el pago excede lo ya pagado, se te cobrará la diferencia.");
-          if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
-        };
-        const convertPartida=async()=>{
-          // v18.0.15 — sin confirm dialog redundante. Lleva directo al wizard.
-          // El compromiso (INSERT tournament) y la advertencia de no-reversibilidad ocurren
-          // en el último paso del wizard. Si el usuario abandona, el booking queda intacto.
-          window.__createMatchFromBooking={
-            id:detail.id,
-            course_id:detail.course_id,
-            course_name:detail.course_name,
-            date:detail.booking_date,
-            time:detail.booking_time
-          };
-          window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));
-          window.__navigate?.("tab:2");
-        };
-        if(!hasPaymentMode&&!detail.social_mode&&!detail.auto_close_at&&!canIncrease&&!canConvertGroup&&!canConvertPartida)return null;
+        const dt=new Date((detail.booking_date||"")+"T12:00:00");
+        const dayN=DN[dt.getDay()]||"";
+        const time=detail.booking_time?.slice(0,5)||"";
+        const tz=course?.timezone?tzShort(course.timezone):"";
+        const ctz=course?.timezone||"America/Mexico_City";
+        const utz=p?.timezone||detectTz();
+        const showLocal=ctz!==utz;
+        const localTime=showLocal?fmtInTz(detail.booking_date,detail.booking_time||"00:00",ctz,utz):null;
+        const stat=stc[detail.status]||{l:detail.status,c:C.gld};
+        const payMode=detail.payment_mode;
+        const payChip=payMode==="split"?{l:t("Split"),c:C.grn}:payMode==="compartir"?{l:t("Compartir"),c:C.gld}:null;
+        const socChip=detail.social_mode==="grupo"?{l:t("Grupo"),c:C.pri}:detail.social_mode==="partida"?{l:t("Partida"),c:C.gld}:null;
+        const ps=detail.payment_status;
+        const showTotal=detail.total_cost>0&&detail.stripe_payment_intent;
+        const totalC=ps==="paid"?C.grn:ps==="refunded"||ps==="no_show_fee"?C.acc:C.gld;
+        const totalLbl=ps==="paid"?t("Cobrado"):ps==="refunded"?t("Reembolsado"):ps==="no_show_fee"?"No-Show":t("Pendiente");
         return<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <span dangerouslySetInnerHTML={{__html:ic("settings",15,C.pri)}}/>
-            <h4 style={{fontSize:13,fontWeight:800,color:C.txt,margin:0,letterSpacing:"-0.01em"}}>{t("Modalidad")}</h4>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:showLocal?4:10,flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:C.txt}}>
+              <span dangerouslySetInnerHTML={{__html:ic("calendar",14,C.tm)}}/>
+              <span>{dayN} {dt.getDate()} {dt.toLocaleDateString("es-MX",{month:"short"}).replace(".","")} · {time}</span>
+              {tz&&<span style={{fontSize:10,color:C.tm,fontWeight:500}}>({tz})</span>}
+            </div>
+            <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:10,background:stat.c+"20",border:"1px solid "+stat.c+"40",fontSize:11,fontWeight:700,color:stat.c}}>{stat.l}</span>
           </div>
-          {(hasPaymentMode||(detail.social_mode&&detail.social_mode!=="none"))&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-            {detail.payment_mode==="compartir"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.gld+"18",border:"1px solid "+C.gld+"40"}}><span dangerouslySetInnerHTML={{__html:ic("users",13,C.gld)}}/><span style={{fontSize:11,fontWeight:700,color:C.gld}}>{t("Compartir")}</span><span style={{fontSize:10,color:C.tm}}>· {t("Tú pagas")}</span></div>}
-            {detail.payment_mode==="split"&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.grn+"18",border:"1px solid "+C.grn+"40"}}><span dangerouslySetInnerHTML={{__html:ic("dollar",13,C.grn)}}/><span style={{fontSize:11,fontWeight:700,color:C.grn}}>{t("Split")}</span><span style={{fontSize:10,color:C.tm}}>· {t("Cada quien paga")}</span></div>}
-            {hasPartidaMode&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.gld+"18",border:"1px solid "+C.gld+"40"}}><span dangerouslySetInnerHTML={{__html:ic("trophy",13,C.gld)}}/><span style={{fontSize:11,fontWeight:700,color:C.gld}}>{t("Partida")}</span></div>}
-            {hasGroupMode&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.pri+"35",border:"1px solid "+C.pri+"55"}}><span dangerouslySetInnerHTML={{__html:ic("group",13,"#fff")}}/><span style={{fontSize:11,fontWeight:700,color:C.txt}}>{t("Grupo")}</span></div>}
-          </div>}
-          {detail.auto_close_at&&!detail.auto_close_executed_at&&detail.status==="confirmed"&&(()=>{
-            const closeAt=new Date(detail.auto_close_at);const now=new Date();const diffMs=closeAt-now;
-            if(diffMs<=0)return null;
-            const hours=Math.floor(diffMs/3600000);const mins=Math.floor((diffMs%3600000)/60000);
-            const isClose=hours<6;
-            return<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:(isClose?C.acc:C.gld)+"12",border:"1px solid "+(isClose?C.acc:C.gld)+"30",borderRadius:10,marginBottom:10}}>
-              <span dangerouslySetInnerHTML={{__html:ic("clock",15,isClose?C.acc:C.gld)}}/>
-              <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:700,color:isClose?C.acc:C.gld}}>{isClose?t("Cierre inminente"):t("Cierre automático de lista")}</div>
-                <div style={{fontSize:10,color:C.tm,marginTop:1}}>{t("En")} {hours>0?hours+"h ":""}{mins}m · {t("Los invitados sin respuesta serán removidos")}</div>
-              </div>
-            </div>;
-          })()}
-          {(canIncrease||canConvertGroup||canConvertPartida)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {canIncrease&&<button onClick={increaseBooking} disabled={busyAction} style={{flex:"1 1 auto",minWidth:110,padding:"8px 10px",background:C.grn+"12",border:"1px solid "+C.grn+"35",borderRadius:10,color:C.grn,fontSize:11,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("plus",12,C.grn)}}/>{t("Aumentar")}</button>}
-            {canConvertGroup&&<button onClick={()=>setConvertModal(detail)} disabled={busyAction} style={{flex:"1 1 auto",minWidth:130,padding:"8px 10px",background:C.pri+"35",border:"1px solid "+C.pri+"55",borderRadius:10,color:C.txt,fontSize:11,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("group",12,"#fff")}}/>{t("Convertir a Grupo")}</button>}
-            {canConvertPartida&&<button onClick={convertPartida} disabled={busyAction} style={{flex:"1 1 auto",minWidth:130,padding:"8px 10px",background:C.gld+"12",border:"1px solid "+C.gld+"35",borderRadius:10,color:C.gld,fontSize:11,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("trophy",12,C.gld)}}/>{t("Convertir a Partida")}</button>}
-          </div>}
-          {isIn2to24&&detail.status==="confirmed"&&<div style={{fontSize:10,color:C.tm,marginTop:8,fontStyle:"italic"}}>{t("A menos de 24h: el botón 'Cerrar lista ahora' aparece en la sección Jugadores si hay pendientes.")}</div>}
+          {showLocal&&<div style={{fontSize:10,color:C.gld,marginBottom:10,marginLeft:22}}>{localTime} {t("tu hora")} ({tzShort(utz)})</div>}
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:C.bd+"60",fontSize:11,fontWeight:600,color:C.ts}}>
+              <span dangerouslySetInnerHTML={{__html:ic("users",11,C.tm)}}/>{detail.party_size} {detail.party_size===1?t("jugador"):t("jugadores")}
+            </span>
+            {payChip&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:payChip.c+"18",border:"1px solid "+payChip.c+"35",fontSize:11,fontWeight:700,color:payChip.c}}>{payChip.l}</span>}
+            {socChip&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:socChip.c+"30",border:"1px solid "+socChip.c+"50",fontSize:11,fontWeight:700,color:socChip.c===C.pri?C.txt:socChip.c}}>{socChip.l}</span>}
+            {showTotal&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:totalC+"18",border:"1px solid "+totalC+"35",fontSize:11,fontWeight:700,color:totalC,marginLeft:"auto"}}>${fm(detail.total_cost)} · {totalLbl}</span>}
+            {!showTotal&&detail.total_cost>0&&<span style={{display:"inline-flex",alignItems:"center",padding:"3px 8px",borderRadius:10,background:C.bd+"60",fontSize:11,fontWeight:700,color:C.txt,marginLeft:"auto"}}>${fm(detail.total_cost)}</span>}
+          </div>
         </div>;
       })()}
-      <ParticipantsSection booking={detail} isOwner={detail.user_id===s?.user?.id} onChanged={()=>{load();loadInvitations();}}/>
-      {(()=>{const courseTz=course?.timezone||"America/Mexico_City";const teeUTC=teeToUTC(detail.booking_date,detail.booking_time||"00:00:00",courseTz);const hoursUntil=(teeUTC.getTime()-Date.now())/3600000;const isPast=hoursUntil<=0;const isIn24h=!isPast&&hoursUntil<24;const isSettled=detail.settlement_status==="settled";const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;const canCancel=detail.user_id===s?.user?.id&&detail.status==="confirmed"&&!isPast&&!isSettled;const canShare=detail.user_id===s?.user?.id&&detail.status==="confirmed"&&!isPast&&detail.party_size>=2&&detail.social_mode!=="grupo";return<>{!isPast&&detail.status==="confirmed"&&<CalBtn course={detail.course_name} date={detail.booking_date} time={detail.booking_time}/>}{course&&<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+(isIn24h&&!isFree?C.acc+"40":C.bd),marginBottom:14}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span dangerouslySetInnerHTML={{__html:ic("clock",16,isIn24h&&!isFree?C.acc:isPast?C.tm:C.grn)}}/><h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Política de Cancelación")}</h4></div><div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>La hora del tee time ya pasó. No es posible cancelar ni reembolsar.</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> Estás a menos de 24h del tee time.</p><p style={{margin:"0 0 4px",color:C.acc}}>Si cancelas, <strong>no habrá reembolso</strong>. El pago queda como <strong>No-Show Fee</strong> (${fm(detail.total_cost)} MXN).</p><p style={{margin:0,color:C.ts}}>Tu espacio se liberará para otros jugadores.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de 24h antes</strong> — cancelación con reembolso completo.</p><p style={{margin:"0 0 4px"}}><strong style={{color:C.acc}}>Menos de 24h</strong> — sin reembolso (No-Show Fee). Se libera el espacio.</p><p style={{margin:0}}><strong style={{color:C.tm}}>Después del tee time</strong> — no se puede cancelar ni reembolsar.</p></>}</div></div>}
-      {canCancel&&<div style={{display:"flex",gap:8,marginBottom:14}}>
-        {canShare?<button onClick={()=>setInvModal(detail)} style={{flex:1,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("users",14,"#fff")}}/>{t("Invitar a jugar")}</button>
-        :detail.party_size<2?<div style={{flex:1,padding:10,background:C.cd,borderRadius:10,textAlign:"center",opacity:.4}}><span style={{fontSize:12,color:C.tm}}>{t("Invitar disponible desde 2 jugadores")}</span></div>:null}
-        <button onClick={async()=>{
-          // v19.24: Calcular monto realmente cobrado (en split sin amigos, total_cost != lo cobrado)
-          let actualPaid=Number(detail.total_cost)||0;
-          if(detail.payment_mode==="split"&&detail.stripe_payment_intent&&detail.payment_status==="paid"){
-            try{
-              const{data:parts}=await sb.from("booking_participants").select("split_amount,payment_status").eq("booking_id",detail.id).in("payment_status",["paid","paid_transferred"]);
-              if(parts&&parts.length>0){
-                const sum=parts.reduce((s,p)=>s+(Number(p.split_amount)||0),0);
-                if(sum>0)actualPaid=sum;
+      {/* v19.30 (Opción C): Banner cierre automático SOLO en últimas 12h. Antes se mostraba siempre. */}
+      {detail.auto_close_at&&!detail.auto_close_executed_at&&detail.status==="confirmed"&&(()=>{
+        const closeAt=new Date(detail.auto_close_at);const now=new Date();const diffMs=closeAt-now;
+        if(diffMs<=0)return null;
+        const hours=Math.floor(diffMs/3600000);const mins=Math.floor((diffMs%3600000)/60000);
+        if(hours>=12)return null; // v19.30: solo aparece urgente
+        const isClose=hours<6;
+        return<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:(isClose?C.acc:C.gld)+"12",border:"1px solid "+(isClose?C.acc:C.gld)+"30",borderRadius:10,marginBottom:14}}>
+          <span dangerouslySetInnerHTML={{__html:ic("clock",15,isClose?C.acc:C.gld)}}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:isClose?C.acc:C.gld}}>{isClose?t("Cierre inminente"):t("Cierre automático de lista")}</div>
+            <div style={{fontSize:10,color:C.tm,marginTop:1}}>{t("En")} {hours>0?hours+"h ":""}{mins}m · {t("Los invitados sin respuesta serán removidos")}</div>
+          </div>
+        </div>;
+      })()}
+      <ParticipantsSection booking={detail} isOwner={detail.user_id===s?.user?.id} onChanged={async()=>{load();loadInvitations();const{data:fresh}=await sb.from("bookings").select("*,golf_courses(facility_type)").eq("id",detail.id).single();if(fresh)setDetail(fresh);}}/>
+      {/* v19.30 (Opción C): CTAs primero, luego dos colapsables (Detalles y políticas / Layout del campo) */}
+      {(()=>{
+        const courseTz=course?.timezone||"America/Mexico_City";
+        const teeUTC=teeToUTC(detail.booking_date,detail.booking_time||"00:00:00",courseTz);
+        const hoursUntil=(teeUTC.getTime()-Date.now())/3600000;
+        const isPast=hoursUntil<=0;
+        const isIn24h=!isPast&&hoursUntil<24;
+        const isOver24h=hoursUntil>24;
+        const isSettled=detail.settlement_status==="settled";
+        const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;
+        const isCreator=detail.user_id===s?.user?.id;
+        const canCancel=isCreator&&detail.status==="confirmed"&&!isPast&&!isSettled;
+        const canShare=isCreator&&detail.status==="confirmed"&&!isPast&&detail.party_size>=2&&detail.social_mode!=="grupo";
+        const canMakeSpaceToInvite=isCreator&&detail.status==="confirmed"&&hoursUntil>24&&(detail.party_size||1)<2&&detail.payment_mode!=="solo"&&detail.social_mode!=="grupo";
+        const hasGroupMode=detail.social_mode==="grupo";
+        const hasPartidaMode=detail.social_mode==="partida";
+        const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type==="campo";
+        const canConvertPartida=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasPartidaMode&&!hasGroupMode&&course?.facility_type==="campo";
+        const policyJSX=course?<div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>La hora del tee time ya pasó. No es posible cancelar ni reembolsar.</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> Estás a menos de 24h del tee time.</p><p style={{margin:"0 0 4px",color:C.acc}}>Si cancelas, <strong>no habrá reembolso</strong>. El pago queda como <strong>No-Show Fee</strong> (${fm(detail.total_cost)} MXN).</p><p style={{margin:0,color:C.ts}}>Tu espacio se liberará para otros jugadores.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de 24h antes</strong> — cancelación con reembolso completo.</p><p style={{margin:"0 0 4px"}}><strong style={{color:C.acc}}>Menos de 24h</strong> — sin reembolso (No-Show Fee). Se libera el espacio.</p><p style={{margin:0}}><strong style={{color:C.tm}}>Después del tee time</strong> — no se puede cancelar ni reembolsar.</p></>}</div>:null;
+        return<>
+          {/* CTAs primarios */}
+          {canCancel&&<div style={{display:"flex",gap:8,marginBottom:14}}>
+            {(canShare||canMakeSpaceToInvite)?<button onClick={canShare?()=>setInvModal(detail):()=>increaseBooking(true)} disabled={busyAction} style={{flex:1,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("users",14,"#fff")}}/>{t("Invitar a jugar")}</button>:null}
+            <button onClick={async()=>{
+              // v19.24: Calcular monto realmente cobrado (en split sin amigos, total_cost != lo cobrado)
+              let actualPaid=Number(detail.total_cost)||0;
+              if(detail.payment_mode==="split"&&detail.stripe_payment_intent&&detail.payment_status==="paid"){
+                try{
+                  const{data:parts}=await sb.from("booking_participants").select("split_amount,payment_status").eq("booking_id",detail.id).in("payment_status",["paid","paid_transferred"]);
+                  if(parts&&parts.length>0){
+                    const sum=parts.reduce((s,p)=>s+(Number(p.split_amount)||0),0);
+                    if(sum>0)actualPaid=sum;
+                  }
+                }catch(e){console.warn("[cancel] failed to compute actual paid",e)}
               }
-            }catch(e){console.warn("[cancel] failed to compute actual paid",e)}
-          }
-          const go=async()=>{
-          let refundAmt=0;
-          if(detail.stripe_payment_intent&&detail.payment_status==="paid"){
-            try{const r=await fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id})});const d=await r.json();if(d.success){refundAmt=d.type==="no_show"?0:(d.refund_amount||0);const msg=d.type==="no_show"?"Cancelada · No-Show Fee $"+fm(d.fee_amount)+" MXN · Espacio liberado":"Cancelada · Reembolso completo $"+fm(d.refund_amount)+" MXN";window.__toast?.(msg,d.type==="no_show"?"info":"success")}else{window.__toast?.(d.error||"Error","error");return}}catch(e){window.__toast?.("Error: "+e.message,"error");return}
-          }else{await sb.from("bookings").update({status:"cancelled",cancelled_at:new Date().toISOString()}).eq("id",detail.id);try{await sb.rpc("release_slot",{p_course_name:detail.course_name,p_slot_date:detail.booking_date,p_slot_time:detail.booking_time,p_party_size:detail.party_size||1})}catch(e){}window.__toast?.("Reserva cancelada","success")}
-          // v18.3.30: dispatch notificaciones via notify-booking-change v2 (3 canales: in-app + push + email). Fire-and-forget; reemplaza al legacy send-email booking_cancelled.
-          fetch(SB_FN_URL+"/notify-booking-change",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id,change_type:"cancel",change_data:{refund_amount:refundAmt}})}).catch(e=>{console.warn("[cancel] notify dispatch failed (non-fatal):",e)});
-          setDetail(null);load()};const confirmMsg=isFree?t("¿Cancelar esta reserva? No hay cargos."):isIn24h?t("¿Cancelar en ")+detail.course_name+"?\n\n"+t("No habrá reembolso. El pago de $")+fm(actualPaid)+t(" MXN queda como No-Show Fee.\nTu espacio se liberará."):t("¿Cancelar esta reserva?")+"\n"+t("Reembolso completo: $")+fm(actualPaid)+" MXN.";if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go()}} style={{padding:"10px 14px",background:isIn24h&&!isFree?C.acc+"30":C.acc+"20",border:isIn24h&&!isFree?"1px solid "+C.acc+"40":"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{isIn24h&&!isFree?t("Cancelar (No-Show Fee)"):t("Cancelar")}</button>
-      </div>}</>})()}
-      {detail.status==="confirmed"&&new Date(detail.booking_date)<new Date()&&<ReviewPrompt bookingId={detail.id} courseId={detail.course_id} courseName={detail.course_name}/>}
-      <HoleLayout courseId={detail.course_id}/>
+              const go=async()=>{
+              let refundAmt=0;
+              if(detail.stripe_payment_intent&&detail.payment_status==="paid"){
+                try{const r=await fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id})});const d=await r.json();if(d.success){refundAmt=d.type==="no_show"?0:(d.refund_amount||0);const msg=d.type==="no_show"?"Cancelada · No-Show Fee $"+fm(d.fee_amount)+" MXN · Espacio liberado":"Cancelada · Reembolso completo $"+fm(d.refund_amount)+" MXN";window.__toast?.(msg,d.type==="no_show"?"info":"success")}else{window.__toast?.(d.error||"Error","error");return}}catch(e){window.__toast?.("Error: "+e.message,"error");return}
+              }else{await sb.from("bookings").update({status:"cancelled",cancelled_at:new Date().toISOString()}).eq("id",detail.id);try{await sb.rpc("release_slot",{p_course_name:detail.course_name,p_slot_date:detail.booking_date,p_slot_time:detail.booking_time,p_party_size:detail.party_size||1})}catch(e){}window.__toast?.("Reserva cancelada","success")}
+              fetch(SB_FN_URL+"/notify-booking-change",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id,change_type:"cancel",change_data:{refund_amount:refundAmt}})}).catch(e=>{console.warn("[cancel] notify dispatch failed (non-fatal):",e)});
+              setDetail(null);load()};const confirmMsg=isFree?t("¿Cancelar esta reserva? No hay cargos."):isIn24h?t("¿Cancelar en ")+detail.course_name+"?\n\n"+t("No habrá reembolso. El pago de $")+fm(actualPaid)+t(" MXN queda como No-Show Fee.\nTu espacio se liberará."):t("¿Cancelar esta reserva?")+"\n"+t("Reembolso completo: $")+fm(actualPaid)+" MXN.";if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go()}} style={{padding:"10px 14px",background:isIn24h&&!isFree?C.acc+"30":C.acc+"20",border:isIn24h&&!isFree?"1px solid "+C.acc+"40":"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{isIn24h&&!isFree?t("Cancelar (No-Show Fee)"):t("Cancelar")}</button>
+          </div>}
+
+          {/* Colapsable 1: Detalles y políticas */}
+          <Collapsible title={t("Detalles y políticas")} icon="settings" open={detailsOpen} onToggle={()=>setDetailsOpen(!detailsOpen)}>
+            {/* Extras */}
+            {bkExtras.length>0&&<div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1,marginBottom:6}}>{t("EXTRAS")}</div>
+              {bkExtras.map((ex,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{color:C.ts}}>{ex.extras_catalog?.icon} {ex.extras_catalog?.name} x{ex.quantity}</span><span style={{color:C.txt,fontWeight:600}}>${fm(ex.total_price)}</span></div>)}
+            </div>}
+            {/* Total breakdown */}
+            {detail.total_cost>0&&<div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1,marginBottom:6}}>{t("DESGLOSE DE PAGO")}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13}}>
+                <span style={{color:C.ts}}>{t("Total")}</span>
+                <span style={{color:C.grn,fontWeight:700}}>${fm(detail.total_cost)} MXN</span>
+              </div>
+            </div>}
+            {/* Convertir */}
+            {(canConvertGroup||canConvertPartida)&&<div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1,marginBottom:6}}>{t("CONVERTIR MODALIDAD")}</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {canConvertGroup&&<button onClick={()=>setConvertModal(detail)} disabled={busyAction} style={{flex:"1 1 auto",minWidth:130,padding:"8px 10px",background:C.pri+"35",border:"1px solid "+C.pri+"55",borderRadius:10,color:C.txt,fontSize:11,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("group",12,"#fff")}}/>{t("Convertir a Grupo")}</button>}
+                {canConvertPartida&&<button onClick={convertPartida} disabled={busyAction} style={{flex:"1 1 auto",minWidth:130,padding:"8px 10px",background:C.gld+"12",border:"1px solid "+C.gld+"35",borderRadius:10,color:C.gld,fontSize:11,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("trophy",12,C.gld)}}/>{t("Convertir a Partida")}</button>}
+              </div>
+            </div>}
+            {/* Calendario */}
+            {!isPast&&detail.status==="confirmed"&&<div style={{marginBottom:14}}><CalBtn course={detail.course_name} date={detail.booking_date} time={detail.booking_time}/></div>}
+            {/* Política */}
+            {policyJSX&&<div>
+              <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1,marginBottom:6,display:"flex",alignItems:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("clock",11,isIn24h&&!isFree?C.acc:C.tm)}}/>{t("POLÍTICA DE CANCELACIÓN")}</div>
+              {policyJSX}
+            </div>}
+          </Collapsible>
+
+          {/* Colapsable 2: Layout del campo */}
+          <Collapsible title={t("Layout del campo")} icon="map" open={layoutOpen} onToggle={()=>setLayoutOpen(!layoutOpen)}>
+            <HoleLayout courseId={detail.course_id}/>
+          </Collapsible>
+
+          {/* Review prompt sigue al final si aplica */}
+          {detail.status==="confirmed"&&new Date(detail.booking_date)<new Date()&&<ReviewPrompt bookingId={detail.id} courseId={detail.course_id} courseName={detail.course_name}/>}
+        </>;
+      })()}
     </div>}
     {invModal&&<InvitePlayersSheet booking={invModal} friends={friends} onClose={()=>setInvModal(null)} onInvited={()=>{load();loadInvitations();}}/>}
     {convertModal&&<ConvertToGroupModal booking={convertModal} onClose={()=>setConvertModal(null)} onConverted={async()=>{const{data:fresh}=await sb.from("bookings").select("*").eq("id",convertModal.id).single();if(fresh)setDetail(fresh);load();}}/>}
