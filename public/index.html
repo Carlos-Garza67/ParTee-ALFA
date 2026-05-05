@@ -1393,7 +1393,7 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
         else if(String(msg).includes("auto_close"))window.__toast?.(t("Esta reserva ya se cerró automáticamente"),"error");
         else if(String(msg).includes("not_creator"))window.__toast?.(t("Solo el anfitrión puede invitar"),"error");
         else if(String(msg).includes("party_size_exceeded")||String(msg).includes("max_party"))window.__toast?.(t("No caben más jugadores en esta reserva"),"error");
-        else if(String(msg).includes("grupo")||String(msg).includes("versus"))window.__toast?.(t("Las reservas tipo grupo usan Versus, no invitaciones directas"),"error");
+        // v19.36: se eliminó el toast específico de "grupo"/"versus" — la edge function expand-and-invite (v3) ya permite invitaciones manuales con grupo activo.
         else window.__toast?.("Error: "+msg,"error");
         return;
       }
@@ -1982,6 +1982,17 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 // el realtime listener de booking_participants también llama onChanged() que re-fetcha el
 // booking entero. Backend (trigger) y frontend (realtime) ahora cierran el modelo de bloques
 // en ambas direcciones de forma reactiva.
+// v19.36 (Model A · pure blocks · elasticidad real): la reserva ahora puede crecer y decrecer
+// de forma simétrica e indefinida hasta T-24h. Backend cambios:
+//   • activate_group_mode: ya NO pre-reserva slots. Solo marca social_mode='grupo' y crea
+//     match_request. El target del grupo es solo intent — los slots se reservan al join.
+//   • join_public_group: ahora llama expand_slot_capacity(+1) con rollback (shrink_slot_capacity(-1))
+//     si la transacción falla. Mantiene el invariant slot.booked_count = sum(active party_sizes).
+//   • expand-and-invite v3: removido el guard `social_mode='grupo' → reject`. Invitaciones
+//     manuales y joins via Versus coexisten libremente. El cap de 4 lo aplica el backend.
+// Frontend cambios:
+//   • canShare y canMakeSpaceToInvite: removida la condición `social_mode!=='grupo'`.
+//   • sendInvites: removido el toast obsoleto que detectaba "grupo"/"versus" en mensajes de error.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -2122,8 +2133,11 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;
         const isCreator=detail.user_id===s?.user?.id;
         const canCancel=isCreator&&detail.status==="confirmed"&&!isPast&&!isSettled;
-        const canShare=isCreator&&detail.status==="confirmed"&&!isPast&&detail.party_size>=2&&detail.social_mode!=="grupo";
-        const canMakeSpaceToInvite=isCreator&&detail.status==="confirmed"&&hoursUntil>24&&(detail.party_size||1)<2&&detail.payment_mode!=="solo"&&detail.social_mode!=="grupo";
+        // v19.36 (Model A): se removió el guard `social_mode!=='grupo'` de canShare y canMakeSpaceToInvite.
+        // Ahora invitaciones manuales y joins via Versus coexisten — ambos terminan en expand_slot_capacity(+1).
+        // El cap de 4 jugadores lo aplica el backend (increase_booking_size + expand_slot_capacity).
+        const canShare=isCreator&&detail.status==="confirmed"&&!isPast&&detail.party_size>=2;
+        const canMakeSpaceToInvite=isCreator&&detail.status==="confirmed"&&hoursUntil>24&&(detail.party_size||1)<2&&detail.payment_mode!=="solo";
         const hasGroupMode=detail.social_mode==="grupo";
         const hasPartidaMode=detail.social_mode==="partida";
         const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type==="campo";
