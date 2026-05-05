@@ -1337,11 +1337,13 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   // v19.32: isFullAtCurrent indica que la reserva ya está al tope con su party_size actual,
   // pero todavía puede expandirse hasta 4. Lo usa el banner para mostrar mensajería precisa.
   const isFullAtCurrent=totalActiveCount>=(booking?.party_size||1)&&maxInvitable>0;
-  // v19.32: suggestedSplitAmount es REACTIVO a finalPartySize. Si el usuario selecciona más amigos
-  // y la reserva se expande (ej: party_size 2→4), el sugerido se recalcula automáticamente
-  // ($1600/4=$400) en vez de quedarse en $1600/2=$800. Esto resuelve la inconsistencia donde
-  // el UI mostraba $800 pero el backend recibía un valor distinto.
-  const suggestedSplitAmount=booking?.total_cost&&finalPartySize?Math.round((Number(booking.total_cost)/finalPartySize)*100)/100:0;
+  // v19.33: suggestedSplitAmount = costo por slot ORIGINAL del booking. Es FIJO y no cambia
+  // al seleccionar más invitados. Cada nuevo invitado paga el costo de un slot completo
+  // (no una redistribución), porque al expandir la reserva el campo de golf cobra otro slot.
+  // Modelo: total_post_expansión = total_original + (nuevos_invitados × costo_por_slot)
+  // Ejemplo: booking 2 jugadores, $1600 total → costo/slot=$800. Invitar 1 más → reserva
+  // se expande a 3, total nuevo=$2400, el invitado nuevo paga $800 (igual que el resto).
+  const suggestedSplitAmount=booking?.total_cost&&booking?.party_size?Math.round((Number(booking.total_cost)/Number(booking.party_size))*100)/100:0;
   // v19.32: Auto-sync del input al sugerido. Solo cuando el usuario NO ha editado manualmente
   // (userEditedSplit=false). Si edita, respetamos su valor sin sobreescribir.
   useEffect(()=>{
@@ -1356,7 +1358,6 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
     return[...prev,fid];
   });
   const creatorAmount=withSplit?Number(splitPerPerson||0):0;
-  const totalSplit=withSplit?creatorAmount*(selFr.length+1):0;
   const visibleFriends=friends.filter(f=>{
     if(!search.trim())return true;
     const q=search.toLowerCase();
@@ -1426,9 +1427,9 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
                 :t("Puedes invitar hasta")+" "+maxInvitable+" "+(maxInvitable===1?t("amigo"):t("amigos"))
           }</div>
           <div style={{fontSize:11,color:C.ts,marginTop:2}}>{t("Actualmente")}: {totalActiveCount}/{booking.party_size} ({t("tú")} + {activeCount}) · {t("Cap")}: 4 {t("jugadores")}</div>
-          {willExpand&&selFr.length>0&&<div style={{fontSize:11,color:C.gld,marginTop:4,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+          {willExpand&&selFr.length>0&&<div style={{fontSize:11,color:C.gld,marginTop:4,fontWeight:600,display:"flex",alignItems:"flex-start",gap:5}}>
             <span>↑</span>
-            <span>{t("Se expandirá a")} {finalPartySize} {t("jugadores")}{withSplit?" · "+t("Split nuevo")+": $"+fm(suggestedSplitAmount)+" "+t("c/u"):""}</span>
+            <span>{t("Se expandirá a")} {finalPartySize} {t("jugadores")}{withSplit?" · "+t("cada nuevo paga")+" $"+fm(suggestedSplitAmount):""}</span>
           </div>}
         </div>
       </div>
@@ -1441,17 +1442,20 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
         <span style={{fontSize:10,color:C.tm,fontWeight:600}} dangerouslySetInnerHTML={{__html:ic("lock",11,C.tm)}}/>
       </div>
       {withSplit&&<div style={{background:C.grn+"10",border:"1px solid "+C.grn+"30",borderRadius:10,padding:12,marginBottom:12}}>
-        <label style={{fontSize:11,color:C.tm,marginBottom:4,display:"block"}}>{t("Monto por persona (MXN)")}</label>
+        <label style={{fontSize:11,color:C.tm,marginBottom:4,display:"block"}}>{t("Monto por nuevo invitado (MXN)")}</label>
         <input type="number" value={splitPerPerson} onChange={e=>{setUserEditedSplit(true);setSplitPerPerson(e.target.value);}} placeholder={String(suggestedSplitAmount||500)} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px",fontSize:15,color:C.grn,fontWeight:700,outline:"none"}}/>
         <div style={{fontSize:10,color:C.tm,marginTop:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-          <span>{t("Sugerido")}: ${fm(suggestedSplitAmount)} ({t("total entre")} {finalPartySize} {t("jugadores")})</span>
+          <span>{t("Sugerido")}: ${fm(suggestedSplitAmount)} ({t("costo por slot — igual a lo que pagaste tú")})</span>
           {userEditedSplit&&Number(splitPerPerson||0)!==suggestedSplitAmount&&<button onClick={()=>{setUserEditedSplit(false);setSplitPerPerson(String(suggestedSplitAmount||""));}} style={{background:"transparent",border:"1px solid "+C.bd,color:C.grn,fontSize:10,padding:"2px 6px",borderRadius:4,cursor:"pointer"}}>{t("Restaurar sugerido")}</button>}
         </div>
+        {/* v19.33: Resumen reformulado al modelo cost-per-slot. Solo muestra lo que se va a
+             COBRAR a los nuevos invitados (los originales ya pagaron su slot, no se redistribuye).
+             Cuando hay expansión, muestra también el nuevo total de la reserva. */}
         {selFr.length>0&&creatorAmount>0&&<div style={{marginTop:10,fontSize:12,color:C.ts,lineHeight:1.7}}>
-          <div>{t("Tu parte")}: <strong style={{color:C.txt}}>${fm(creatorAmount)}</strong></div>
-          <div>{selFr.length} {t("invitado(s)")}: <strong style={{color:C.txt}}>${fm(creatorAmount)} c/u</strong></div>
-          <div style={{marginTop:4,paddingTop:6,borderTop:"1px dashed "+C.bd,fontWeight:700,color:C.grn}}>{t("Total reparto")}: ${fm(totalSplit)}</div>
-          {totalSplit>Number(booking.total_cost)&&<div style={{color:C.acc,fontSize:11,marginTop:3}}>⚠ {t("Supera el total de la reserva")} (${fm(booking.total_cost)})</div>}
+          <div>{t("Cada nuevo invitado paga")}: <strong style={{color:C.txt}}>${fm(creatorAmount)}</strong></div>
+          <div>{selFr.length} {selFr.length===1?t("invitado nuevo"):t("invitados nuevos")} → <strong style={{color:C.txt}}>${fm(creatorAmount*selFr.length)}</strong> {t("a recolectar")}</div>
+          {willExpand&&<div style={{marginTop:4,paddingTop:6,borderTop:"1px dashed "+C.bd,fontWeight:700,color:C.grn}}>{t("Costo total expandido")}: ${fm(Number(booking.total_cost)+creatorAmount*selFr.length)} <span style={{color:C.tm,fontWeight:400,fontSize:11}}>({t("era")} ${fm(booking.total_cost)})</span></div>}
+          {creatorAmount!==suggestedSplitAmount&&<div style={{color:C.gld,fontSize:11,marginTop:3}}>ℹ {t("Cobras un monto distinto al costo por slot estándar")}</div>}
         </div>}
       </div>}
       <div style={{marginBottom:8}}>
@@ -1960,6 +1964,11 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 // split es reactivo a finalPartySize, input auto-sincronizado con flag userEditedSplit para
 // respetar override manual, payload usa creatorAmount (lo que el usuario ve = lo que se manda).
 // Banner con 3 estados: espacios libres (verde) / al tope expandible (dorado) / cap absoluto (rojo).
+// v19.33: Fix de modelo de costos — el sugerido ahora es el COSTO POR SLOT FIJO
+// (total_original/party_size_original), no una redistribución. Cada nuevo invitado paga un
+// slot completo porque al expandir, el campo de golf cobra otro slot adicional. Bloque de
+// resumen reformulado: muestra "cada nuevo paga $X", "total a recolectar de invitados",
+// y el "costo total expandido" cuando aplique. Eliminado totalSplit (variable obsoleta).
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
