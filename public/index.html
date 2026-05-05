@@ -1490,7 +1490,10 @@ function ParticipantsSection({booking,isOwner,onChanged}){
     setParts(data||[]);setLd(false);
   };
   useEffect(()=>{if(booking?.id)load()},[booking?.id,booking?.updated_at]);// v19.34: depende también de updated_at para refetch garantizado cuando expand-and-invite muta el booking, en caso de que el realtime listener falle.
-  useRealtime(booking?.id?"booking_participants":null,booking?.id?("booking_id=eq."+booking.id):null,()=>load(),[booking?.id]);
+  // v19.35: el realtime también dispara onChanged() para refrescar el booking entero (party_size, total_cost)
+  // cuando un invitee rechaza/cancela y el trigger backend auto-reduce dispara. Sin esto, el detail
+  // se quedaba con datos viejos hasta que el dueño hacía otra acción.
+  useRealtime(booking?.id?"booking_participants":null,booking?.id?("booking_id=eq."+booking.id):null,()=>{load();onChanged?.();},[booking?.id]);
   const statusBadge=(p)=>{
     if(p.is_creator_proportional)return{l:t("Anfitrión"),c:C.grn,bg:C.grn+"20"};
     if(p.status==="accepted"&&p.coverage_source==="creator_absorbed")return{l:"Cubierto por anfitrión",c:C.gld,bg:C.gld+"20"};
@@ -1973,6 +1976,12 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 // no re-fetchaba `detail`, dejando la pantalla con party_size/total_cost viejos a pesar
 // de que el backend sí actualizó. Ahora el callback hace setDetail(fresh) y ParticipantsSection
 // re-fetcha cuando cambia booking.updated_at (no solo cuando cambia booking.id).
+// v19.35: Cierre del bug de UI stale por la otra ruta — cuando un invitee rechaza/cancela
+// (acción que NO viene del creador), el trigger backend auto_size_down ya reduce
+// party_size/total_cost en BD, pero el detail screen del creador no se entera. Ahora
+// el realtime listener de booking_participants también llama onChanged() que re-fetcha el
+// booking entero. Backend (trigger) y frontend (realtime) ahora cierran el modelo de bloques
+// en ambas direcciones de forma reactiva.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
