@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.13">
+<meta name="version" content="19.14">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -230,9 +230,9 @@ select,select option{background:var(--card-bg,#12121f);color:var(--txt,#f4f4f6)}
 /* Press feedback for interactive cards */
 .pressable{transition:transform .15s ease,box-shadow .15s ease;cursor:pointer}
 .pressable:active{transform:scale(.97)!important;box-shadow:none!important}
-.chip-f{font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:4px;flex-shrink:0}
+.chip-f{font-size:11px;display:inline-flex;align-items:center;justify-content:center;gap:4px;flex-shrink:0}
 .chip-f svg{vertical-align:middle;flex-shrink:0}
-.chips-row{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:0 16px}
+.chips-row{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:0 12px}
 @media(max-width:374px){.chip-f{font-size:10px}}
 @media(min-width:375px) and (max-width:413px){.chip-f{font-size:11px}}
 
@@ -880,7 +880,7 @@ function Home({onPick}){const{s,p}=useA();const[cs,setCs]=useState([]);const[ld,
   const near=geoOn?nearbyList.map(n=>{const c=cs.find(x=>x.id===n.id);return c?{...enrichC(c),_dist:n.distance_km}:null}).filter(c=>c&&mF(c)):[];
   useAS(fR,feat);useAS(oR,ofC);useAS(aR,all);useAS(nR,near);
   const Card=({c,w,h})=>{const ft=c.facility_type||"campo";return<div onClick={()=>onPick(c)} style={{width:w,background:C.glass||"rgba(255,255,255,.04)",borderRadius:16,overflow:"hidden",border:"1px solid "+(C.glassBd||"rgba(255,255,255,.06)"),cursor:"pointer",position:"relative",boxShadow:C.shCard||"0 2px 8px rgba(0,0,0,.3)"}}><Img imgs={c.photo_urls} h={h}/><button onClick={ev=>tF(c.id,ev)} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,.5)",border:"none",borderRadius:14,width:28,height:28,cursor:"pointer",fontSize:13,color:favIds.has(c.id)?C.acc:C.txt,display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,backdropFilter:"blur(8px)"}}><span dangerouslySetInnerHTML={{__html:favIds.has(c.id)?ic("heart",14,C.acc):ic("heart",14,"#fff")}}/></button><div style={{position:"absolute",top:8,left:8,display:"flex",gap:4,zIndex:2}}><span style={{background:TC[c.course_type],color:"#fff",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6}}>{TL[c.course_type]}</span>{ft!=="campo"&&<span style={{background:"#6c5ce7",color:"#fff",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6}} dangerouslySetInnerHTML={{__html:FT[ft]+" "+FL[ft]}}/>}</div><div style={{padding:10}}><h4 style={{margin:0,fontSize:w>250?15:13,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.course_name}</h4><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:C.ts,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>{c.city}{c._dist!=null?" · "+(c._dist<1?Math.round(c._dist*1000)+" m":Math.round(c._dist)+" km"):""}</span><span style={{fontSize:12,fontWeight:800,color:C.grn,marginLeft:6,flexShrink:0}}>${fm(c.green_fee_min)}</span></div>{c._avg>0&&<div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}><span style={{color:C.gld,fontSize:11}} dangerouslySetInnerHTML={{__html:ic("star",11,C.gld)}}/><span style={{fontSize:11,fontWeight:700,color:C.gld}}>{c._avg}</span><span style={{fontSize:10,color:C.tm}}>({c._cnt})</span></div>}{ft==="plataforma"&&c.stations_count>0&&<div style={{fontSize:10,color:"#6c5ce7",marginTop:3}}>{c.stations_count} bahias</div>}{ft==="simulador"&&<div style={{fontSize:10,color:"#6c5ce7",marginTop:3}}>{c.cabins_count||0} cabinas{c.simulator_brand?" · "+c.simulator_brand:""}</div>}</div></div>};
-  const chipS=(a)=>({padding:"7px 12px",borderRadius:22,border:a?"none":"1px solid "+C.bd,background:a?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.cd,color:a?"#fff":C.ts,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",boxShadow:a?(C.shAcc||"none"):(C.shCard||"none")});
+  const chipS=(a)=>({padding:"6px 10px",borderRadius:20,border:a?"none":"1px solid "+C.bd,background:a?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.cd,color:a?"#fff":C.ts,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",boxShadow:a?(C.shAcc||"none"):(C.shCard||"none")});
   if(ld)return<div style={{display:"flex",flexDirection:"column",gap:16,padding:20}}><div style={{display:"flex",gap:14}}><CardSkeleton/><CardSkeleton/></div><Skeleton w="40%" h={20}/><div style={{display:"flex",gap:14}}><CardSkeleton/><CardSkeleton/><CardSkeleton/></div></div>;
   return<div style={{paddingTop:12,paddingBottom:8}}>
     <div style={{background:C.heroGrad||"transparent",padding:"0 20px"}}><div style={{..._s.flexB,paddingBottom:12}}><ParteeMark size={22} color={C.txt}/><div style={{display:"flex",gap:7,alignItems:"center"}}><NotifBell/></div></div><div style={{paddingBottom:14}}><div style={{fontSize:12,color:C.ts,fontWeight:500}}>{greet()}</div><div style={{fontSize:24,fontWeight:800,color:C.txt,letterSpacing:"-0.03em",lineHeight:1.2,marginTop:2}}>{p?.nickname||p?.full_name?.split(" ")[0]||""} &#128075;</div></div></div>
