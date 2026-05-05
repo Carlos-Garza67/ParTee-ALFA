@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.22">
+<meta name="version" content="19.23">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1116,6 +1116,8 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     // ==== Path 2 (n>1): usa StripePayment modal + RPC atomico en onSuccess ====
     if(n>1){
       if(appliedPromo){window.__toast?.(t("Los códigos promocionales aún no aplican a reservas con varios jugadores"),"warn");return}
+      // v19.23 — Validar que split tenga al menos 1 amigo invitado
+      if(paymentMode==="split"&&selectedFriends.length===0){window.__toast?.(t("Para Split necesitas invitar al menos a 1 amigo"),"warn");return}
       const chargeAmount=paymentMode==="split"?Math.round((gT/n)*100)/100:grand;
       setPayData({amount:chargeAmount,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n,isPathTwo:true,totalCost:gT,extras:Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0)});
       return;
@@ -1173,6 +1175,10 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
           <div style={{fontSize:17,fontWeight:800,color:C.grn}}>${fm(Math.round((gT/n)*100)/100)} MXN</div>
           <div style={{fontSize:10,color:C.tm,marginTop:2}}>{t("Cada invitado pagará el mismo monto al aceptar")}</div>
         </div>}
+        {paymentMode==="split"&&selectedFriends.length===0&&<div style={{marginTop:8,padding:"8px 10px",background:C.acc+"15",borderRadius:8,border:"1px solid "+C.acc+"40",display:"flex",alignItems:"center",gap:8}}>
+          <span dangerouslySetInnerHTML={{__html:ic("alert",14,C.acc)}}/>
+          <span style={{fontSize:11,color:C.acc,fontWeight:600}}>{t("Para Split necesitas invitar al menos a 1 amigo")}</span>
+        </div>}
         {paymentMode==="compartir"&&<div style={{marginTop:10,padding:10,background:C.bg,borderRadius:8,border:"1px solid "+C.bd}}>
           <div style={{fontSize:11,color:C.ts}}>{t("Tú pagas")}</div>
           <div style={{fontSize:17,fontWeight:800,color:C.txt}}>${fm(gT)} MXN</div>
@@ -1182,7 +1188,7 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       <div onClick={()=>setFriendsOpen(!friendsOpen)} style={{..._s.flexB,cursor:"pointer",padding:"10px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginBottom:10}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <span dangerouslySetInnerHTML={{__html:ic("users",15,C.txt)}}/>
-          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Invitar amigos")} {selectedFriends.length>0?<span style={{color:C.grn}}>({selectedFriends.length}/{n-1})</span>:<span style={{color:C.tm,fontWeight:400}}>({t("opcional")})</span>}</span>
+          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Invitar amigos")} {selectedFriends.length>0?<span style={{color:C.grn}}>({selectedFriends.length}/{n-1})</span>:paymentMode==="split"?<span style={{color:C.acc,fontWeight:600}}>({t("requerido")})</span>:<span style={{color:C.tm,fontWeight:400}}>({t("opcional")})</span>}</span>
         </div>
         <span style={{transition:"transform .2s",transform:friendsOpen?"rotate(180deg)":"rotate(0)"}} dangerouslySetInnerHTML={{__html:ic("down",15,C.ts)}}/>
       </div>
