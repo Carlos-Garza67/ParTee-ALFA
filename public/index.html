@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.26">
+<meta name="version" content="19.27">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1838,11 +1838,12 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
         fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:booking.id,partial_amount:data.refund_amount,reason:"size_reduced"})}).catch(()=>{});
       }
       fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"booking_size_reduced",data:{booking_code:data.booking_code,course_name:data.course_name,course_id:data.course_id,date:data.booking_date,time:data.booking_time?.slice(0,5),old_party_size:data.old_party_size,new_party_size:data.new_party_size,refund_amount:data.refund_amount}})}).catch(()=>{});
-      window.__toast?.(data.refund_amount>0?t("Reserva reducida a")+" "+newSize+" jugadores · Refund $"+fm(data.refund_amount):t("Reserva reducida a")+" "+newSize+" jugadores · Espacios liberados","success");
+      window.__toast?.(t("Reserva reducida a")+" "+newSize+" "+(newSize===1?t("jugador"):t("jugadores")),"success");
       onReduced?.();
     }catch(e){
       const msg=e.message||"";
       if(msg.includes("tee_time_too_close"))window.__toast?.("No se puede reducir a <2h del tee time","error");
+      else if(msg.includes("cannot_reduce_with_paid_participants"))window.__toast?.("No se puede reducir incluyendo jugadores que ya pagaron","error");
       else window.__toast?.("Error: "+msg,"error");
     }finally{setProcessing(false)}
   };
@@ -1850,10 +1851,9 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
     <h3 style={{color:C.txt,fontSize:16,fontWeight:800,margin:"0 0 10px"}}>{t("Reducir reserva")}</h3>
     <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}><span style={{color:C.ts}}>{t("Jugadores")}</span><span style={{color:C.txt,fontWeight:700}}>{booking.party_size} → {newSize}</span></div>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}><span style={{color:C.ts}}>{t("Total")}</span><span style={{color:C.txt,fontWeight:700}}>${fm(booking.total_cost)} → ${fm(booking.total_cost-refundAmount)}</span></div>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:14,paddingTop:8,borderTop:"1px dashed "+C.bd}}><span style={{color:refundAmount>0?C.grn:C.tm,fontWeight:700}}>{t("Refund")}</span><span style={{color:refundAmount>0?C.grn:C.tm,fontWeight:800}}>${fm(refundAmount)} MXN</span></div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.ts}}>{t("Total")}</span><span style={{color:C.txt,fontWeight:700}}>${fm(booking.total_cost)} → ${fm(booking.total_cost-refundAmount)}</span></div>
     </div>
-    <p style={{fontSize:11,color:C.ts,lineHeight:1.6,marginBottom:12}}>{refundAmount>0?t("Se liberarán los espacios, se procesará el refund a tu tarjeta y se notificará al campo del cambio."):t("Se liberarán los espacios y se notificará al campo. No hay refund porque los jugadores removidos no completaron el pago.")}</p>
+    <p style={{fontSize:11,color:C.ts,lineHeight:1.6,marginBottom:12}}>{t("Se liberarán los espacios y se notificará al campo. Solo los jugadores que aún no pagaron pueden ser removidos sin cargo.")}</p>
     <div style={{display:"flex",gap:8}}>
       <button onClick={confirm} disabled={processing} style={{flex:2,padding:12,background:processing?C.cd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:processing?"default":"pointer"}}>{processing?t("Procesando..."):t("Confirmar")}</button>
       <button onClick={onClose} disabled={processing} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>
