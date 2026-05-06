@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.41 (invitee UX · leave_booking + visibility)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.42 (movimientos · cargos + refunds parciales en historial)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.41 (invitee UX · leave_booking + visibility)"
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.41">
+<meta name="version" content="19.42">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2099,6 +2099,20 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     Confirmación + toast con monto de refund estimado. Mensaje clarifica reembolso en <10min.
 //   • ParticipantsSection.load: split path según isOwner. Owner usa SELECT directo (RLS lo deja
 //     ver invitados via invited_by=auth.uid()). Invitee usa RPC nueva.
+// v19.42 (movimientos · cargos + refunds parciales en historial · FRONTEND ONLY):
+//   • PaymentAndMovementsSection: queries ampliadas para incluir payment_status IN
+//     ('paid_held','paid_transferred','refund_pending','refunded'). Antes solo capturaba
+//     bookings con state activo, perdiendo todo el ciclo de invitees que cancelaron.
+//   • Lista de movements ahora muestra:
+//     - Lado invitee: el cargo histórico SIEMPRE (si paid_at), + un evento adicional según
+//       payment_status final ('refund_pending' = reembolso en proceso amarillo, 'refunded' =
+//       reembolso completado verde).
+//     - Lado creator: cuando un participante con paid_held/paid_transferred pasó a refunded,
+//       muestra el cobro original (con etiqueta "luego reembolsado al jugador") + un evento
+//       de earning_refund que sale del histórico del creator.
+//   • Saldo "por liquidar" sigue calculándose solo con activos — los refundeados no inflan
+//     el card de pending earnings.
+//   • 2 kinds nuevos: refund_pending (gld+clock) y earning_refund (acc+down).
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -3277,11 +3291,13 @@ function PaymentAndMovementsSection(){
     Promise.all([
       // v18.0.9 — Cobros recibidos: participantes OTROS (no yo) en bookings donde soy creador.
       // El filtro neq("user_id", me) evita que mi propio pago aparezca aquí cuando también soy participante de mi split.
-      sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,paid_at,booking:booking_id(id,course_name,booking_date,user_id,settlement_status,settlement_date)").in("payment_status",["paid_held","paid_transferred"]).neq("user_id",s.user.id).order("created_at",{ascending:false}),
+      // v19.42: incluir refunded/refund_pending también para que el creator vea cuando un invitado canceló y le hicieron refund.
+      sb.from("booking_participants").select("id,booking_id,payment_status,split_amount,created_at,paid_at,refunded_at,booking:booking_id(id,course_name,booking_date,user_id,settlement_status,settlement_date)").in("payment_status",["paid_held","paid_transferred","refund_pending","refunded"]).neq("user_id",s.user.id).order("created_at",{ascending:false}),
       // Cargos: bookings que hice yo (como creador)
       sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
-      // Cargos como participante en split (booking ajeno donde yo pagué)
-      sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,created_at,payment_status,booking:booking_id(id,course_name,booking_date,user_id)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred"]).order("created_at",{ascending:false}).limit(60),
+      // Cargos como participante en split (booking ajeno donde yo pagué).
+      // v19.42: incluir refund_pending y refunded para mostrar el ciclo completo cuando el invitado canceló su parte.
+      sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,refunded_at,created_at,payment_status,booking:booking_id(id,course_name,booking_date,user_id)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred","refund_pending","refunded"]).order("created_at",{ascending:false}).limit(60),
     ]).then(([recvRes,bksRes,partRes])=>{
       if(!alive)return;
       // Solo cobros donde el booking es mío (creador del booking)
@@ -3331,23 +3347,54 @@ function PaymentAndMovementsSection(){
     }
   });
   // Pagos como participante de un split (cargos a mí pero booking ajeno)
+  // v19.42: cuando payment_status es refund_pending o refunded, igual muestra el cargo histórico
+  //   (el invitee SÍ pagó, ese cargo ocurrió y debe aparecer en su historial), y además agrega
+  //   una entrada de refund/refund_pending diferenciada por kind.
   refunds.forEach(p=>{
-    movements.push({
-      id:"split-"+p.id,
-      kind:"charge",
-      date:p.paid_at||p.created_at,
-      amount:Number(p.split_amount||0),
-      title:p.booking?.course_name||"Reserva",
-      sub:t("Tu parte del split")+" · "+(p.booking?.booking_date||""),
-      status:p.payment_status,
-    });
+    const wasPaid=!!p.paid_at;
+    const ps=p.payment_status;
+    if(wasPaid){
+      movements.push({
+        id:"split-"+p.id,
+        kind:"charge",
+        date:p.paid_at||p.created_at,
+        amount:Number(p.split_amount||0),
+        title:p.booking?.course_name||"Reserva",
+        sub:t("Tu parte del split")+" · "+(p.booking?.booking_date||""),
+        status:ps==="paid_held"||ps==="paid_transferred"?ps:"paid",
+      });
+    }
+    if(ps==="refund_pending"){
+      movements.push({
+        id:"refp-"+p.id,
+        kind:"refund_pending",
+        date:p.refunded_at||new Date().toISOString(),
+        amount:Number(p.split_amount||0),
+        title:p.booking?.course_name||"Reserva",
+        sub:t("Reembolso en proceso · llegará en menos de 10 min"),
+        status:"refund_pending",
+      });
+    }else if(ps==="refunded"&&p.refunded_at){
+      movements.push({
+        id:"refd-"+p.id,
+        kind:"refund",
+        date:p.refunded_at,
+        amount:Number(p.split_amount||0),
+        title:p.booking?.course_name||"Reserva",
+        sub:t("Reembolso por salida de reserva"),
+        status:"refunded",
+      });
+    }
   });
   // Cobros recibidos como creador (alguien más me pagó split)
   // Filtramos a los participantes que no soy yo del booking propio
   const creatorEarnings=earnings.filter(e=>e.booking&&e.booking.user_id===s.user.id);
-  // Agrupar por booking para card de saldo
+  // v19.42: separar los activos (cuentan para saldo) de los refundeados (solo aparecen como histórico)
+  const activeEarnings=creatorEarnings.filter(e=>e.payment_status==="paid_held"||e.payment_status==="paid_transferred");
+  const refundedEarnings=creatorEarnings.filter(e=>e.payment_status==="refunded"||e.payment_status==="refund_pending");
+  // Agrupar por booking para card de saldo (solo activos)
   const byBooking=new Map();
-  creatorEarnings.forEach(e=>{
+  activeEarnings.forEach(e=>{
     const bk=e.booking;if(!bk)return;
     if(!byBooking.has(bk.id))byBooking.set(bk.id,{bk,total:0,held:0,transferred:0,items:[]});
     const row=byBooking.get(bk.id);
@@ -3361,26 +3408,66 @@ function PaymentAndMovementsSection(){
   const totalPending=earnGroups.reduce((acc,g)=>acc+g.held,0);
   const totalTransferred=earnGroups.reduce((acc,g)=>acc+g.transferred,0);
   // Sumar cobros como movimientos también
+  // v19.42: incluye todos los cobros recibidos (activos + refundeados). Los refundeados se
+  // marcan con kind especial para que el creator vea "X invitado pagó pero luego canceló".
   creatorEarnings.forEach(e=>{
     if(!e.booking)return;
-    movements.push({
-      id:"earn-"+e.id,
-      kind:e.payment_status==="paid_transferred"?"transfer":"earning",
-      date:e.paid_at||e.created_at,
-      amount:Number(e.split_amount||0),
-      title:e.booking.course_name||"Reserva",
-      sub:e.payment_status==="paid_transferred"?t("Transferido a tu cuenta"):t("Cobro pendiente de transferir"),
-      status:e.payment_status,
-    });
+    const ps=e.payment_status;
+    if(ps==="paid_held"||ps==="paid_transferred"){
+      movements.push({
+        id:"earn-"+e.id,
+        kind:ps==="paid_transferred"?"transfer":"earning",
+        date:e.paid_at||e.created_at,
+        amount:Number(e.split_amount||0),
+        title:e.booking.course_name||"Reserva",
+        sub:ps==="paid_transferred"?t("Transferido a tu cuenta"):t("Cobro pendiente de transferir"),
+        status:ps,
+      });
+    }else if(ps==="refunded"){
+      // Cobro original (histórico) + refund que salió de tu reserva
+      movements.push({
+        id:"earn-"+e.id,
+        kind:"earning",
+        date:e.paid_at||e.created_at,
+        amount:Number(e.split_amount||0),
+        title:e.booking.course_name||"Reserva",
+        sub:t("Cobro recibido (luego reembolsado al jugador)"),
+        status:"paid_then_refunded",
+      });
+      if(e.refunded_at){
+        movements.push({
+          id:"earnref-"+e.id,
+          kind:"earning_refund",
+          date:e.refunded_at,
+          amount:Number(e.split_amount||0),
+          title:e.booking.course_name||"Reserva",
+          sub:t("Reembolso a jugador que salió de la reserva"),
+          status:"refunded",
+        });
+      }
+    }else if(ps==="refund_pending"){
+      movements.push({
+        id:"earn-"+e.id,
+        kind:"earning",
+        date:e.paid_at||e.created_at,
+        amount:Number(e.split_amount||0),
+        title:e.booking.course_name||"Reserva",
+        sub:t("Cobro recibido (reembolso en proceso)"),
+        status:"paid_pending_refund",
+      });
+    }
   });
   // Ordenar cronológicamente desc
   movements.sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
   const visibleMov=showAll?movements:movements.slice(0,15);
   // v18.4.0 Modelo A: startConnect handler eliminado. Connect onboarding ahora vive en panel admin del campo (create-course-connect-account).
+  // v19.42: 2 kinds nuevos — refund_pending (reembolso en tránsito) y earning_refund (refund que salió de mi cobro como creator)
   const movMeta={
     charge:{label:t("Cargo"),color:C.acc,sign:"-",icon:"down"},
-    refund:{label:t("Reembolso"),color:C.ts,sign:"+",icon:"check"},
+    refund:{label:t("Reembolso"),color:C.grn,sign:"+",icon:"check"},
+    refund_pending:{label:t("Reembolso en proceso"),color:C.gld,sign:"+",icon:"clock"},
     earning:{label:t("Cobro"),color:C.gld,sign:"+",icon:"dollar"},
+    earning_refund:{label:t("Reembolso a jugador"),color:C.acc,sign:"-",icon:"down"},
     transfer:{label:t("Transferencia"),color:C.grn,sign:"+",icon:"check"},
   };
   return<div>
