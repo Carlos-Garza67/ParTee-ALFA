@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.52 (UX cleanup · sin warning Reserva individual cuando hay modalidad activa)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.54 (chip calendar · border consistente + solid bg + isolation)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.52 (UX cleanup · sin warning Reserva individu
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.52">
+<meta name="version" content="19.54">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -933,7 +933,7 @@ function Detail({c,onBack,onBook}){const{s,p}=useA();const[slots,setSlots]=useSt
       <div style={{fontSize:10,color:C.tm,marginTop:4}}>{p.valid_from} → {p.valid_until}{p.time_start?" · "+p.time_start+"-"+p.time_end:""}{p.min_players>1?" · Mín "+p.min_players+" jug":""}</div>
     </div>)}</div>}
     <div style={{..._s.flexB,marginBottom:10}}><div style={{display:"flex",alignItems:"center",gap:6}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,margin:0}}>{t("Tee Times")}</h3>{c.timezone&&c.timezone!==(p?.timezone||detectTz())&&<span style={{fontSize:9,color:C.gld,background:C.gld+"15",padding:"2px 6px",borderRadius:5,fontWeight:600}}>Hora {tzShort(c.timezone)}</span>}</div>{!ld&&slots.length>0&&<span className="price-badge" style={{fontSize:11,fontWeight:700,color:C.grn,background:C.grn+"15",padding:"4px 10px",borderRadius:8}}>{slots.length} disponibles · desde ${fm(Math.min(...slots.map(x=>Number(x.price))))}</span>}</div>
-    <div className="scroll-fade" style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:14}}>{n7().map(d=>{const day=new Date(d+"T12:00:00");const a=d===dt;return<button key={d} onClick={()=>setDt(d)} style={{minWidth:54,padding:"8px 10px",borderRadius:10,border:a?"none":"1px solid "+C.bd,background:a?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.cd,cursor:"pointer",textAlign:"center",flexShrink:0}}><div style={{fontSize:10,fontWeight:600,color:a?"rgba(255,255,255,.8)":C.tm}}>{DN[day.getDay()]}</div><div style={{fontSize:15,fontWeight:700,color:a?"#fff":C.txt}}>{day.getDate()}</div></button>})}</div>
+    <div className="scroll-fade" style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:14}}>{n7().map(d=>{const day=new Date(d+"T12:00:00");const a=d===dt;return<button key={d} onClick={()=>setDt(d)} style={{minWidth:54,padding:"8px 10px",borderRadius:10,border:"1px solid "+(a?"transparent":C.bd),background:a?C.acc:C.glass||C.cd,cursor:"pointer",textAlign:"center",flexShrink:0,outline:"none",WebkitTapHighlightColor:"transparent",boxShadow:"none",position:"relative",isolation:"isolate",zIndex:a?2:1,transition:"background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease"}}><div style={{fontSize:10,fontWeight:600,color:a?"rgba(255,255,255,.85)":C.tm}}>{DN[day.getDay()]}</div><div style={{fontSize:15,fontWeight:700,color:a?"#fff":C.txt}}>{day.getDate()}</div></button>})}</div>
     {ld?<div style={{padding:16}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60}/><Skeleton w="80%" h={16}/></div>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}>{t("No hay tee times")}</div>:groupSlots()}
     
     {friendsHere.length>0&&<div style={{marginTop:16,marginBottom:6}}><div style={{fontSize:12,fontWeight:700,color:C.ts,marginBottom:6}}>👥 Amigos que jugaron aquí</div><div style={{display:"flex",gap:-4,alignItems:"center"}}>{friendsHere.slice(0,5).map((f,i)=><div key={f.id} style={{width:30,height:30,borderRadius:15,border:"2px solid "+C.bg,marginLeft:i>0?-8:0,overflow:"hidden",background:C.grn+"20",display:"flex",alignItems:"center",justifyContent:"center",zIndex:5-i}} title={f.nickname||f.full_name}>{f.avatar_url?<img src={f.avatar_url} style={{width:30,height:30,borderRadius:15,objectFit:"cover"}}/>:<span style={{fontSize:11}} dangerouslySetInnerHTML={{__html:ic("user",12,C.grn)}}/>}</div>)}{friendsHere.length>5&&<span style={{fontSize:11,color:C.ts,marginLeft:6}}>+{friendsHere.length-5}</span>}<span style={{fontSize:11,color:C.ts,marginLeft:8}}>{friendsHere.slice(0,3).map(f=>f.nickname||f.full_name?.split(" ")[0]).join(", ")}{friendsHere.length>3?" y "+(friendsHere.length-3)+" más":""}</span></div></div>}
@@ -2392,6 +2392,72 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     así que invitar desde party_size=1 funciona perfectamente sin pre-aumentar.
 //   • UX final: chooser → toast → InvitePlayersSheet con selector de amigos directo,
 //     sin pantallas intermedias.
+// v19.53 (slot-manager rolling window + chip calendar polish):
+//   • BACKEND — cadena de 5 bugs encontrados al investigar "No hay tee times" en Puerto
+//     Cancún 8 días por delante:
+//     (A) Cron schedule "0 9 * * 0" (semanal domingo) en vez de diario "0 9 * * *".
+//         La función estaba diseñada para correr diaria pero el cron erosionaba la
+//         ventana 1 día/día. Fix: cambio a diario con cron.unschedule + cron.schedule.
+//     (B) Edge fn skip logic: "if (count > 100) continue" saltaba siempre que hubiera
+//         >5 días generados (24 slots/día × 5 = 120). Fix: reemplazado por verificación
+//         de last_slot_date >= today+25.
+//     (C) Edge fn SELECT incluía 'capacity_per_slot' que NO existe en golf_courses.
+//         PostgREST rechazaba el SELECT entero → 0 courses → 0 slots generados. Esto
+//         era el síntoma más serio: aunque el cron corriera, no hacía nada útil. Fix:
+//         remover columna fantasma del SELECT, usar SLOT_CAPACITY_DEFAULT=8 hardcoded.
+//     (D) Edge fn INSERT enviaba 'price: null' pero la columna time_slots.price es
+//         NOT NULL. Cada upsert violaba el constraint y se rechazaba silenciosamente
+//         (con ignoreDuplicates: true PostgREST no devuelve error claro). Fix: leer
+//         green_fee_min del course y usarlo como price default. Fallback a 0.
+//     (E) MEJORA defensiva: tabla time_slots tenía un INDEX UNIQUE pero NO un CONSTRAINT
+//         UNIQUE sobre (course_name, slot_date, slot_time). PostgREST necesita un
+//         CONSTRAINT (no solo index) para resolver onConflict del upsert. Fix:
+//         ALTER TABLE ... ADD CONSTRAINT ... UNIQUE USING INDEX (promueve el index
+//         existente sin recrear data).
+//   • Edge function deployada: slot-manager v12.
+//   • Migration aplicada: cron schedule + unique constraint.
+//   • Resultado: 16 courses activos × 30 días × 24 slots/día ≈ 11,000 slots futuros.
+//     Cobertura uniforme hasta today+29. Cron diario mantendrá ventana de 30 días.
+//
+//   • FRONTEND — micro fix UX del calendario de días en CourseDetail:
+//     Bug visual reportado: al deslizar del día 11 al 12, el chip activo mostraba una
+//     "sombra rojiza fantasma" a la izquierda. Causa: outline de focus del navegador
+//     después del tap (Samsung Internet/Chrome móvil renderizan focus ring con un tinte
+//     que combina con el background gradient del chip activo).
+//     Fix: agregadas propiedades inline al <button>:
+//       - outline: "none" (elimina focus ring del navegador)
+//       - WebkitTapHighlightColor: "transparent" (defensa explícita además del global)
+//       - boxShadow: "none" (asegura que ningún render residual deje sombra)
+//       - transition: "background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease"
+//         (suaviza el cambio entre chips para que no haya pop visual)
+//     Cambio mínimo, solo en el chip del calendario CourseDetail (línea ~936). Otros
+//     calendarios (sub-tabs Reservas, AdminProfile, etc.) no presentan el síntoma porque
+//     usan estilos distintos.
+// v19.54 (chip calendar · fix más agresivo tras feedback de v19.53 no efectivo):
+//   • Bug persistente reportado: el chip activo del calendario muestra una "sombra
+//     fantasma rojiza" a su izquierda. Confirmado por Carlos:
+//       - Permanente cuando el chip está activo (no es transition)
+//       - También se ve al cargar fresco la página (no es race condition)
+//       - Pasa en todos los courses (no es data-specific)
+//   • v19.53 intentó arreglar con outline:none + transition (asumiendo focus ring) pero
+//     no resolvió. Eso descartó la hipótesis del focus ring del navegador.
+//   • v19.54 prueba 3 cambios estructurales en paralelo:
+//     (1) Border CONSISTENTE: antes border:none cuando activo y 1px solid C.bd cuando
+//         inactivo. Eso causaba shift de 2px entre estados (chip activo era más estrecho).
+//         Ahora ambos tienen border:1px, pero el activo lo tiene transparente.
+//         Tamaño consistente, no hay shift.
+//     (2) SOLID color en vez de linear-gradient cuando activo. El gradient
+//         linear-gradient(135deg, C.acc, #d63d55) tenía 2 colores muy similares pero
+//         distintos. En algunos render passes de mobile browsers, el delta entre top-left
+//         (claro) y bottom-right (oscuro) puede mostrar artifacts visibles. Solid C.acc
+//         elimina esa posibilidad totalmente.
+//     (3) STACKING CONTEXT explícito: position:relative + isolation:isolate + zIndex:2
+//         para el activo (zIndex:1 inactivos). Esto crea un nuevo painting context y
+//         garantiza que el chip activo se renderiza en su propia "capa", aislado de
+//         cualquier paint residual de chips vecinos.
+//   • Si esto no resuelve, el bug NO está en el chip mismo sino en algún elemento padre
+//     o sibling. Próximo paso: pedir screenshot con DevTools para inspeccionar el
+//     elemento exacto que está dibujando la sombra.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
