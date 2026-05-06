@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.43 (movimientos personales · cargos+refunds del usuario)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.44 (movimientos · RPC bypass RLS para historial completo)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.43 (movimientos personales · cargos+refunds d
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.43">
+<meta name="version" content="19.44">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2125,6 +2125,16 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //   • Removido el bloque de "Saldo por cobrar" (ya estaba comentado en v18.4.0 — ahora hizo limpieza completa).
 //   • Bug fix: el componente tenía un return + JSX duplicado al final tras una edición incompleta
 //     anterior. Limpieza completa del bloque para evitar código no alcanzable.
+// v19.44 (movimientos · RPC bypass RLS para usuarios con bp terminal):
+//   • Bug detectado en v19.43: Robocop (status='cancelled') no veía sus movimientos. Causa:
+//     el JOIN booking:booking_id(user_id) era bloqueado por RLS de bookings (is_booking_participant
+//     solo retorna true para statuses activos). Sin booking → filtro lo descartaba → array vacío.
+//   • Solución: nueva RPC get_my_booking_history() SECURITY DEFINER que retorna info pública
+//     (course_name, booking_date, booking_code, is_mine) de TODOS los bookings donde el usuario
+//     ha tenido participación — incluso terminales.
+//   • Frontend: removido el JOIN inline; ahora hace fetch separado de bps + RPC para resolver
+//     nombres de cursos. Fallback gracioso si la RPC falla: muestra "Reserva" como title genérico.
+//   • Sin cambios en lógica de negocio. Solo arreglo de visibilidad para histórico de cancelaciones.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -3305,18 +3315,35 @@ function PaymentAndMovementsSection(){
     Promise.all([
       // Bookings que hice yo como creator (cargos directos a mí)
       sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
-      // Mi participación como invitee en bookings ajenos (cargos directos a mí del split).
-      // Incluye paid_held, paid_transferred (activos), refund_pending y refunded (cancelados con refund).
-      sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,refunded_at,created_at,payment_status,booking:booking_id(id,course_name,booking_date,user_id)").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred","refund_pending","refunded"]).order("created_at",{ascending:false}).limit(60),
-    ]).then(([bksRes,partRes])=>{
+      // Mi participación como invitee en bookings ajenos. v19.44: NO usar JOIN booking:booking_id(...)
+      // porque la RLS de bookings bloquea la lectura cuando bp.status es terminal (cancelled/rejected).
+      // En su lugar, traemos los bp solos y luego hacemos un fetch separado de los bookings por su id
+      // (la RLS de bookings nos deja leer porque pasamos bp.booking_id directo, y la función
+      // is_booking_participant retorna true solo para activos — pero como nosotros somos los user_id
+      // del bp, sí podemos leer el booking via la otra rama de la policy bookings_select_creator
+      // O mejor: usamos la RPC que ya existe para esto, o un select directo sin RLS-blocked JOIN).
+      sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,refunded_at,created_at,payment_status").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred","refund_pending","refunded"]).order("created_at",{ascending:false}).limit(60),
+    ]).then(async([bksRes,partRes])=>{
       if(!alive)return;
       setCharges(bksRes.data||[]);
-      // Filtramos: solo cuento como "mi pago de split" si el booking NO es mío (no soy creator).
-      // Si soy creator y también tengo bp con mi user_id (caso is_creator_proportional), eso ya
-      // se contabiliza en el cargo del booking.
-      setMyParticipations((partRes.data||[]).filter(p=>p.booking&&p.booking.user_id!==s.user.id));
+      const myParts=partRes.data||[];
+      // v19.44: para cada bp, traemos el booking via RPC SECURITY DEFINER (la RLS de bookings
+      // bloquea SELECT directo cuando bp.status es terminal — ej. Robocop con cancelled). La RPC
+      // get_my_booking_history retorna info pública de TODOS los bookings donde el usuario ha
+      // tenido participación, incluso si ahora está cancelled/refunded.
+      if(myParts.length>0){
+        const{data:bks,error:bksErr}=await sb.rpc("get_my_booking_history");
+        if(bksErr)console.warn("[movimientos] get_my_booking_history falló:",bksErr);
+        const bkMap=new Map((bks||[]).map(b=>[b.booking_id,{id:b.booking_id,course_name:b.course_name,booking_date:b.booking_date,user_id:b.is_mine?s.user.id:null}]));
+        const enriched=myParts.map(p=>({...p,booking:bkMap.get(p.booking_id)||null}));
+        // Filtramos solo los bookings ajenos. Si el booking quedó null por algún caso edge,
+        // lo incluimos igual (mejor mostrar "Reserva" genérico que esconder el cargo del usuario).
+        setMyParticipations(enriched.filter(p=>!p.booking||p.booking.user_id!==s.user.id));
+      }else{
+        setMyParticipations([]);
+      }
       setLd(false);
-    }).catch(()=>{if(alive)setLd(false)});
+    }).catch((e)=>{console.error("[movimientos]",e);if(alive)setLd(false)});
     return()=>{alive=false};
   },[s?.user?.id]);
   // Construir lista unificada de movimientos — solo míos directos
