@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.47 (housekeeping · zombies eliminados)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.48 (UX fix · solo→compartir/split chooser)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.47 (housekeeping · zombies eliminados)","colo
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.47">
+<meta name="version" content="19.48">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1972,6 +1972,78 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
   </div></div>;
 }
 
+// v19.48 — PaymentModeChooserSheet: bottom sheet que aparece cuando un user con
+// reserva en payment_mode='solo' clickea "Invitar a jugar". Pregunta si va a
+// pagar todo (compartir) o si cada quien paga lo suyo (split). Al confirmar,
+// llama RPC convert_solo_to_payment_mode y luego abre InvitePlayersSheet con
+// el booking actualizado para continuar el flujo normal.
+function PaymentModeChooserSheet({booking,onClose,onChosen}){
+  const[mode,setMode]=useState("compartir");
+  const[busy,setBusy]=useState(false);
+  const submit=async()=>{
+    if(busy)return;
+    setBusy(true);
+    try{
+      const{data,error}=await sb.rpc("convert_solo_to_payment_mode",{p_booking_id:booking.id,p_new_mode:mode});
+      if(error)throw error;
+      if(data?.success===false){window.__toast?.(data.error||t("No se pudo cambiar el modo"),"error");setBusy(false);return}
+      // Re-fetch del booking actualizado
+      const{data:fresh}=await sb.from("bookings").select("*,golf_courses(facility_type)").eq("id",booking.id).single();
+      window.__toast?.(t("Modo cambiado a")+" "+(mode==="compartir"?t("Compartir"):t("Split")),"success");
+      onChosen?.(fresh||{...booking,payment_mode:mode});
+      onClose?.();
+    }catch(e){
+      const msg=e.message||"";
+      if(msg.includes("only_creator_can_convert"))window.__toast?.(t("Solo el creador puede cambiar el modo"),"error");
+      else if(msg.includes("booking_not_confirmed"))window.__toast?.(t("La reserva no está confirmada"),"warn");
+      else if(msg.includes("booking_not_in_solo_mode"))window.__toast?.(t("El modo ya cambió. Recarga la pantalla."),"warn");
+      else if(msg.includes("too_close_to_tee_time"))window.__toast?.(t("Muy cerca del tee time (debe ser >24h)"),"error");
+      else window.__toast?.("Error: "+msg,"error");
+      setBusy(false);
+    }
+  };
+  return<div className="bsheet-overlay" onClick={onClose}><div onClick={e=>e.stopPropagation()} className="bsheet" style={{background:C.cd,borderTop:"1px solid "+C.bd}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+      <span dangerouslySetInnerHTML={{__html:ic("users",22,C.grn)}}/>
+      <h3 style={{color:C.txt,fontSize:17,fontWeight:700,margin:0}}>{t("Invitar a jugar")}</h3>
+    </div>
+    <p style={{color:C.ts,fontSize:12,marginBottom:14,lineHeight:1.5}}>
+      {t("Tu reserva está en modo Solo. Para invitar amigos, necesitas elegir cómo se pagarán los slots adicionales.")}
+    </p>
+    <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+      <button onClick={()=>setMode("compartir")} disabled={busy} style={{textAlign:"left",padding:"12px 14px",borderRadius:12,border:mode==="compartir"?"2px solid "+C.grn:"1px solid "+C.bd,background:mode==="compartir"?C.grn+"15":C.bg,cursor:busy?"not-allowed":"pointer",transition:"all .15s"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",border:"2px solid "+(mode==="compartir"?C.grn:C.tm),background:mode==="compartir"?C.grn:"transparent",flexShrink:0}}>
+            {mode==="compartir"&&<span style={{width:6,height:6,borderRadius:"50%",background:"#fff"}}/>}
+          </span>
+          <span style={{fontSize:14,fontWeight:700,color:C.txt}}>{t("Compartir — yo pago todo")}</span>
+        </div>
+        <p style={{margin:"0 0 0 26px",fontSize:11,color:C.ts,lineHeight:1.4}}>
+          {t("Yo cubro el costo de mis amigos. Se cobrará el delta en mi tarjeta cuando los invite.")}
+        </p>
+      </button>
+      <button onClick={()=>setMode("split")} disabled={busy} style={{textAlign:"left",padding:"12px 14px",borderRadius:12,border:mode==="split"?"2px solid "+C.grn:"1px solid "+C.bd,background:mode==="split"?C.grn+"15":C.bg,cursor:busy?"not-allowed":"pointer",transition:"all .15s"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",border:"2px solid "+(mode==="split"?C.grn:C.tm),background:mode==="split"?C.grn:"transparent",flexShrink:0}}>
+            {mode==="split"&&<span style={{width:6,height:6,borderRadius:"50%",background:"#fff"}}/>}
+          </span>
+          <span style={{fontSize:14,fontWeight:700,color:C.txt}}>{t("Split — cada quien paga su parte")}</span>
+        </div>
+        <p style={{margin:"0 0 0 26px",fontSize:11,color:C.ts,lineHeight:1.4}}>
+          {t("Mis amigos pagan su slot al aceptar la invitación. Mi pago actual queda como mi parte.")}
+        </p>
+      </button>
+    </div>
+    <div style={{background:C.gld+"12",border:"1px solid "+C.gld+"30",borderRadius:10,padding:10,marginBottom:14,fontSize:11,color:C.ts,lineHeight:1.5}}>
+      <strong style={{color:C.gld}}>{t("Importante")}:</strong> {t("Una vez cambies el modo, no puedes volver a Solo. Tras confirmar, se abrirá la pantalla para elegir a quién invitar.")}
+    </div>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={submit} disabled={busy} style={{flex:1,padding:12,background:busy?C.cd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>{busy?t("Cambiando...")+"...":t("Continuar")}</button>
+      <button onClick={onClose} disabled={busy} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:12,color:C.ts,cursor:busy?"not-allowed":"pointer"}}>{t("Cancelar")}</button>
+    </div>
+  </div></div>;
+}
+
 // v18.0.7 — ConvertToGroupModal: pide target_party_size + notas e invoca activate_group_mode RPC.
 // Convierte una reserva solo/compartir/split en modo "grupo" con pre-reserva de slots hasta T-24h.
 function ConvertToGroupModal({booking,onClose,onConverted}){
@@ -2209,6 +2281,34 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     - Edge functions sin referencias: create-connect-account (v18.4.0 deprecada),
 //       submit-score, send-notification, course-stats, health-check
 //   • 0 cambios funcionales. App debe comportarse idéntica a v19.46.
+// v19.48 (UX fix · bug 2B37 · invitar desde payment_mode=solo):
+//   • Bug reportado: en reserva PT-20260509-2B37 (Quivira, payment_mode=solo, party_size=1)
+//     el botón "Invitar a jugar" no aparecía. Investigación reveló triple guard de
+//     payment_mode!=='solo': frontend línea 2346 + edge fn increase-booking-size +
+//     edge fn expand-and-invite + RPC increase_booking_size.
+//   • Problema: usuario que reservó "solo" pensando jugar solo y luego cambia de
+//     opinión queda atrapado sin opción visible para invitar a un amigo específico.
+//     "Convertir a Grupo" existe pero publica la reserva en Versus (no es lo que típicamente
+//     querría — es para grupos abiertos, no para invitar al amigo de toda la vida).
+//   • Solución: Modal explícito que pregunta compartir vs split, sin auto-conversión silenciosa.
+//   • Frontend:
+//     - canMakeSpaceToInvite mantiene el guard de !solo (defense in depth)
+//     - NUEVO flag canConvertSoloAndInvite habilita el botón cuando booking es solo
+//     - Click en botón rutea: canShare→InvitePlayersSheet | canMakeSpace→increaseBooking |
+//       canConvertSolo→PaymentModeChooserSheet
+//     - PaymentModeChooserSheet (NUEVO componente): pregunta compartir/split, llama RPC
+//       convert_solo_to_payment_mode, on success abre InvitePlayersSheet con booking fresco
+//   • Backend (1 RPC nueva):
+//     - convert_solo_to_payment_mode(p_booking_id, p_new_mode) SECURITY DEFINER
+//     - Validaciones: auth, creator-only, status=confirmed, payment_mode=solo, >24h hasta tee
+//     - solo→compartir: solo cambia payment_mode (creator sigue pagando todo)
+//     - solo→split: cambia payment_mode + crea booking_participant del creator con
+//       is_creator_proportional=true, split_amount=total_cost, payment_status hereda del booking
+//     - Audit log en booking_audit_log con change_type='payment_mode_change'
+//   • Backend NO tocado: increase-booking-size, expand-and-invite y RPC increase_booking_size
+//     mantienen sus guards de solo (defense in depth — son protecciones server-side correctas).
+//   • El user pasa por el modal una sola vez; tras la conversión, el flujo de invitar es
+//     idéntico al que existe para reservas que nacieron compartir/split desde el inicio.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -2222,7 +2322,7 @@ function Collapsible({title,icon,open,onToggle,children}){
   </div>;
 }
 
-function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);const[detailsOpen,setDetailsOpen]=useState(false);const[layoutOpen,setLayoutOpen]=useState(false);const[policyOpen,setPolicyOpen]=useState(false);
+function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);const[detailsOpen,setDetailsOpen]=useState(false);const[layoutOpen,setLayoutOpen]=useState(false);const[policyOpen,setPolicyOpen]=useState(false);const[payChooser,setPayChooser]=useState(null);
   useEffect(()=>{if(s){load();loadInvitations();sb.from("friends").select("*,friend:friend_id(id,full_name,player_id,nickname)").eq("user_id",s.user.id).eq("status","accepted").then(({data})=>setFriends(data||[]))}},[s,tab]);
   useEffect(()=>{const h=e=>{if(e.detail?.tab)setTab(e.detail.tab)};window.addEventListener("partee:subtab",h);return()=>window.removeEventListener("partee:subtab",h)},[]);
   // v18.0.5: UNION de bookings del usuario (como creator) + bookings donde soy participante aceptado.
@@ -2344,6 +2444,11 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         // El cap de 4 jugadores lo aplica el backend (increase_booking_size + expand_slot_capacity).
         const canShare=isCreator&&detail.status==="confirmed"&&!isPast&&detail.party_size>=2;
         const canMakeSpaceToInvite=isCreator&&detail.status==="confirmed"&&hoursUntil>24&&(detail.party_size||1)<2&&detail.payment_mode!=="solo";
+        // v19.48 (UX fix bug 2B37): cuando el booking está en payment_mode='solo', en vez de ocultar
+        // el botón "Invitar a jugar" mostramos un modal previo (PaymentModeChooserSheet) que pregunta
+        // compartir vs split. Después de la elección, llama RPC convert_solo_to_payment_mode y
+        // continúa con el flujo normal de invite (expand-and-invite).
+        const canConvertSoloAndInvite=isCreator&&detail.status==="confirmed"&&hoursUntil>24&&detail.payment_mode==="solo"&&course?.facility_type==="campo";
         const hasGroupMode=detail.social_mode==="grupo";
         const hasPartidaMode=detail.social_mode==="partida";
         const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type==="campo";
@@ -2352,7 +2457,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         return<>
           {/* CTAs primarios */}
           {canCancel&&<div style={{display:"flex",gap:8,marginBottom:14}}>
-            {(canShare||canMakeSpaceToInvite)?<button onClick={canShare?()=>setInvModal(detail):()=>increaseBooking(true)} disabled={busyAction} style={{flex:1,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("users",14,"#fff")}}/>{t("Invitar a jugar")}</button>:null}
+            {(canShare||canMakeSpaceToInvite||canConvertSoloAndInvite)?<button onClick={canShare?()=>setInvModal(detail):canMakeSpaceToInvite?()=>increaseBooking(true):()=>setPayChooser(detail)} disabled={busyAction} style={{flex:1,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("users",14,"#fff")}}/>{t("Invitar a jugar")}</button>:null}
             <button onClick={async()=>{
               // v19.24: Calcular monto realmente cobrado (en split sin amigos, total_cost != lo cobrado)
               let actualPaid=Number(detail.total_cost)||0;
@@ -2468,6 +2573,9 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       loadInvitations();
     }}/>}
     {convertModal&&<ConvertToGroupModal booking={convertModal} onClose={()=>setConvertModal(null)} onConverted={async()=>{const{data:fresh}=await sb.from("bookings").select("*").eq("id",convertModal.id).single();if(fresh)setDetail(fresh);load();}}/>}
+    {/* v19.48: PaymentModeChooserSheet aparece cuando el user clickea "Invitar" estando en payment_mode='solo'.
+        Al elegir compartir/split, llama RPC convert_solo_to_payment_mode y luego abre InvitePlayersSheet con el booking actualizado. */}
+    {payChooser&&<PaymentModeChooserSheet booking={payChooser} onClose={()=>setPayChooser(null)} onChosen={(fresh)=>{setDetail(fresh);setPayChooser(null);setInvModal(fresh);load();}}/>}
   </div>;}
   return<div style={{padding:16}}><div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Invitaciones")+(invitations.length>0?" ("+invitations.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
     {tab==="requests"&&<>{invitations.length===0?<EmptyState icon="mail" iconColor={C.tm} title={t("Sin invitaciones pendientes")} sub={t("Cuando alguien te invite a una reserva, aparecerá aquí")}/>:invitations.map(inv=>{
