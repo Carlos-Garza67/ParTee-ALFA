@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.51 (UX cleanup · sin warning falso en chooser)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.52 (UX cleanup · sin warning Reserva individual cuando hay modalidad activa)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.51 (UX cleanup · sin warning falso en chooser
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.51">
+<meta name="version" content="19.52">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1315,7 +1315,13 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
   const bookingPaymentMode=booking?.payment_mode||"solo";
   // v18.0.12 — isSoloBooking solo aplica a bookings que aún no han escalado a multi-jugador.
   // Si social_mode='grupo', el booking ya tiene >=1 joiners y no aplica el banner "individual".
-  const isSoloBooking=(bookingPaymentMode==="solo"&&booking?.social_mode!=="grupo"&&booking?.social_mode!=="partida")||booking?.party_size===1;
+  // v19.52 — Quitado el OR `|| party_size===1`. Razón: cuando un user llega aquí con
+  // payment_mode='split'/'compartir' y party_size=1 (ej. recién convertido por
+  // PaymentModeChooserSheet, o todos los invitados rechazaron), el flujo válido es invitar
+  // de una vez — expand-and-invite escala automáticamente. El warning "Reserva individual"
+  // era confuso y bloqueaba un flujo legítimo. Para payment_mode='solo' el chooser intercepta
+  // antes de llegar aquí, así que este check queda como defense in depth.
+  const isSoloBooking=bookingPaymentMode==="solo"&&booking?.social_mode!=="grupo"&&booking?.social_mode!=="partida";
   const withSplit=bookingPaymentMode==="split";
   // v19.32: splitPerPerson ahora se inicializa vacío; un useEffect de abajo lo sincroniza con
   // suggestedSplitAmount (que ya es reactivo a finalPartySize) cuando el usuario no lo ha editado manualmente.
@@ -2369,6 +2375,23 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     elegir a quién invitar" — eso ya está garantizado por el setTimeout de v19.50.
 //   • UX final del chooser: título → descripción → 2 opciones (Compartir/Split) →
 //     botones Continuar/Cancelar. Sin distractores.
+// v19.52 (UX cleanup · InvitePlayersSheet sin warning falso de Reserva individual):
+//   • Bug detectado en E2E continuación de v19.51:
+//     después de PaymentModeChooserSheet (solo→split), el InvitePlayersSheet se abría
+//     pero mostraba el banner rojo "Reserva individual · Esta reserva es para 1 jugador.
+//     Para invitar amigos primero debes aumentar el tamaño de la reserva desde la sección
+//     Modalidad." Esto bloqueaba el selector de amigos.
+//   • Causa: la flag isSoloBooking del componente tenía OR `|| booking?.party_size===1`
+//     que se disparaba aunque el booking ya estuviera en payment_mode='split'/'compartir'.
+//     Era un guard legacy de v18.0.12, antes de que existiera expand-and-invite atómico.
+//   • Fix: simplificar isSoloBooking a verificar SOLO payment_mode='solo'. Con el flow
+//     actual (chooser intercepta payment_mode='solo' antes), este check queda como
+//     defense in depth — pero ya no bloquea el caso legítimo de invitar a una reserva en
+//     split/compartir con party_size=1.
+//   • expand-and-invite ya sabe escalar atómicamente cuando targetPartySize > party_size,
+//     así que invitar desde party_size=1 funciona perfectamente sin pre-aumentar.
+//   • UX final: chooser → toast → InvitePlayersSheet con selector de amigos directo,
+//     sin pantallas intermedias.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
