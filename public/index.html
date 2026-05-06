@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.50 (realtime publication + race fix solo→split→invite)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.51 (UX cleanup · sin warning falso en chooser)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.50 (realtime publication + race fix solo→spl
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.50">
+<meta name="version" content="19.51">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2034,9 +2034,6 @@ function PaymentModeChooserSheet({booking,onClose,onChosen}){
         </p>
       </button>
     </div>
-    <div style={{background:C.gld+"12",border:"1px solid "+C.gld+"30",borderRadius:10,padding:10,marginBottom:14,fontSize:11,color:C.ts,lineHeight:1.5}}>
-      <strong style={{color:C.gld}}>{t("Importante")}:</strong> {t("Una vez cambies el modo, no puedes volver a Solo. Tras confirmar, se abrirá la pantalla para elegir a quién invitar.")}
-    </div>
     <div style={{display:"flex",gap:8}}>
       <button onClick={submit} disabled={busy} style={{flex:1,padding:12,background:busy?C.cd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>{busy?t("Cambiando...")+"...":t("Continuar")}</button>
       <button onClick={onClose} disabled={busy} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:12,color:C.ts,cursor:busy?"not-allowed":"pointer"}}>{t("Cancelar")}</button>
@@ -2362,6 +2359,16 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //   • Otras tablas que YA estaban en realtime (sin tocar): notifications, tournaments,
 //     tournament_players, tournament_scores, match_members, match_requests.
 //   • Sin migración de datos. Sin cambios en RPCs ni edge functions.
+// v19.51 (UX cleanup · sin warning falso en PaymentModeChooserSheet):
+//   • Banner "Importante: Una vez cambies el modo, no puedes volver a Solo..." removido.
+//   • Razón: el warning era falso. La reserva es atómicamente elástica:
+//     si todos los invitados salen/cancelan/son removidos, party_size puede llegar
+//     de vuelta a 1 (efectivamente "solo" funcionalmente, aunque payment_mode='split'
+//     o 'compartir' a nivel data). El warning generaba fricción innecesaria.
+//   • También eliminamos la promesa "tras confirmar, se abrirá la pantalla para
+//     elegir a quién invitar" — eso ya está garantizado por el setTimeout de v19.50.
+//   • UX final del chooser: título → descripción → 2 opciones (Compartir/Split) →
+//     botones Continuar/Cancelar. Sin distractores.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
