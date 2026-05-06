@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.45 (movimientos · monto correcto en split — solo mi parte)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.46 (UX detalle reserva · Opción A · jugadores+modalidad+total juntos)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.45 (movimientos · monto correcto en split —
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.45">
+<meta name="version" content="19.46">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1570,10 +1570,23 @@ function ParticipantsSection({booking,isOwner,onChanged}){
       }
     });return}
   };
+  // v19.46 (Opción A): chips de modalidad + total al pie. Se mueven aquí desde el card de fecha
+  // para juntar "quién, cómo y cuánto" en un solo bloque visual.
+  const payMode=booking.payment_mode;
+  const payChip=payMode==="split"?{l:t("Split"),c:C.grn}:payMode==="compartir"?{l:t("Compartir"),c:C.gld}:null;
+  const socChip=booking.social_mode==="grupo"?{l:t("Grupo"),c:C.pri}:booking.social_mode==="partida"?{l:t("Partida"),c:C.gld}:null;
+  const ps=booking.payment_status;
+  const showTotal=booking.total_cost>0&&booking.stripe_payment_intent;
+  const totalC=ps==="paid"?C.grn:ps==="refunded"||ps==="no_show_fee"?C.acc:C.gld;
+  const totalLbl=ps==="paid"?t("Cobrado"):ps==="refunded"?t("Reembolsado"):ps==="no_show_fee"?"No-Show":t("Pendiente");
   return<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-      <h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Jugadores")} <span style={{color:C.tm,fontWeight:500}}>({parts.filter(x=>x.status==="accepted"||x.status==="accepted_pending_payment"||x.is_creator_proportional).length}/{booking.party_size})</span></h4>
+      <h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Jugadores y modalidad")} <span style={{color:C.tm,fontWeight:500}}>({parts.filter(x=>x.status==="accepted"||x.status==="accepted_pending_payment"||x.is_creator_proportional).length}/{booking.party_size})</span></h4>
     </div>
+    {(payChip||socChip)&&<div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:12}}>
+      {payChip&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:payChip.c+"18",border:"1px solid "+payChip.c+"35",fontSize:11,fontWeight:700,color:payChip.c}}>{payChip.l}</span>}
+      {socChip&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:socChip.c+"30",border:"1px solid "+socChip.c+"50",fontSize:11,fontWeight:700,color:socChip.c===C.pri?C.txt:socChip.c}}>{socChip.l}</span>}
+    </div>}
     {ld?<Skeleton w="100%" h={40}/>:parts.length===0?<p style={{fontSize:12,color:C.tm,margin:0}}>{t("Sin participantes todavía. Invita a jugar.")}</p>:parts.map(pp=>{
       const bd=statusBadge(pp);
       return<div key={pp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.bd+"40"}}>
@@ -1677,6 +1690,17 @@ function ParticipantsSection({booking,isOwner,onChanged}){
         </div>
       </div>;
     })()}
+    {/* v19.46 (Opción A): Total al pie. Se muestra solo si el booking tiene total_cost>0 y stripe_pi.
+        El color y label cambian según payment_status (verde=Cobrado, rojo=Reembolsado/No-Show, oro=Pendiente).
+        Esto reemplaza el chip de total que vivía en el card de fecha en v19.45. */}
+    {showTotal&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,marginTop:8,borderTop:"1px dashed "+C.bd}}>
+      <span style={{fontSize:11,color:C.ts}}>{t("Total")}</span>
+      <span style={{fontSize:14,fontWeight:700,color:totalC}}>${fm(booking.total_cost)} MXN · {totalLbl}</span>
+    </div>}
+    {!showTotal&&booking.total_cost>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,marginTop:8,borderTop:"1px dashed "+C.bd}}>
+      <span style={{fontSize:11,color:C.ts}}>{t("Total")}</span>
+      <span style={{fontSize:14,fontWeight:700,color:C.txt}}>${fm(booking.total_cost)} MXN</span>
+    </div>}
     {reduceDlg&&<ReduceBookingDialog booking={booking} rejectedParts={rejectedParts} onClose={()=>setReduceDlg(false)} onReduced={()=>{setReduceDlg(false);load();onChanged?.();}}/>}
   </div>;
 }
@@ -2148,6 +2172,26 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     payment_mode='split'. Para 'solo'/'compartir', sigue usando total_cost.
 //   • Refunds del creator también ajustados: si el booking se canceló y era split, el refund mostrado
 //     es solo lo que el creator recibió (su split_amount), no el total_cost.
+// v19.46 (UX detalle reserva · Opción A · FRONTEND ONLY):
+//   • Reorganización del orden visual del detalle de reserva:
+//     1. Card header (campo + foto)
+//     2. Card código de reservación
+//     3. Card fecha/hora/estado MINIMALISTA (antes incluía chips de jugadores/modalidad/total)
+//     4. Banner cierre automático (si <12h)
+//     5. ⭐ ParticipantsSection AMPLIADO ahora incluye:
+//        - Título "Jugadores y modalidad" (antes "Jugadores")
+//        - Chips de payment_mode (Split/Compartir) y social_mode (Grupo/Partida) bajo el título
+//        - Lista de participants
+//        - Banner unificado de pendientes/rechazos
+//        - Total al pie con border-top dashed: "$X MXN · Cobrado/Reembolsado/Pendiente"
+//     6. CTAs (Invitar / Cancelar / Salir)
+//     7. Colapsable "Detalles" (extras + desglose + convertir + calendario, SIN política)
+//     8. ⭐ NUEVO Colapsable "Política de cancelación" — cerrado por default, AUTO-ABIERTO cuando
+//        isIn24h && !isFree (situación urgente). Antes vivía dentro del Collapsible "Detalles y políticas".
+//     9. Colapsable "Layout del campo" (sin cambios)
+//   • Justificación: "quién juega, cómo y cuánto" pertenecen al mismo bloque mental.
+//     "Política de cancelación" es decisión separada que merece visibilidad propia.
+//   • Sin cambios en BD ni en lógica — solo render reorganizado.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -2161,7 +2205,7 @@ function Collapsible({title,icon,open,onToggle,children}){
   </div>;
 }
 
-function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);const[detailsOpen,setDetailsOpen]=useState(false);const[layoutOpen,setLayoutOpen]=useState(false);
+function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);const[detailsOpen,setDetailsOpen]=useState(false);const[layoutOpen,setLayoutOpen]=useState(false);const[policyOpen,setPolicyOpen]=useState(false);
   useEffect(()=>{if(s){load();loadInvitations();sb.from("friends").select("*,friend:friend_id(id,full_name,player_id,nickname)").eq("user_id",s.user.id).eq("status","accepted").then(({data})=>setFriends(data||[]))}},[s,tab]);
   useEffect(()=>{const h=e=>{if(e.detail?.tab)setTab(e.detail.tab)};window.addEventListener("partee:subtab",h);return()=>window.removeEventListener("partee:subtab",h)},[]);
   // v18.0.5: UNION de bookings del usuario (como creator) + bookings donde soy participante aceptado.
@@ -2222,6 +2266,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
     {course&&<div style={{padding:16}}><div style={{borderRadius:16,overflow:"hidden",border:"1px solid "+(C.glassBd||C.bd),marginBottom:14,boxShadow:C.shCard||"none"}}><Img imgs={course.photo_urls} h={130}/><div style={{background:C.glass||C.w04,padding:14}}><h3 style={{fontSize:15,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>{course.course_name}</h3><p style={{fontSize:12,color:C.ts,marginTop:2}}>{course.city}, {course.state}</p></div></div>
       {detail.booking_code&&<div style={{background:`linear-gradient(135deg,${C.grn},#00cec9)`,borderRadius:14,padding:14,marginBottom:14,textAlign:"center"}}><div style={{fontSize:9,textTransform:"uppercase",letterSpacing:2,color:"rgba(255,255,255,.6)",marginBottom:2}}>{t("CÓDIGO DE RESERVACIÓN")}</div><div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:3,..._s.mono}}>{detail.booking_code}</div></div>}
       {/* v19.30 (Opción C): Card combinado — fecha/hora/estado + chips de jugadores/modalidad/total */}
+      {/* v19.46 (Opción A): Card minimalista solo con fecha/hora/estado. Chips de modalidad y total se mueven al bloque ParticipantsSection abajo, donde tienen mejor contexto. */}
       {(()=>{
         const dt=new Date((detail.booking_date||"")+"T12:00:00");
         const dayN=DN[dt.getDay()]||"";
@@ -2232,15 +2277,8 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         const showLocal=ctz!==utz;
         const localTime=showLocal?fmtInTz(detail.booking_date,detail.booking_time||"00:00",ctz,utz):null;
         const stat=stc[detail.status]||{l:detail.status,c:C.gld};
-        const payMode=detail.payment_mode;
-        const payChip=payMode==="split"?{l:t("Split"),c:C.grn}:payMode==="compartir"?{l:t("Compartir"),c:C.gld}:null;
-        const socChip=detail.social_mode==="grupo"?{l:t("Grupo"),c:C.pri}:detail.social_mode==="partida"?{l:t("Partida"),c:C.gld}:null;
-        const ps=detail.payment_status;
-        const showTotal=detail.total_cost>0&&detail.stripe_payment_intent;
-        const totalC=ps==="paid"?C.grn:ps==="refunded"||ps==="no_show_fee"?C.acc:C.gld;
-        const totalLbl=ps==="paid"?t("Cobrado"):ps==="refunded"?t("Reembolsado"):ps==="no_show_fee"?"No-Show":t("Pendiente");
         return<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:showLocal?4:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:C.txt}}>
               <span dangerouslySetInnerHTML={{__html:ic("calendar",14,C.tm)}}/>
               <span>{dayN} {dt.getDate()} {dt.toLocaleDateString("es-MX",{month:"short"}).replace(".","")} · {time}</span>
@@ -2248,16 +2286,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
             </div>
             <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:10,background:stat.c+"20",border:"1px solid "+stat.c+"40",fontSize:11,fontWeight:700,color:stat.c}}>{stat.l}</span>
           </div>
-          {showLocal&&<div style={{fontSize:10,color:C.gld,marginBottom:10,marginLeft:22}}>{localTime} {t("tu hora")} ({tzShort(utz)})</div>}
-          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:C.bd+"60",fontSize:11,fontWeight:600,color:C.ts}}>
-              <span dangerouslySetInnerHTML={{__html:ic("users",11,C.tm)}}/>{detail.party_size} {detail.party_size===1?t("jugador"):t("jugadores")}
-            </span>
-            {payChip&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:payChip.c+"18",border:"1px solid "+payChip.c+"35",fontSize:11,fontWeight:700,color:payChip.c}}>{payChip.l}</span>}
-            {socChip&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:socChip.c+"30",border:"1px solid "+socChip.c+"50",fontSize:11,fontWeight:700,color:socChip.c===C.pri?C.txt:socChip.c}}>{socChip.l}</span>}
-            {showTotal&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:totalC+"18",border:"1px solid "+totalC+"35",fontSize:11,fontWeight:700,color:totalC,marginLeft:"auto"}}>${fm(detail.total_cost)} · {totalLbl}</span>}
-            {!showTotal&&detail.total_cost>0&&<span style={{display:"inline-flex",alignItems:"center",padding:"3px 8px",borderRadius:10,background:C.bd+"60",fontSize:11,fontWeight:700,color:C.txt,marginLeft:"auto"}}>${fm(detail.total_cost)}</span>}
-          </div>
+          {showLocal&&<div style={{fontSize:10,color:C.gld,marginTop:6,marginLeft:22}}>{localTime} {t("tu hora")} ({tzShort(utz)})</div>}
         </div>;
       })()}
       {/* v19.30 (Opción C): Banner cierre automático SOLO en últimas 12h. Antes se mostraba siempre. */}
@@ -2365,8 +2394,8 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
             <div style={{fontSize:10,color:C.tm,marginTop:6,textAlign:"center",lineHeight:1.5}}>{t("Si ya pagaste, recibirás reembolso automático en menos de 10 minutos.")}</div>
           </div>}
 
-          {/* Colapsable 1: Detalles y políticas */}
-          <Collapsible title={t("Detalles y políticas")} icon="settings" open={detailsOpen} onToggle={()=>setDetailsOpen(!detailsOpen)}>
+          {/* v19.46: Colapsable 1 — solo "Detalles" (sin política, que ahora vive en su propio bloque) */}
+          <Collapsible title={t("Detalles")} icon="settings" open={detailsOpen} onToggle={()=>setDetailsOpen(!detailsOpen)}>
             {/* Extras */}
             {bkExtras.length>0&&<div style={{marginBottom:14}}>
               <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1,marginBottom:6}}>{t("EXTRAS")}</div>
@@ -2389,15 +2418,21 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
               </div>
             </div>}
             {/* Calendario */}
-            {!isPast&&detail.status==="confirmed"&&<div style={{marginBottom:14}}><CalBtn course={detail.course_name} date={detail.booking_date} time={detail.booking_time}/></div>}
-            {/* Política */}
-            {policyJSX&&<div>
-              <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1,marginBottom:6,display:"flex",alignItems:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("clock",11,isIn24h&&!isFree?C.acc:C.tm)}}/>{t("POLÍTICA DE CANCELACIÓN")}</div>
-              {policyJSX}
-            </div>}
+            {!isPast&&detail.status==="confirmed"&&<div><CalBtn course={detail.course_name} date={detail.booking_date} time={detail.booking_time}/></div>}
           </Collapsible>
 
-          {/* Colapsable 2: Layout del campo */}
+          {/* v19.46: NUEVO Colapsable 2 — Política de cancelación, separado del bloque Detalles.
+              Cerrado por default; auto-abierto cuando isIn24h && !isFree (situación urgente).
+              Título cambia color (oro→rojo) según urgencia para señalizar visualmente sin abrir. */}
+          {policyJSX&&<Collapsible
+            title={t("Política de cancelación")}
+            icon="clock"
+            open={policyOpen||(isIn24h&&!isFree)}
+            onToggle={()=>setPolicyOpen(!policyOpen)}>
+            {policyJSX}
+          </Collapsible>}
+
+          {/* Colapsable 3: Layout del campo */}
           <Collapsible title={t("Layout del campo")} icon="map" open={layoutOpen} onToggle={()=>setLayoutOpen(!layoutOpen)}>
             <HoleLayout courseId={detail.course_id}/>
           </Collapsible>
