@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.49 (elasticidad por facility · grupos en plataforma)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.50 (realtime publication + race fix solo→split→invite)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.49 (elasticidad por facility · grupos en plat
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.49">
+<meta name="version" content="19.50">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2338,6 +2338,30 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     - validate_match_facility_type trigger: mismo cambio
 //   • Validación post-deploy: testbed Top Cuack Golf Range (plataforma, 720 slots) podrá
 //     convertir reservas a Grupo. TrackMan Simulator GDL (simulador) seguirá bloqueado.
+// v19.50 (realtime publication + race fix solo→split→invite):
+//   • Bugs detectados en E2E del flow solo→split→invitar (reserva 2B37):
+//   
+//   FRICTION 1: Después del PaymentModeChooserSheet, el InvitePlayersSheet no se abría
+//   automáticamente. Carlos tuvo que clickear "Invitar a jugar" una segunda vez.
+//   Causa: race condition entre setPayChooser(null) (unmount) y setInvModal(fresh) (mount)
+//   en el mismo tick. React batcheaba ambos state changes y a veces el segundo sheet no
+//   aparecía visualmente.
+//   Fix: setTimeout(()=>setInvModal(fresh), 50) para encolar el mount del invite sheet
+//   al siguiente tick, garantizando que el chooser ya esté desmontado.
+//   
+//   FRICTION 2: El invitado se creó correctamente en BD (bp Alex DLP, status='invited')
+//   pero no apareció en el detalle de la reserva. ParticipantsSection tiene useRealtime
+//   sobre booking_participants pero el listener nunca disparaba.
+//   Causa raíz: las tablas `bookings` y `booking_participants` NO estaban en la
+//   publication `supabase_realtime`. Bug histórico latente — los listeners se subscribían
+//   pero jamás recibían eventos.
+//   Fix: ALTER PUBLICATION supabase_realtime ADD TABLE bookings, booking_participants.
+//   Ahora todos los listeners de detail screen + ParticipantsSection + invitations
+//   funcionan en tiempo real correctamente.
+//   
+//   • Otras tablas que YA estaban en realtime (sin tocar): notifications, tournaments,
+//     tournament_players, tournament_scores, match_members, match_requests.
+//   • Sin migración de datos. Sin cambios en RPCs ni edge functions.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -2607,8 +2631,10 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
     }}/>}
     {convertModal&&<ConvertToGroupModal booking={convertModal} onClose={()=>setConvertModal(null)} onConverted={async()=>{const{data:fresh}=await sb.from("bookings").select("*").eq("id",convertModal.id).single();if(fresh)setDetail(fresh);load();}}/>}
     {/* v19.48: PaymentModeChooserSheet aparece cuando el user clickea "Invitar" estando en payment_mode='solo'.
-        Al elegir compartir/split, llama RPC convert_solo_to_payment_mode y luego abre InvitePlayersSheet con el booking actualizado. */}
-    {payChooser&&<PaymentModeChooserSheet booking={payChooser} onClose={()=>setPayChooser(null)} onChosen={(fresh)=>{setDetail(fresh);setPayChooser(null);setInvModal(fresh);load();}}/>}
+        Al elegir compartir/split, llama RPC convert_solo_to_payment_mode y luego abre InvitePlayersSheet con el booking actualizado.
+        v19.50: setTimeout(...,50) para evitar race condition entre el unmount del chooser y el mount del invite sheet.
+        Sin el delay, React batchea ambos setState y a veces el invite sheet no aparece (solo se ve el chooser cerrarse). */}
+    {payChooser&&<PaymentModeChooserSheet booking={payChooser} onClose={()=>setPayChooser(null)} onChosen={(fresh)=>{setDetail(fresh);setPayChooser(null);load();setTimeout(()=>setInvModal(fresh),50);}}/>}
   </div>;}
   return<div style={{padding:16}}><div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Invitaciones")+(invitations.length>0?" ("+invitations.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
     {tab==="requests"&&<>{invitations.length===0?<EmptyState icon="mail" iconColor={C.tm} title={t("Sin invitaciones pendientes")} sub={t("Cuando alguien te invite a una reserva, aparecerá aquí")}/>:invitations.map(inv=>{
