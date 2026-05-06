@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.54 (chip calendar · border consistente + solid bg + isolation)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.55 (chip calendar · sin scroll-fade + contain + flex layout interno)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.54 (chip calendar · border consistente + soli
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.54">
+<meta name="version" content="19.55">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -933,7 +933,7 @@ function Detail({c,onBack,onBook}){const{s,p}=useA();const[slots,setSlots]=useSt
       <div style={{fontSize:10,color:C.tm,marginTop:4}}>{p.valid_from} → {p.valid_until}{p.time_start?" · "+p.time_start+"-"+p.time_end:""}{p.min_players>1?" · Mín "+p.min_players+" jug":""}</div>
     </div>)}</div>}
     <div style={{..._s.flexB,marginBottom:10}}><div style={{display:"flex",alignItems:"center",gap:6}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,margin:0}}>{t("Tee Times")}</h3>{c.timezone&&c.timezone!==(p?.timezone||detectTz())&&<span style={{fontSize:9,color:C.gld,background:C.gld+"15",padding:"2px 6px",borderRadius:5,fontWeight:600}}>Hora {tzShort(c.timezone)}</span>}</div>{!ld&&slots.length>0&&<span className="price-badge" style={{fontSize:11,fontWeight:700,color:C.grn,background:C.grn+"15",padding:"4px 10px",borderRadius:8}}>{slots.length} disponibles · desde ${fm(Math.min(...slots.map(x=>Number(x.price))))}</span>}</div>
-    <div className="scroll-fade" style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:14}}>{n7().map(d=>{const day=new Date(d+"T12:00:00");const a=d===dt;return<button key={d} onClick={()=>setDt(d)} style={{minWidth:54,padding:"8px 10px",borderRadius:10,border:"1px solid "+(a?"transparent":C.bd),background:a?C.acc:C.glass||C.cd,cursor:"pointer",textAlign:"center",flexShrink:0,outline:"none",WebkitTapHighlightColor:"transparent",boxShadow:"none",position:"relative",isolation:"isolate",zIndex:a?2:1,transition:"background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease"}}><div style={{fontSize:10,fontWeight:600,color:a?"rgba(255,255,255,.85)":C.tm}}>{DN[day.getDay()]}</div><div style={{fontSize:15,fontWeight:700,color:a?"#fff":C.txt}}>{day.getDate()}</div></button>})}</div>
+    <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:14,WebkitOverflowScrolling:"touch"}}>{n7().map(d=>{const day=new Date(d+"T12:00:00");const a=d===dt;return<button key={d} onClick={()=>setDt(d)} style={{minWidth:54,minHeight:48,padding:"10px",borderRadius:10,border:"1px solid "+(a?"transparent":C.bd),background:a?C.acc:C.glass||C.cd,cursor:"pointer",textAlign:"center",flexShrink:0,outline:"none",WebkitTapHighlightColor:"transparent",boxShadow:"none",position:"relative",zIndex:a?2:1,contain:"layout paint",overflow:"hidden",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1}}><span style={{fontSize:10,fontWeight:600,color:a?"rgba(255,255,255,.85)":C.tm,lineHeight:1}}>{DN[day.getDay()]}</span><span style={{fontSize:15,fontWeight:700,color:a?"#fff":C.txt,lineHeight:1}}>{day.getDate()}</span></button>})}</div>
     {ld?<div style={{padding:16}}><Skeleton w="60%" h={16} mb={12}/><Skeleton w="100%" h={60}/><Skeleton w="80%" h={16}/></div>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}>{t("No hay tee times")}</div>:groupSlots()}
     
     {friendsHere.length>0&&<div style={{marginTop:16,marginBottom:6}}><div style={{fontSize:12,fontWeight:700,color:C.ts,marginBottom:6}}>👥 Amigos que jugaron aquí</div><div style={{display:"flex",gap:-4,alignItems:"center"}}>{friendsHere.slice(0,5).map((f,i)=><div key={f.id} style={{width:30,height:30,borderRadius:15,border:"2px solid "+C.bg,marginLeft:i>0?-8:0,overflow:"hidden",background:C.grn+"20",display:"flex",alignItems:"center",justifyContent:"center",zIndex:5-i}} title={f.nickname||f.full_name}>{f.avatar_url?<img src={f.avatar_url} style={{width:30,height:30,borderRadius:15,objectFit:"cover"}}/>:<span style={{fontSize:11}} dangerouslySetInnerHTML={{__html:ic("user",12,C.grn)}}/>}</div>)}{friendsHere.length>5&&<span style={{fontSize:11,color:C.ts,marginLeft:6}}>+{friendsHere.length-5}</span>}<span style={{fontSize:11,color:C.ts,marginLeft:8}}>{friendsHere.slice(0,3).map(f=>f.nickname||f.full_name?.split(" ")[0]).join(", ")}{friendsHere.length>3?" y "+(friendsHere.length-3)+" más":""}</span></div></div>}
@@ -2458,6 +2458,42 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //   • Si esto no resuelve, el bug NO está en el chip mismo sino en algún elemento padre
 //     o sibling. Próximo paso: pedir screenshot con DevTools para inspeccionar el
 //     elemento exacto que está dibujando la sombra.
+// v19.55 (chip calendar · 4to intento, info crucial: solo en mobile):
+//   • Carlos confirmó: el bug SOLO se ve en celular (no desktop) y SOLO en chip Mar 12.
+//   • Esa info descarta CSS estructural (sería igual en ambos). Apunta a un quirk de
+//     render mobile específico.
+//   • Investigación reveló dos posibles culpables a nivel CSS:
+//     (a) Media query `@media (hover:none) and (pointer:coarse)` aplica
+//         `min-height:40px` a TODOS los buttons en mobile. El chip tenía padding
+//         "8px 10px" + contenido ~25px = ~41px natural, pero en mobile específicamente
+//         el min-height puede causar artifacts de layout cuando el contenido está cerca
+//         del threshold.
+//     (b) `.scroll-fade::after` es un overlay con `border-radius:0 14px 14px 0` y un
+//         linear-gradient que va de transparente a var(--app-bg). Aunque está al lado
+//         derecho, puede tener interacciones inesperadas con el render de chips
+//         específicamente cuando overflowX está activo en mobile.
+//   • Cambios v19.55 (combinación radical de varios fixes):
+//     1. REMOVIDO className="scroll-fade" del calendario. El fade visual no es esencial
+//        y podía causar el artifact. Reemplazado por contenedor plain con
+//        WebkitOverflowScrolling:"touch" (smooth momentum scroll mobile).
+//     2. CHIP con min-height:48px explícito (mayor que el 40px del media query) para
+//        sacarlo de la zona de threshold y asegurar consistencia.
+//     3. Padding SIMÉTRICO "10px" en vez de "8px 10px" (anterior tenía padding
+//        diferente entre arriba/abajo y lados).
+//     4. Layout INTERNO con flex:column + alignItems:center + justifyContent:center.
+//        Antes los <div> hijos usaban defaults que en mobile podían dejar gaps.
+//        Ahora el contenido está centrado por flex, sin posibilidad de overflow vertical.
+//     5. `contain:"layout paint"` y `overflow:"hidden"` para limitar paint scope del
+//        chip — esto fuerza al navegador a renderizar el chip en su propio scope, sin
+//        bleeding hacia el espacio del chip vecino.
+//     6. `lineHeight:1` en los span hijos para eliminar baseline metrics que en mobile
+//        a veces dejan padding extra invisible.
+//     7. Cambiados <div> a <span> (más simple, menos quirks).
+//     8. QUITADA la transition (a veces causa repaint artifacts en mobile durante el
+//        cambio de active state).
+//   • Si NADA de esto funciona, el bug está fuera del chip. Plan B: pedir a Carlos
+//     screenshot con Chrome DevTools (USB remote debugging) para ver el árbol DOM y
+//     computed styles exactos del chip activo en mobile.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
