@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.48 (UX fix · solo→compartir/split chooser)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.49 (elasticidad por facility · grupos en plataforma)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.48 (UX fix · solo→compartir/split chooser)"
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.48">
+<meta name="version" content="19.49">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2309,6 +2309,35 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     mantienen sus guards de solo (defense in depth — son protecciones server-side correctas).
 //   • El user pasa por el modal una sola vez; tras la conversión, el flujo de invitar es
 //     idéntico al que existe para reservas que nacieron compartir/split desde el inicio.
+//   • v19.48-fix2 (post-deploy): dos correcciones tras E2E test del flujo split:
+//     - bp creator del split usaba payment_status='paid' (heredado del booking) pero
+//       el invariant enforce_split_payment_invariant exige paid_held|paid_transferred.
+//       FIX: distinguir según bookings.settled_at (paid_held si no settled, paid_transferred si sí).
+//     - trigger enforce_split_payment_invariant tenía 2 RAISE EXCEPTION con sintaxis inválida
+//       (mensaje en string + USING MESSAGE = duplicado). Bug latente que se disparó por
+//       primera vez con el flujo nuevo. FIX: separar condition_name del MESSAGE.
+// v19.49 (elasticidad por facility · grupos también en plataforma):
+//   • Auditoría completa de elasticidad por facility_type confirmó las reglas:
+//     campo:      ✅ aumentar/disminuir, ✅ invitar, ✅ split, ✅ grupo,  ✅ partida
+//     plataforma: ✅ aumentar/disminuir, ✅ invitar, ✅ split, ✅ grupo,  ❌ partida
+//     simulador:  ✅ aumentar/disminuir, ✅ invitar, ✅ split, ❌ grupo,  ❌ partida
+//   • Hallazgos pre-fix:
+//     1. canConvertSoloAndInvite (v19.48 nuevo) limitado a campo — bug, debería aplicar
+//        a todos los tipos porque la conversión de payment_mode es ortogonal al facility.
+//     2. canConvertGroup limitado a campo — bug, plataforma debería poder hacer grupos.
+//     3. RPC activate_group_mode rechazaba todo != campo — bug, plataforma OK.
+//     4. trigger validate_match_facility_type rechazaba todo != campo — bug, plataforma OK.
+//     5. canConvertPartida limitado a campo — correcto, no se toca.
+//     6. trigger validate_tournament_facility_type limitado a campo — correcto, no se toca.
+//   • Cambios frontend (este HTML):
+//     - canConvertSoloAndInvite: removido && course?.facility_type==='campo'
+//     - canConvertGroup: cambiado de ==='campo' a !=='simulador'
+//     - canConvertPartida: sin cambios (sigue solo campo)
+//   • Cambios backend (migración aplicada):
+//     - activate_group_mode RPC: guard cambiado de !='campo' a ='simulador'
+//     - validate_match_facility_type trigger: mismo cambio
+//   • Validación post-deploy: testbed Top Cuack Golf Range (plataforma, 720 slots) podrá
+//     convertir reservas a Grupo. TrackMan Simulator GDL (simulador) seguirá bloqueado.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -2448,10 +2477,14 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         // el botón "Invitar a jugar" mostramos un modal previo (PaymentModeChooserSheet) que pregunta
         // compartir vs split. Después de la elección, llama RPC convert_solo_to_payment_mode y
         // continúa con el flujo normal de invite (expand-and-invite).
-        const canConvertSoloAndInvite=isCreator&&detail.status==="confirmed"&&hoursUntil>24&&detail.payment_mode==="solo"&&course?.facility_type==="campo";
+        // v19.49: removido el filtro de facility_type. La conversión de payment_mode es ortogonal
+        // al tipo de facility — aplica a campo, plataforma y simulador por igual.
+        const canConvertSoloAndInvite=isCreator&&detail.status==="confirmed"&&hoursUntil>24&&detail.payment_mode==="solo";
         const hasGroupMode=detail.social_mode==="grupo";
         const hasPartidaMode=detail.social_mode==="partida";
-        const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type==="campo";
+        // v19.49: grupos permitidos en campo y plataforma; solo simulador bloqueado (cabinas individuales).
+        // canConvertPartida sigue solo en campo (las partidas requieren scorecards de 9/18 hoyos).
+        const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type!=="simulador";
         const canConvertPartida=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasPartidaMode&&!hasGroupMode&&course?.facility_type==="campo";
         const policyJSX=course?<div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>La hora del tee time ya pasó. No es posible cancelar ni reembolsar.</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> Estás a menos de 24h del tee time.</p><p style={{margin:"0 0 4px",color:C.acc}}>Si cancelas, <strong>no habrá reembolso</strong>. El pago queda como <strong>No-Show Fee</strong> (${fm(detail.total_cost)} MXN).</p><p style={{margin:0,color:C.ts}}>Tu espacio se liberará para otros jugadores.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de 24h antes</strong> — cancelación con reembolso completo.</p><p style={{margin:"0 0 4px"}}><strong style={{color:C.acc}}>Menos de 24h</strong> — sin reembolso (No-Show Fee). Se libera el espacio.</p><p style={{margin:0}}><strong style={{color:C.tm}}>Después del tee time</strong> — no se puede cancelar ni reembolsar.</p></>}</div>:null;
         return<>
