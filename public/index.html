@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.39-r2 (RPC + reactivity fix · "+new Date().toISOString().slice(0,10)+")","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.41 (invitee UX · leave_booking + visibility)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.39-r2 (RPC + reactivity fix · "+new Date().to
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.39">
+<meta name="version" content="19.41">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1502,8 +1502,34 @@ function ParticipantsSection({booking,isOwner,onChanged}){
   const[reduceDlg,setReduceDlg]=useState(false);
   const load=async()=>{
     setLd(true);
-    const{data}=await sb.from("booking_participants").select("*, profile:user_id(full_name,nickname,player_id)").eq("booking_id",booking.id).neq("status","cancelled").order("created_at",{ascending:true});
-    setParts(data||[]);setLd(false);
+    if(isOwner){
+      // El creator tiene visibilidad RLS sobre todos los bp del booking (user_id=auth.uid() del creator
+      // O invited_by=auth.uid() del creator). SELECT directo trae todos los campos incluido payment.
+      const{data}=await sb.from("booking_participants").select("*, profile:user_id(full_name,nickname,player_id)").eq("booking_id",booking.id).neq("status","cancelled").order("created_at",{ascending:true});
+      setParts(data||[]);
+    }else{
+      // v19.41: para invitees, la RLS solo deja ver su propia fila. Usamos la RPC SECURITY DEFINER
+      // get_booking_participants_view que retorna info pública (sin payment_status, split_amount,
+      // stripe ids). Mapeamos al shape esperado por el render con campos sensibles en null/0.
+      const{data,error}=await sb.rpc("get_booking_participants_view",{p_booking_id:booking.id});
+      if(error){console.error("[get_booking_participants_view]",error);setParts([])}
+      else setParts((data||[]).map(r=>({
+        id:r.bp_id,
+        user_id:r.user_id,
+        status:r.status,
+        joined_via:r.joined_via,
+        is_creator_proportional:r.is_creator_proportional,
+        split_amount:0,
+        payment_status:null,
+        coverage_source:null,
+        profile:{
+          full_name:r.user_full_name,
+          nickname:r.user_nickname,
+          player_id:r.user_player_id
+        }
+      })));
+    }
+    setLd(false);
   };
   useEffect(()=>{if(booking?.id)load()},[booking?.id,booking?.updated_at]);// v19.34: depende también de updated_at para refetch garantizado cuando expand-and-invite muta el booking, en caso de que el realtime listener falle.
   // v19.35: el realtime también dispara onChanged() para refrescar el booking entero (party_size, total_cost)
@@ -2052,6 +2078,27 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     booking_id, que refrescan openDetail al detectar cambios. Cubren invitados que aceptan/
 //     cancelan, refunds, auto-reduce del trigger, y cambios de party_size/total_cost.
 //   • Sin cambios DB en este sprint — es UI + reactividad sobre datos ya existentes.
+// v19.40 (process-partial-refund · Stripe refunds parciales · BACKEND ONLY):
+//   • Nueva Edge fn `process-partial-refund` (verify_jwt=false, dual auth: cron secret + service
+//     role). Lee booking_participants WHERE payment_status='refund_pending' AND stripe_pi IS NOT
+//     NULL, llama stripe.refunds.create con idempotency_key=`refund_pp_<bp.id>`, marca payment_status
+//     ='refunded' + audita. Maneja amount=0 (cleanup), already_refunded (Stripe), errors transient
+//     (deja refund_pending para reintento).
+//   • Nuevo cron `partee_process_partial_refunds` cada 10 min (mismo patrón que execute-auto-close).
+//   • Validado E2E con Pipo: paid_held → cancelled → refund_pending → cron procesó →
+//     stripe_refund_id=re_3TTu99PbfR39rPLy0BC6UKBs ($800 MXN) en Stripe test mode dashboard.
+//   • Sin cambios HTML — todo backend.
+// v19.41 (invitee UX · leave_booking + visibilidad de jugadores):
+//   • Nueva RPC get_booking_participants_view(p_booking_id) SECURITY DEFINER, retorna info
+//     pública (sin payment) bypassing RLS estricta. Usada por ParticipantsSection cuando
+//     !isOwner — antes el SELECT directo solo dejaba al invitee verse a sí mismo.
+//   • Nueva RPC leave_booking(p_booking_id) que valida (no creator, >24h tee, participant
+//     activo) y dispara UPDATE bp.status='cancelled'. El trigger v19.37 hace todo lo demás
+//     (refund_pending si pagó → cron v19.40 procesa Stripe refund automático).
+//   • Nuevo botón "Salir de la reserva" en BkTab detalle visible para invitees activos.
+//     Confirmación + toast con monto de refund estimado. Mensaje clarifica reembolso en <10min.
+//   • ParticipantsSection.load: split path según isOwner. Owner usa SELECT directo (RLS lo deja
+//     ver invitados via invited_by=auth.uid()). Invitee usa RPC nueva.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -2192,6 +2239,12 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;
         const isCreator=detail.user_id===s?.user?.id;
         const canCancel=isCreator&&detail.status==="confirmed"&&!isPast&&!isSettled;
+        // v19.41: invitee puede salir de la reserva si está activo y >24h del tee.
+        // Detectamos su bp_id mirando la lista de participants (que ParticipantsSection ya cargó vía RPC).
+        // Como ParticipantsSection es hermano y no compartimos state, hacemos un check más simple aquí:
+        // permitimos el botón si el usuario NO es creator y la reserva está confirmada >24h.
+        // El backend (leave_booking RPC) re-valida que el caller sea participant activo.
+        const canLeave=!isCreator&&detail.status==="confirmed"&&hoursUntil>24&&!isSettled;
         // v19.36 (Model A): se removió el guard `social_mode!=='grupo'` de canShare y canMakeSpaceToInvite.
         // Ahora invitaciones manuales y joins via Versus coexisten — ambos terminan en expand_slot_capacity(+1).
         // El cap de 4 jugadores lo aplica el backend (increase_booking_size + expand_slot_capacity).
@@ -2225,6 +2278,42 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
               }else{await sb.from("bookings").update({status:"cancelled",cancelled_at:new Date().toISOString()}).eq("id",detail.id);try{await sb.rpc("release_slot",{p_course_name:detail.course_name,p_slot_date:detail.booking_date,p_slot_time:detail.booking_time,p_party_size:detail.party_size||1})}catch(e){}window.__toast?.("Reserva cancelada","success")}
               fetch(SB_FN_URL+"/notify-booking-change",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id,change_type:"cancel",change_data:{refund_amount:refundAmt}})}).catch(e=>{console.warn("[cancel] notify dispatch failed (non-fatal):",e)});
               setDetail(null);load()};const confirmMsg=isFree?t("¿Cancelar esta reserva? No hay cargos."):isIn24h?t("¿Cancelar en ")+detail.course_name+"?\n\n"+t("No habrá reembolso. El pago de $")+fm(actualPaid)+t(" MXN queda como No-Show Fee.\nTu espacio se liberará."):t("¿Cancelar esta reserva?")+"\n"+t("Reembolso completo: $")+fm(actualPaid)+" MXN.";if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go()}} style={{padding:"10px 14px",background:isIn24h&&!isFree?C.acc+"30":C.acc+"20",border:isIn24h&&!isFree?"1px solid "+C.acc+"40":"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{isIn24h&&!isFree?t("Cancelar (No-Show Fee)"):t("Cancelar")}</button>
+          </div>}
+          {/* v19.41: CTA para invitees — Salir de la reserva. Llama a RPC leave_booking que dispara
+              el trigger v19.37 (libera slot + marca refund_pending si pagó). El cron v19.40 procesa
+              el Stripe refund automáticamente en <10 min. */}
+          {canLeave&&<div style={{marginBottom:14}}>
+            <button onClick={()=>{
+              const go=async()=>{
+                try{
+                  const{data,error}=await sb.rpc("leave_booking",{p_booking_id:detail.id});
+                  if(error)throw error;
+                  if(data?.success){
+                    const willRefund=data.will_refund;
+                    const amt=Number(data.refund_amount||0);
+                    const msg=willRefund
+                      ?"Saliste de la reserva · Refund de $"+fm(amt)+" MXN se procesará en menos de 10 min"
+                      :"Saliste de la reserva";
+                    window.__toast?.(msg,"success");
+                    setDetail(null);
+                    load();
+                    loadInvitations();
+                  }
+                }catch(e){
+                  const msg=e?.message||"";
+                  if(msg.includes("creator_cannot_leave"))window.__toast?.("Como creador, debes cancelar la reserva entera","warn");
+                  else if(msg.includes("too_close_to_tee_time"))window.__toast?.("Muy cerca del tee time para salir (<24h)","warn");
+                  else if(msg.includes("not_an_active_participant"))window.__toast?.("No eres participante activo de esta reserva","warn");
+                  else window.__toast?.("Error al salir: "+msg,"error");
+                }
+              };
+              const confirmMsg="¿Salir de esta reserva?\n\nSe liberará tu lugar. Si ya pagaste, el reembolso se procesará automáticamente.";
+              if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go();
+            }} style={{width:"100%",padding:11,background:C.acc+"15",border:"1px solid "+C.acc+"30",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              <span dangerouslySetInnerHTML={{__html:ic("logout",14,C.acc)}}/>
+              {t("Salir de la reserva")}
+            </button>
+            <div style={{fontSize:10,color:C.tm,marginTop:6,textAlign:"center",lineHeight:1.5}}>{t("Si ya pagaste, recibirás reembolso automático en menos de 10 minutos.")}</div>
           </div>}
 
           {/* Colapsable 1: Detalles y políticas */}
@@ -4330,19 +4419,10 @@ const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);
     // sea creator/participant activo/match_member, y retorna solo info pública (sin payment
     // info ni stripe ids). Mapeamos la estructura aplanada al shape {...,user:{...}}.
     if(grp.booking_id){
-      console.log("[v19.39-r2] openDetail calling RPC for booking_id=",grp.booking_id,"match_id=",grp.id);
       const{data:bp,error:bpErr}=await sb.rpc("get_group_participants_view",{p_match_id:grp.id});
-      if(bpErr){
-        console.error("[v19.39-r2] get_group_participants_view ERROR:",bpErr);
-        window.__toast?.("RPC falló: "+(bpErr.message||bpErr.code||"unknown"),"error");
-        setBookingParts([])
-      }
-      else {
-        console.log("[v19.39-r2] RPC returned",(bp||[]).length,"rows:",bp);
-        setBookingParts((bp||[]).map(r=>({id:r.bp_id,user_id:r.user_id,status:r.status,joined_via:r.joined_via,is_creator_proportional:r.is_creator_proportional,user:{full_name:r.user_full_name,nickname:r.user_nickname,player_id:r.user_player_id,city:r.user_city,handicap:r.user_handicap}})));
-      }
+      if(bpErr){console.error("[get_group_participants_view]",bpErr);setBookingParts([])}
+      else setBookingParts((bp||[]).map(r=>({id:r.bp_id,user_id:r.user_id,status:r.status,joined_via:r.joined_via,is_creator_proportional:r.is_creator_proportional,user:{full_name:r.user_full_name,nickname:r.user_nickname,player_id:r.user_player_id,city:r.user_city,handicap:r.user_handicap}})));
     }else{
-      console.log("[v19.39-r2] openDetail: grp has no booking_id, skipping RPC");
       setBookingParts([]);
     }
   }
