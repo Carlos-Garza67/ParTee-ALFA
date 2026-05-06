@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.44 (movimientos · RPC bypass RLS para historial completo)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.45 (movimientos · monto correcto en split — solo mi parte)","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +32,7 @@ console.log("%c[Partee] Build v19.44 (movimientos · RPC bypass RLS para histori
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.44">
+<meta name="version" content="19.45">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2135,6 +2135,19 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //   • Frontend: removido el JOIN inline; ahora hace fetch separado de bps + RPC para resolver
 //     nombres de cursos. Fallback gracioso si la RPC falla: muestra "Reserva" como title genérico.
 //   • Sin cambios en lógica de negocio. Solo arreglo de visibilidad para histórico de cancelaciones.
+// v19.45 (movimientos · monto correcto en split):
+//   • Bug detectado: en payment_mode='split', el cargo del creator mostraba booking.total_cost
+//     completo (ej. $1,600 para Tres Marías con party_size=2) pero realmente Profeta solo pagó
+//     SU parte ($800). El total_cost refleja lo que el grupo pagará completo, no lo que el creator
+//     puso de su tarjeta.
+//   • Modelo correcto en split:
+//     - Creator paga al crear la reserva: SU split_amount (registrado en bp con is_creator_proportional=true)
+//     - Cada invitee paga al aceptar: SU split_amount (registrado en bp con stripe_payment_intent_id propio)
+//   • Solución: traer todos los bps del usuario sin filtrar por user_id, indexar por booking_id,
+//     y para cada cargo de booking propio leer el split_amount del bp creator-proportional cuando
+//     payment_mode='split'. Para 'solo'/'compartir', sigue usando total_cost.
+//   • Refunds del creator también ajustados: si el booking se canceló y era split, el refund mostrado
+//     es solo lo que el creator recibió (su split_amount), no el total_cost.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -3313,50 +3326,55 @@ function PaymentAndMovementsSection(){
     if(!s?.user?.id)return;
     let alive=true;
     Promise.all([
-      // Bookings que hice yo como creator (cargos directos a mí)
-      sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_status,status,created_at,booking_code").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
-      // Mi participación como invitee en bookings ajenos. v19.44: NO usar JOIN booking:booking_id(...)
-      // porque la RLS de bookings bloquea la lectura cuando bp.status es terminal (cancelled/rejected).
-      // En su lugar, traemos los bp solos y luego hacemos un fetch separado de los bookings por su id
-      // (la RLS de bookings nos deja leer porque pasamos bp.booking_id directo, y la función
-      // is_booking_participant retorna true solo para activos — pero como nosotros somos los user_id
-      // del bp, sí podemos leer el booking via la otra rama de la policy bookings_select_creator
-      // O mejor: usamos la RPC que ya existe para esto, o un select directo sin RLS-blocked JOIN).
-      sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,refunded_at,created_at,payment_status").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred","refund_pending","refunded"]).order("created_at",{ascending:false}).limit(60),
+      // Bookings que hice yo como creator (cargos directos a mí — pero monto correcto solo si NO es split)
+      sb.from("bookings").select("id,course_name,booking_date,booking_time,total_cost,payment_mode,payment_status,status,created_at,booking_code").eq("user_id",s.user.id).in("payment_status",["paid","refunded","partially_refunded"]).order("created_at",{ascending:false}).limit(60),
+      // TODOS mis bp con paid_at (incluye creator_proportional + invitee de splits ajenos).
+      // v19.45: NO filtrar por user_id≠creator aquí, porque también necesito mi bp como creator-proportional
+      // para saber cuánto pagué realmente cuando payment_mode='split'.
+      sb.from("booking_participants").select("id,booking_id,split_amount,paid_at,refunded_at,created_at,payment_status,is_creator_proportional").eq("user_id",s.user.id).in("payment_status",["paid_held","paid_transferred","refund_pending","refunded"]).order("created_at",{ascending:false}).limit(60),
     ]).then(async([bksRes,partRes])=>{
       if(!alive)return;
-      setCharges(bksRes.data||[]);
-      const myParts=partRes.data||[];
-      // v19.44: para cada bp, traemos el booking via RPC SECURITY DEFINER (la RLS de bookings
-      // bloquea SELECT directo cuando bp.status es terminal — ej. Robocop con cancelled). La RPC
-      // get_my_booking_history retorna info pública de TODOS los bookings donde el usuario ha
-      // tenido participación, incluso si ahora está cancelled/refunded.
-      if(myParts.length>0){
-        const{data:bks,error:bksErr}=await sb.rpc("get_my_booking_history");
-        if(bksErr)console.warn("[movimientos] get_my_booking_history falló:",bksErr);
-        const bkMap=new Map((bks||[]).map(b=>[b.booking_id,{id:b.booking_id,course_name:b.course_name,booking_date:b.booking_date,user_id:b.is_mine?s.user.id:null}]));
-        const enriched=myParts.map(p=>({...p,booking:bkMap.get(p.booking_id)||null}));
-        // Filtramos solo los bookings ajenos. Si el booking quedó null por algún caso edge,
-        // lo incluimos igual (mejor mostrar "Reserva" genérico que esconder el cargo del usuario).
-        setMyParticipations(enriched.filter(p=>!p.booking||p.booking.user_id!==s.user.id));
-      }else{
-        setMyParticipations([]);
-      }
+      const allBps=partRes.data||[];
+      // v19.45: indexar bps por booking_id para hacer match con cargos del creator
+      const myBpByBookingId=new Map();
+      allBps.forEach(p=>{
+        if(!myBpByBookingId.has(p.booking_id))myBpByBookingId.set(p.booking_id,[]);
+        myBpByBookingId.get(p.booking_id).push(p);
+      });
+      // v19.45: enriquecer cada cargo del creator con la info de su bp creator-proportional (si existe)
+      const enrichedCharges=(bksRes.data||[]).map(b=>{
+        const myBps=myBpByBookingId.get(b.id)||[];
+        const myCreatorBp=myBps.find(p=>p.is_creator_proportional);
+        return{...b,_myCreatorBp:myCreatorBp};
+      });
+      setCharges(enrichedCharges);
+      // Resolver nombres de cursos para bookings ajenos via RPC (RLS bypass para bps terminales)
+      const{data:bks,error:bksErr}=await sb.rpc("get_my_booking_history");
+      if(bksErr)console.warn("[movimientos] get_my_booking_history falló:",bksErr);
+      const bkMap=new Map((bks||[]).map(b=>[b.booking_id,{id:b.booking_id,course_name:b.course_name,booking_date:b.booking_date,user_id:b.is_mine?s.user.id:null}]));
+      // Solo bps de bookings AJENOS (donde NO soy creator) — esos son los splits que pagué como invitee
+      setMyParticipations(allBps.filter(p=>!p.is_creator_proportional).map(p=>({...p,booking:bkMap.get(p.booking_id)||null})).filter(p=>!p.booking||p.booking.user_id!==s.user.id));
       setLd(false);
     }).catch((e)=>{console.error("[movimientos]",e);if(alive)setLd(false)});
     return()=>{alive=false};
   },[s?.user?.id]);
   // Construir lista unificada de movimientos — solo míos directos
   const movements=[];
-  // 1) Cargos por bookings que hice como creator
+  // 1) Cargos por bookings que hice como creator.
+  // v19.45: el monto correcto depende del payment_mode:
+  //   - 'solo'/'compartir' → pago el total_cost completo del booking
+  //   - 'split' → solo pago mi parte (bp.split_amount donde is_creator_proportional=true)
   charges.forEach(b=>{
+    const isSplit=b.payment_mode==="split";
+    const myAmount=isSplit&&b._myCreatorBp?Number(b._myCreatorBp.split_amount||0):Number(b.total_cost||0);
+    const splitNote=isSplit?" · "+t("Tu parte del split"):"";
     movements.push({
       id:"chg-"+b.id,
       kind:"charge",
       date:b.created_at||b.booking_date,
-      amount:Number(b.total_cost||0),
+      amount:myAmount,
       title:b.course_name||"Reserva",
-      sub:b.booking_date+" · "+t("Reserva")+(b.booking_code?" "+b.booking_code:""),
+      sub:b.booking_date+" · "+t("Reserva")+(b.booking_code?" "+b.booking_code:"")+splitNote,
       status:b.payment_status,
     });
     if(b.payment_status==="refunded"){
@@ -3364,7 +3382,7 @@ function PaymentAndMovementsSection(){
         id:"ref-"+b.id,
         kind:"refund",
         date:b.created_at,
-        amount:Number(b.total_cost||0),
+        amount:myAmount,
         title:b.course_name||"Reserva",
         sub:t("Reembolso completo"),
         status:"refunded",
