@@ -7,6 +7,8 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
+// PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v19.39-r2 (RPC + reactivity fix · "+new Date().toISOString().slice(0,10)+")","color:#00b894;font-weight:bold;font-size:13px");
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -4322,14 +4324,25 @@ const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);
     setPending(pend||[]);
     // v19.39: si el grupo está vinculado a un booking, cargar también booking_participants
     // para visualizar invitados manuales (joined_via='friend_invite') que NO están en match_members.
-    // Solo statuses activos — los terminales (cancelled/rejected/expired/left) ya liberaron su cupo.
+    // v19.39-fix: usamos la RPC get_group_participants_view (SECURITY DEFINER) en vez de un
+    // SELECT directo, porque la RLS de booking_participants solo deja a cada usuario ver su
+    // propia fila (user_id=auth.uid() OR invited_by=auth.uid()). La RPC valida que el caller
+    // sea creator/participant activo/match_member, y retorna solo info pública (sin payment
+    // info ni stripe ids). Mapeamos la estructura aplanada al shape {...,user:{...}}.
     if(grp.booking_id){
-      const{data:bp}=await sb.from("booking_participants")
-        .select("*,user:user_id(full_name,nickname,player_id,city,handicap)")
-        .eq("booking_id",grp.booking_id)
-        .in("status",["invited","accepted","accepted_pending_payment"]);
-      setBookingParts(bp||[]);
+      console.log("[v19.39-r2] openDetail calling RPC for booking_id=",grp.booking_id,"match_id=",grp.id);
+      const{data:bp,error:bpErr}=await sb.rpc("get_group_participants_view",{p_match_id:grp.id});
+      if(bpErr){
+        console.error("[v19.39-r2] get_group_participants_view ERROR:",bpErr);
+        window.__toast?.("RPC falló: "+(bpErr.message||bpErr.code||"unknown"),"error");
+        setBookingParts([])
+      }
+      else {
+        console.log("[v19.39-r2] RPC returned",(bp||[]).length,"rows:",bp);
+        setBookingParts((bp||[]).map(r=>({id:r.bp_id,user_id:r.user_id,status:r.status,joined_via:r.joined_via,is_creator_proportional:r.is_creator_proportional,user:{full_name:r.user_full_name,nickname:r.user_nickname,player_id:r.user_player_id,city:r.user_city,handicap:r.user_handicap}})));
+      }
     }else{
+      console.log("[v19.39-r2] openDetail: grp has no booking_id, skipping RPC");
       setBookingParts([]);
     }
   }
