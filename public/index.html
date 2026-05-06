@@ -2015,13 +2015,23 @@ function ConvertToGroupModal({booking,onClose,onConverted}){
 //     split + invitee NO pagó → solo accounting, sin refund inapropiado.
 //   • Nuevo valor 'refund_pending' en booking_participants.payment_status (CHECK actualizado).
 //     Estado intermedio: el slot se liberó pero el Stripe refund aún no se procesa.
-//   • TODO v19.38: build process-partial-refund Edge fn que lea participants con
+//   • invite_booking_participant ahora reactiva registros en estado terminal (rejected/cancelled/
+//     expired/left) en vez de fallar por la UNIQUE constraint (booking_id, user_id). Mantiene
+//     id y created_at por trazabilidad. Response incluye reactivated:true cuando aplica.
+//   • TODO v19.39: build process-partial-refund Edge fn que lea participants con
 //     payment_status='refund_pending' y procese stripe.refunds.create.
 // Frontend:
 //   • InvitePlayersSheet ahora carga activeUserIds (no solo el count) y muestra los amigos
 //     ya participantes deshabilitados con badge "YA EN LA RESERVA". toggleFr defendido contra
 //     state corruption. Solo bloquea statuses activos (invited/accepted) — rejected sigue
 //     siendo seleccionable para re-invitación.
+// v19.38 (Versus visibility fix):
+//   • MatchScreen / Buscar Grupos: removido el JOIN booking:booking_id(social_mode) que la RLS
+//     de bookings bloqueaba para usuarios con status terminal en el booking (cancelled/rejected/
+//     etc.). is_booking_participant solo concede SELECT a statuses activos, así que un usuario
+//     que rechazó una invitación previa no podía ver ese mismo booking como grupo público en
+//     Versus. Validamos en BD que no hay match_requests legacy inconsistentes, por lo que el
+//     filtro era redundante. Cambio mínimo: 1 línea SELECT + 1 línea filter.
 // flecha animada y body con borde superior. Estado controlado externamente para persistir
 // entre renders del padre.
 function Collapsible({title,icon,open,onToggle,children}){
@@ -4184,10 +4194,18 @@ function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=us
     // v18.0.11 — además filtrar legacy: solo bookings con social_mode='grupo'
     // v18.0.18 — además filtrar grupos donde ya soy participant del booking (split-invited),
     // para evitar que aparezcan opciones donde un click "Unirme" intente cobrar de nuevo.
+    // v19.38: removido el JOIN booking:booking_id(social_mode) y su filtro asociado. Causa
+    // raíz del bug: la RLS de bookings (vía is_booking_participant) solo concede SELECT a
+    // usuarios con status activo (invited/accepted/...). Un usuario que canceló o rechazó
+    // una invitación pasada al mismo booking veía ese JOIN como booking=null, y el filtro
+    // (!g.booking_id || g.booking?.social_mode==="grupo") lo excluía erróneamente. Como
+    // verificamos en BD que NO hay match_requests legacy con booking inconsistente, el filtro
+    // de social_mode era redundante y solo causaba este edge case. Si en el futuro aparecen
+    // legacy, se atacarán con validación al insert o un trigger de coherencia.
     const{data:myParticipantBookings}=await sb.from("booking_participants").select("booking_id").eq("user_id",s.user.id).in("status",["accepted","accepted_pending_payment"]);
     const myBookingIds=new Set((myParticipantBookings||[]).map(p=>p.booking_id).filter(Boolean));
-    const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap),booking:booking_id(social_mode)").eq("visibility","public").eq("status","open").neq("creator_id",s.user.id).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");
-    setGroups((all||[]).filter(g=>(!g.booking_id||g.booking?.social_mode==="grupo")&&!myBookingIds.has(g.booking_id)));
+    const{data:all}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("visibility","public").eq("status","open").neq("creator_id",s.user.id).gte("play_date",new Date().toISOString().slice(0,10)).order("play_date").order("play_time");
+    setGroups((all||[]).filter(g=>!myBookingIds.has(g.booking_id)));
     // 2) User memberships: which groups am I in and with what status
     const{data:mems}=await sb.from("match_members").select("match_id,status").eq("user_id",s.user.id);
     const memMap={};(mems||[]).forEach(m=>{memMap[m.match_id]=m.status});
