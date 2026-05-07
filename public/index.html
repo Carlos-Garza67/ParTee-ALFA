@@ -8,7 +8,36 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.55 (chip calendar · sin scroll-fade + contain + flex layout interno)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.56 (cancel by creator · híbrido split/compartir + course policy)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.56 (cancel by creator · sistema híbrido):
+//   • Reemplazado el handler del botón "Cancelar" en BookingDetail. Antes:
+//     - UPDATE bookings status=cancelled directo + release_slot
+//     - process-refund edge fn si había stripe_payment_intent
+//     - Mensaje hardcoded "No-Show Fee" cuando <24h
+//   • Ahora llama RPC cancel_booking_by_creator(p_booking_id) que aplica:
+//     1. GUARD policy: si hours_to_tee < course.cancellation_hours → REJECT
+//        con error 'cancellation_policy_violation' + DETAIL JSON con phone/email
+//        del campo. El frontend muestra modal con datos de contacto en vez de
+//        intentar cancelar.
+//     2. Si payment_mode=compartir (o solo) → SIEMPRE cancel_total + refund 100%
+//        al creator. Los BPs no pagaron, quedan cancelled con notif.
+//     3. Si payment_mode=split:
+//        - sin BPs pagados activos → cancel_total + refund al creator
+//        - con BPs pagados → TRANSFER OWNERSHIP al BP más antiguo accepted+paid:
+//          * bookings.user_id cambia al nuevo creator
+//          * is_creator_proportional=true se transfiere
+//          * party_size -= 1, total_cost recalculado
+//          * Si party=1 y había partida/grupo → social_mode='none' + match cancel
+//          * Refund 100% al creator anterior
+//          * Notif customizada por rol (old_creator, new_creator, other_bp, admin)
+//   • Toast diferenciado:
+//     - cancel_total: "Reserva cancelada · Reembolso completo $X MXN"
+//     - transfer_ownership: "Reserva transferida · Refund de $X MXN se procesará en menos de 10 min"
+//   • policyJSX actualizado: lee course.cancellation_hours y .cancellation_refund_pct
+//     directamente (antes hardcoded a 24h y 100%). Menciona transfer ownership en split.
+//   • Backend RPC dispara notify-booking-change automáticamente, ya no hace falta
+//     fetch desde el frontend.
+//   • Documentación previa de cancel by creator queda obsoleta.
 // v19.5: Theme bootstrap. Aplica CSS vars antes que renderice el splash para
 // evitar flash visual entre splash estático y loader interno de React.
 (function(){
@@ -32,7 +61,7 @@ console.log("%c[Partee] Build v19.55 (chip calendar · sin scroll-fade + contain
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="19.55">
+<meta name="version" content="19.56">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -2642,17 +2671,21 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         // canConvertPartida sigue solo en campo (las partidas requieren scorecards de 9/18 hoyos).
         const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type!=="simulador";
         const canConvertPartida=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasPartidaMode&&!hasGroupMode&&course?.facility_type==="campo";
-        const policyJSX=course?<div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>La hora del tee time ya pasó. No es posible cancelar ni reembolsar.</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> Estás a menos de 24h del tee time.</p><p style={{margin:"0 0 4px",color:C.acc}}>Si cancelas, <strong>no habrá reembolso</strong>. El pago queda como <strong>No-Show Fee</strong> (${fm(detail.total_cost)} MXN).</p><p style={{margin:0,color:C.ts}}>Tu espacio se liberará para otros jugadores.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de 24h antes</strong> — cancelación con reembolso completo.</p><p style={{margin:"0 0 4px"}}><strong style={{color:C.acc}}>Menos de 24h</strong> — sin reembolso (No-Show Fee). Se libera el espacio.</p><p style={{margin:0}}><strong style={{color:C.tm}}>Después del tee time</strong> — no se puede cancelar ni reembolsar.</p></>}</div>:null;
+        const policyJSX=course?<div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>La hora del tee time ya pasó. No es posible cancelar ni reembolsar.</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> Estás dentro de la ventana de cancelación del campo.</p><p style={{margin:"0 0 4px",color:C.ts}}>No es posible cancelar desde la app. Para cancelar, contacta directamente a {course.course_name||"el campo"}{course.phone_number?" al "+course.phone_number:""}.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de {course.cancellation_hours||24}h antes</strong> — cancelación con reembolso del {course.cancellation_refund_pct||100}%.</p>{detail.payment_mode==="split"?<p style={{margin:"0 0 4px",color:C.ts}}>Si tienes invitados que ya pagaron, la reserva se transfiere al primer jugador en aceptar y tú recibes refund de tu parte.</p>:null}<p style={{margin:"0 0 4px",color:C.ts}}>Estando dentro de la ventana de cancelación, contacta directo al campo.</p><p style={{margin:0}}><strong style={{color:C.tm}}>Después del tee time</strong> — no se puede cancelar ni reembolsar.</p></>}</div>:null;
         return<>
           {/* CTAs primarios */}
           {canCancel&&<div style={{display:"flex",gap:8,marginBottom:14}}>
             {(canShare||canMakeSpaceToInvite||canConvertSoloAndInvite)?<button onClick={canShare?()=>setInvModal(detail):canMakeSpaceToInvite?()=>increaseBooking(true):()=>setPayChooser(detail)} disabled={busyAction} style={{flex:1,padding:10,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,cursor:busyAction?"not-allowed":"pointer",opacity:busyAction?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("users",14,"#fff")}}/>{t("Invitar a jugar")}</button>:null}
             <button onClick={async()=>{
-              // v19.24: Calcular monto realmente cobrado (en split sin amigos, total_cost != lo cobrado)
+              // v19.56: usa cancel_booking_by_creator RPC (sistema híbrido split vs compartir).
+              //   - Backend rechaza si hours_to_tee < cancellation_hours del course (policy guard)
+              //   - Para split con BPs pagados activos → transfer ownership al BP más antiguo
+              //   - Para split sin BPs pagados, compartir, o solo → cancel total + refund
+              //   - El backend dispara notify-booking-change automáticamente, ya no hace falta aquí
               let actualPaid=Number(detail.total_cost)||0;
-              if(detail.payment_mode==="split"&&detail.stripe_payment_intent&&detail.payment_status==="paid"){
+              if(detail.payment_mode==="split"&&detail.payment_status==="paid"){
                 try{
-                  const{data:parts}=await sb.from("booking_participants").select("split_amount,payment_status").eq("booking_id",detail.id).in("payment_status",["paid","paid_transferred"]);
+                  const{data:parts}=await sb.from("booking_participants").select("split_amount,payment_status").eq("booking_id",detail.id).in("payment_status",["paid","paid_held","paid_transferred"]);
                   if(parts&&parts.length>0){
                     const sum=parts.reduce((s,p)=>s+(Number(p.split_amount)||0),0);
                     if(sum>0)actualPaid=sum;
@@ -2660,12 +2693,57 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
                 }catch(e){console.warn("[cancel] failed to compute actual paid",e)}
               }
               const go=async()=>{
-              let refundAmt=0;
-              if(detail.stripe_payment_intent&&detail.payment_status==="paid"){
-                try{const r=await fetch(SB_FN_URL+"/process-refund",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id})});const d=await r.json();if(d.success){refundAmt=d.type==="no_show"?0:(d.refund_amount||0);const msg=d.type==="no_show"?"Cancelada · No-Show Fee $"+fm(d.fee_amount)+" MXN · Espacio liberado":"Cancelada · Reembolso completo $"+fm(d.refund_amount)+" MXN";window.__toast?.(msg,d.type==="no_show"?"info":"success")}else{window.__toast?.(d.error||"Error","error");return}}catch(e){window.__toast?.("Error: "+e.message,"error");return}
-              }else{await sb.from("bookings").update({status:"cancelled",cancelled_at:new Date().toISOString()}).eq("id",detail.id);try{await sb.rpc("release_slot",{p_course_name:detail.course_name,p_slot_date:detail.booking_date,p_slot_time:detail.booking_time,p_party_size:detail.party_size||1})}catch(e){}window.__toast?.("Reserva cancelada","success")}
-              fetch(SB_FN_URL+"/notify-booking-change",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:detail.id,change_type:"cancel",change_data:{refund_amount:refundAmt}})}).catch(e=>{console.warn("[cancel] notify dispatch failed (non-fatal):",e)});
-              setDetail(null);load()};const confirmMsg=isFree?t("¿Cancelar esta reserva? No hay cargos."):isIn24h?t("¿Cancelar en ")+detail.course_name+"?\n\n"+t("No habrá reembolso. El pago de $")+fm(actualPaid)+t(" MXN queda como No-Show Fee.\nTu espacio se liberará."):t("¿Cancelar esta reserva?")+"\n"+t("Reembolso completo: $")+fm(actualPaid)+" MXN.";if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go()}} style={{padding:"10px 14px",background:isIn24h&&!isFree?C.acc+"30":C.acc+"20",border:isIn24h&&!isFree?"1px solid "+C.acc+"40":"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{isIn24h&&!isFree?t("Cancelar (No-Show Fee)"):t("Cancelar")}</button>
+                try{
+                  const{data,error}=await sb.rpc("cancel_booking_by_creator",{p_booking_id:detail.id});
+                  if(error){
+                    // Manejar policy violation con mensaje informativo del campo
+                    const msg=error.message||"";
+                    if(msg.includes("cancellation_policy_violation")){
+                      let policyDetail={};
+                      try{policyDetail=JSON.parse(error.details||"{}")}catch(e){}
+                      const courseName=policyDetail.course_name||detail.course_name;
+                      const policyHours=policyDetail.policy_hours||24;
+                      const hoursToTee=policyDetail.hours_to_tee||0;
+                      const phone=policyDetail.course_phone;
+                      const email=policyDetail.course_email;
+                      let alertMsg="No puedes cancelar desde la app.\n\n";
+                      alertMsg+="Estás a "+hoursToTee+"h del tee time. La política de "+courseName+" permite cancelar hasta "+policyHours+"h antes.\n\n";
+                      alertMsg+="Para cancelar, contacta directamente al campo:\n";
+                      if(phone)alertMsg+="• Tel: "+phone+"\n";
+                      if(email)alertMsg+="• Email: "+email+"\n";
+                      if(!phone&&!email)alertMsg+="(Sin datos de contacto registrados — contacta soporte)";
+                      if(window.__confirm)window.__confirm(alertMsg,()=>{},{title:"Política de cancelación del campo",confirmLabel:"Entendido",hideCancel:true});
+                      else alert(alertMsg);
+                      return;
+                    }
+                    if(msg.includes("booking_not_confirmed")){window.__toast?.("La reserva no está confirmada","warn");return}
+                    if(msg.includes("only_creator_can_cancel"))return; // no debería pasar (UI ya filtra)
+                    if(msg.includes("transfer_ownership_no_eligible_bp")){window.__toast?.("Error al transferir: no se encontró jugador elegible","error");return}
+                    throw error;
+                  }
+                  if(data?.success){
+                    // Diferenciar copy según el path
+                    if(data.path==="transfer_ownership"){
+                      const refund=Number(data.refund_to_old_creator||0);
+                      window.__toast?.("Reserva transferida · Refund de $"+fm(refund)+" MXN se procesará en menos de 10 min","success");
+                    }else{
+                      // cancel_total
+                      const refundPct=data.refund_pct||100;
+                      const msg=refundPct>=100
+                        ?"Reserva cancelada · Reembolso completo $"+fm(actualPaid)+" MXN"
+                        :"Reserva cancelada · Reembolso "+refundPct+"% · $"+fm(actualPaid*refundPct/100)+" MXN";
+                      window.__toast?.(msg,"success");
+                    }
+                    setDetail(null);load();
+                  }
+                }catch(e){
+                  window.__toast?.("Error al cancelar: "+(e?.message||e),"error");
+                }
+              };
+              const confirmMsg=isFree
+                ?t("¿Cancelar esta reserva? No hay cargos.")
+                :t("¿Cancelar esta reserva?")+"\n"+t("Reembolso completo: $")+fm(actualPaid)+" MXN.";
+              if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go()}} style={{padding:"10px 14px",background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>
           </div>}
           {/* v19.41: CTA para invitees — Salir de la reserva. Llama a RPC leave_booking que dispara
               el trigger v19.37 (libera slot + marca refund_pending si pagó). El cron v19.40 procesa
