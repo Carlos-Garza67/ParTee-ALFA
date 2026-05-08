@@ -8,7 +8,26 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.61 (release combinado: OAuth race fix + account-deleted guard + full profile row)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.62 (leave_booking UX fix · invitee puede iniciar salida dentro de 24h con mensaje de policy)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.62 — Bug fix puntual reportado en reserva PT-20260509-2B37 (caso Pipo):
+//   • Síntoma: invitee que pagó split no veía botón "Salir de la reserva" cuando faltaban
+//     <24h al tee time. Quedaba sin opción ni feedback. Caso real: Pipo (Alex DLP) pagó
+//     $6,000 en una reserva de Quivira para mañana 06:00 AM — sin botón para salir.
+//   • Causa raíz (frontend): la condición `canLeave` duplicaba el guard `hoursUntil>24`
+//     que ya valida el backend. El creator NO tenía ese guard duplicado en `canCancel`
+//     (su flujo lo maneja el backend con mensaje contextual), creando una asimetría
+//     injusta entre roles.
+//   • Fix:
+//       - canLeave alineado con canCancel: solo pide !isCreator + status=confirmed + !isPast + !isSettled
+//       - onClick de "Salir de la reserva": pre-flight check si isIn24h muestra alertMsg
+//         con datos del campo (course.cancellation_hours, refund_pct, course_name, phone, email)
+//         simétrico al alertMsg del creator cuando recibe cancellation_policy_violation
+//       - Mensaje sugiere dos rutas: pedir al organizador que te remueva (procesa refund) o
+//         contactar directo al campo
+//       - Catch handler simplificado a red de seguridad para clock skew cliente/servidor
+//   • Backend leave_booking sin tocar: la RPC sigue siendo fuente de verdad de la regla,
+//     el frontend solo deja de duplicar la validación y mejora el feedback.
+//
 // v19.61 — Release que recoge los cambios introducidos en v19.59 y v19.60 más
 //   ajustes de housekeeping (archivo HTML renombrado con sufijo de versión
 //   `partee-v19_61.html`, banner alineado con la cadencia consecutiva).
@@ -2799,12 +2818,12 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;
         const isCreator=detail.user_id===s?.user?.id;
         const canCancel=isCreator&&detail.status==="confirmed"&&!isPast&&!isSettled;
-        // v19.41: invitee puede salir de la reserva si está activo y >24h del tee.
-        // Detectamos su bp_id mirando la lista de participants (que ParticipantsSection ya cargó vía RPC).
-        // Como ParticipantsSection es hermano y no compartimos state, hacemos un check más simple aquí:
-        // permitimos el botón si el usuario NO es creator y la reserva está confirmada >24h.
-        // El backend (leave_booking RPC) re-valida que el caller sea participant activo.
-        const canLeave=!isCreator&&detail.status==="confirmed"&&hoursUntil>24&&!isSettled;
+        // v19.41/v19.62: invitee puede iniciar la salida igual que el creator inicia la cancelación.
+        // Antes el frontend duplicaba el guard hoursUntil>24 y ocultaba el botón, dejando al
+        // invitee sin opción ni feedback dentro de la ventana. Ahora mostramos el botón siempre
+        // (mientras booking esté activo) y el backend leave_booking RPC valida policy. Si rechaza
+        // con too_close_to_tee_time, el catch handler de abajo muestra mensaje contextual del campo.
+        const canLeave=!isCreator&&detail.status==="confirmed"&&!isPast&&!isSettled;
         // v19.36 (Model A): se removió el guard `social_mode!=='grupo'` de canShare y canMakeSpaceToInvite.
         // Ahora invitaciones manuales y joins via Versus coexisten — ambos terminan en expand_slot_capacity(+1).
         // El cap de 4 jugadores lo aplica el backend (increase_booking_size + expand_slot_capacity).
@@ -2920,11 +2939,38 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
                 }catch(e){
                   const msg=e?.message||"";
                   if(msg.includes("creator_cannot_leave"))window.__toast?.("Como creador, debes cancelar la reserva entera","warn");
-                  else if(msg.includes("too_close_to_tee_time"))window.__toast?.("Muy cerca del tee time para salir (<24h)","warn");
+                  else if(msg.includes("too_close_to_tee_time")){
+                    // v19.62: red de seguridad para clock skew cliente/servidor; el pre-flight
+                    // upfront cubre el caso normal con mensaje contextual del campo.
+                    window.__toast?.("Muy cerca del tee time. Contacta al campo o al organizador.","warn");
+                  }
                   else if(msg.includes("not_an_active_participant"))window.__toast?.("No eres participante activo de esta reserva","warn");
                   else window.__toast?.("Error al salir: "+msg,"error");
                 }
               };
+              // v19.62: Si <24h del tee time, mostrar mensaje contextual del campo upfront.
+              // Sin esto, el usuario veía confirm "refund automático" → confirmaba → backend
+              // rechazaba con too_close_to_tee_time → alertMsg de policy. Dos dialogs con
+              // mensaje contradictorio. Mejor cortocircuito aquí, simétrico al flow del creator.
+              if(isIn24h){
+                const policyHours=course?.cancellation_hours||24;
+                const refundPct=course?.cancellation_refund_pct||0;
+                const courseName=course?.course_name||detail.course_name||"el campo";
+                const phone=course?.phone_number;
+                const email=course?.email;
+                const hoursStr=hoursUntil>0?hoursUntil.toFixed(1):"0";
+                let alertMsg="No puedes salir de la reserva desde la app.\n\n";
+                alertMsg+="Estás a "+hoursStr+"h del tee time. La política de "+courseName+" permite cancelar hasta "+policyHours+"h antes (con reembolso del "+refundPct+"%).\n\n";
+                alertMsg+="Para cancelar tu participación dentro de la ventana, tienes dos opciones:\n";
+                alertMsg+="• Pídele al organizador de la reserva que te remueva (procesa tu refund)\n";
+                alertMsg+="• Contacta directamente al campo:\n";
+                if(phone)alertMsg+="   Tel: "+phone+"\n";
+                if(email)alertMsg+="   Email: "+email+"\n";
+                if(!phone&&!email)alertMsg+="   (Sin datos de contacto registrados — contacta soporte)\n";
+                if(window.__confirm)window.__confirm(alertMsg,()=>{},{title:"Política de cancelación del campo",confirmLabel:"Entendido",hideCancel:true});
+                else alert(alertMsg);
+                return;
+              }
               const confirmMsg="¿Salir de esta reserva?\n\nSe liberará tu lugar. Si ya pagaste, el reembolso se procesará automáticamente.";
               if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go();
             }} style={{width:"100%",padding:11,background:C.acc+"15",border:"1px solid "+C.acc+"30",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
