@@ -8,22 +8,49 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.59 (Google OAuth race condition fix)","color:#00b894;font-weight:bold;font-size:13px");
-// v19.59 (Google OAuth race condition fix):
-//   • Síntoma: usuario hacía click "Iniciar con Google", Google autenticaba,
-//     pero al volver a Partee el sistema volvía a pedir auth. Segundo intento
-//     entraba bien.
+console.log("%c[Partee] Build v19.61 (release combinado: OAuth race fix + account-deleted guard + full profile row)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.61 — Release que recoge los cambios introducidos en v19.59 y v19.60 más
+//   ajustes de housekeeping (archivo HTML renombrado con sufijo de versión
+//   `partee-v19_61.html`, banner alineado con la cadencia consecutiva).
+//   Este archivo contiene los fixes detallados abajo, todos ya validados con
+//   smoke tests pt.13 y pt.14 en backend (RPCs + edge fn delete-account).
+//
+// v19.60 — Cierre de gaps documentados en smoke test pt.13:
+//   GAP 2 FIX (backend ensure_user_profile v2):
+//     • La RPC rechaza profiles con is_deleted=true (RAISE 'account_deleted').
+//     • Frontend (handleSignedIn) detecta el error y fuerza signOut + toast
+//       "Cuenta eliminada", cerrando el agujero donde un cliente custom con
+//       JWT zombi accedía a un profile soft-deleted.
+//   GAP 3 FIX (backend ensure_user_profile v2):
+//     • La RPC retorna ahora row_to_json(user_profile)::jsonb completo en el
+//       campo `profile`. Frontend ya no hace SELECT extra: usa rpcRes.profile
+//       directo (1 round-trip menos por login).
+//     • Fallback defensivo: si rpcRes.profile viene vacío (RPC vieja en cache
+//       de cliente), hace el SELECT extra como red de seguridad.
+//   GAP 1 (parcial — soft-delete via edge function existente):
+//     • Backend: dropeado FK CASCADE user_profiles.id→auth.users.id para
+//       desacoplar lifecycle (abre puerta a hard-delete GDPR si hace falta
+//       en el futuro sin migración estructural).
+//     • La edge function delete-account v5 ya hacía bien el soft-delete
+//       (anonimiza profile + banea auth.users 100 años + invalida sessions).
+//       Frontend del Profile ya la usa.
+//     • Frontend: el botón "Eliminar cuenta" del dashboard admin (legacy con
+//       UPDATE inline) ahora también llama la edge function delete-account,
+//       alineado con el flow elaborado del Profile.
+//
+// v19.59 — Google OAuth race condition fix:
+//   • Síntoma: tras "Iniciar con Google" Partee volvía a pedir auth; el
+//     segundo intento entraba bien.
 //   • Causa raíz: el frontend leía user_profiles antes de que el trigger DB
 //     handle_new_user terminara (~50-200ms latencia post-redirect).
-//   • Fix backend (ya deployado, no toca este archivo):
-//       - handle_new_user v2: OAuth users default user_role='player'
-//       - RPC public.ensure_user_profile() — IDEMPOTENTE, SECURITY DEFINER:
-//         si profile existe lo retorna, si no lo crea desde auth.users metadata.
-//   • Fix frontend (este archivo): el useEffect del componente Auth ahora
-//     llama ensure_user_profile() RPC antes de cargar el row completo. Esto
-//     garantiza que el profile exista sin importar si el trigger ya corrió.
-//     Bandera oauthInFlight previene doble ejecución entre INITIAL_SESSION
-//     y SIGNED_IN. Fallback a lp() legacy si la RPC falla 2 veces seguidas.
+//   • Fix backend: handle_new_user v2 (OAuth users default user_role='player')
+//     + RPC public.ensure_user_profile() idempotente SECURITY DEFINER que
+//     crea el profile desde auth.users metadata si el trigger no terminó.
+//   • Fix frontend: el useEffect del componente Auth llama ensure_user_profile()
+//     en handleSignedIn antes de cargar el row, garantizando que exista sin
+//     importar si el trigger terminó. Bandera oauthInFlight previene doble
+//     ejecución entre INITIAL_SESSION y SIGNED_IN. Fallback a lp() legacy si
+//     la RPC falla 2 veces seguidas.
 //   • Preservado intacto: password recovery (recoveryRef), email signup
 //     (signUp con polling de signIn), reset password, signOut, lp() (sigue
 //     usándose desde ref() y como red de seguridad).
@@ -768,21 +795,39 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
       clearTimeout(authTimeout);
       try{
         let{data:rpcRes,error:rpcErr}=await sb.rpc("ensure_user_profile");
+        // v19.60: detectar account_deleted (Gap 2 fix backend) y forzar signOut
+        const isDeletedError=(e)=>e&&((e.message&&e.message.includes("account_deleted"))||(e.hint==="account_deleted")||(e.details&&e.details.includes("eliminada")));
+        if(rpcErr&&isDeletedError(rpcErr)){
+          console.warn("[auth] cuenta eliminada, signOut forzado");
+          await sb.auth.signOut();
+          if(mounted){setS(null);setP(null);setLd(false);try{window.__toast?.(t("Esta cuenta fue eliminada"),"error")}catch(e){}}
+          return;
+        }
         if(rpcErr){
           console.warn("[auth] ensure_user_profile error, retry en 500ms:",rpcErr);
           await new Promise(r=>setTimeout(r,500));
           const retry=await sb.rpc("ensure_user_profile");
+          if(retry.error&&isDeletedError(retry.error)){
+            await sb.auth.signOut();
+            if(mounted){setS(null);setP(null);setLd(false);try{window.__toast?.(t("Esta cuenta fue eliminada"),"error")}catch(e){}}
+            return;
+          }
           if(retry.error){
             console.error("[auth] ensure_user_profile retry falló, cayendo a lp():",retry.error);
-            // Red de seguridad: si la RPC falla 2x, usar el flow legacy lp() que tiene sus propios retries
+            // Red de seguridad: si la RPC falla 2x por motivo no-bloqueante, usar el flow legacy lp()
             if(mounted){setS(session);await lp(session.user.id)}
             return;
           }
           rpcRes=retry.data;
         }
         if(!mounted)return;
-        // RPC retorna campos mínimos; el resto del app espera el row completo de user_profiles
-        const{data:fullProfile}=await sb.from("user_profiles").select("*").eq("id",rpcRes.user_id).maybeSingle();
+        // v19.60: RPC ahora retorna profile completo (Gap 3 fix). Sin SELECT extra.
+        // Fallback: si por algún motivo no viene profile (RPC vieja en cache), hacer SELECT.
+        let fullProfile=rpcRes?.profile||null;
+        if(!fullProfile&&rpcRes?.user_id){
+          const{data:fp}=await sb.from("user_profiles").select("*").eq("id",rpcRes.user_id).maybeSingle();
+          fullProfile=fp;
+        }
         if(!mounted)return;
         // Limpia tokens OAuth del hash sin reload (idéntico al comportamiento previo)
         if(hasOAuthTokens){const clean=window.location.origin+window.location.pathname;window.history.replaceState(null,"",clean)}
@@ -4612,7 +4657,25 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     {ft==="simulador"&&<><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}}>Cabinas ({parseInt(cbCount||course.cabins_count)||0})</h3><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{Array.from({length:Math.min(parseInt(cbCount||course.cabins_count)||0,20)},(_,i)=>i+1).map(n=><div key={n} style={{width:56,height:56,borderRadius:14,background:"#6c5ce710",border:"1px solid #6c5ce730",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:"#6c5ce7"}}>{n}</div>)}</div></>}
     {editHole&&<div className="modal-bg" onClick={()=>setEditHole(null)}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:14}}>Hoyo {editHole}</h3><div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>PAR</label><select value={hPar} onChange={x=>setHPar(x.target.value)} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="3">Par 3</option><option value="4">Par 4</option><option value="5">Par 5</option></select></div><div><label style={{fontSize:10,color:C.tm}}>DISTANCIA</label><input value={hDist} onChange={x=>setHDist(x.target.value)} type="number" placeholder="yds" style={{...inp0,marginTop:4}}/></div></div><textarea value={hDesc} onChange={x=>setHDesc(x.target.value)} placeholder={t("Descripción...")} style={{...inp0,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/><div style={{display:"flex",gap:8,marginTop:14}}><button onClick={saveHole} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button><button onClick={()=>setEditHole(null)} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
     <ThemeToggle/><LangToggle/><button onClick={onOut} style={{width:"100%",padding:12,marginTop:16,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
-    <button onClick={()=>{const go=async()=>{await sb.from("user_profiles").update({is_deleted:true,deleted_at:new Date().toISOString()}).eq("id",s.user.id);onOut()};if(window.__confirm)window.__confirm("¿Eliminar cuenta?",go);else if(confirm("¿Eliminar cuenta?"))go()}} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid #666",borderRadius:14,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
+    <button onClick={()=>{
+      // v19.60: alineado con el flow elaborado del Profile — usa edge function delete-account
+      // (soft-delete con blockers check + ban auth.users + anonymize profile + signOut global).
+      const go=async()=>{
+        try{
+          const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+          const res=await fetch(SB_FN_URL+"/delete-account",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"}});
+          const data=await res.json();
+          if(!res.ok||!data.success){
+            if(data.blockers&&data.blockers.length){window.__toast?.(t("Cuenta no eliminada: hay actividad pendiente"),"error")}
+            else{window.__toast?.(data.error||t("Error al eliminar cuenta"),"error")}
+            return;
+          }
+          window.__toast?.(t("Cuenta eliminada"),"success");
+          setTimeout(()=>onOut(),600);
+        }catch(e){window.__toast?.(t("Error al eliminar cuenta"),"error")}
+      };
+      if(window.__confirm)window.__confirm(t("¿Eliminar cuenta?"),go);else if(confirm(t("¿Eliminar cuenta?")))go();
+    }} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid #666",borderRadius:14,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
   </div>}
 
 function AdminPromos({course}){const[promos,setPromos]=useState([]);const[ld,setLd]=useState(true);const[create,setCreate]=useState(false);const[pType,setPType]=useState("percent");const[pVal,setPVal]=useState("");const[pFrom,setPFrom]=useState("");const[pUntil,setPUntil]=useState("");const[pTStart,setPTStart]=useState("");const[pTEnd,setPTEnd]=useState("");const[pDesc,setPDesc]=useState("");const[pMin,setPMin]=useState("1");const[pMaxUses,setPMaxUses]=useState("");const[editId,setEditId]=useState(null);
