@@ -8,25 +8,39 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.63 (OAuth · forzar selector de cuentas Google + cleanup signOut + anti doble-click)","color:#00b894;font-weight:bold;font-size:13px");
-// v19.63 — Bug fix detectado en producción post-v19.62 (caso Pipo + carlos.garzadlp):
-//   • Síntoma: usuario hace logout, va a la pantalla Auth, click "Continuar con Google" y
-//     vuelve a entrar con la misma cuenta sin poder elegir otra. Para el usuario se siente
-//     como "no deja cerrar sesión" porque efectivamente queda atrapado en una sola cuenta
-//     de Google. Caso reportado: Pipo (carlos.garza@joindr.com.mx) intentando alternar con
-//     carlos.garzadlp@gmail.com, ambos cuentas Carlos Garza.
-//   • Causa raíz: signInWithOAuth se llamaba sin queryParams.prompt. Google asume "auto-consent"
-//     cuando hay sesión activa del lado de Google y re-autoriza directo sin selector. El logout
-//     de Supabase limpia el JWT pero no la cookie de sesión de Google.
+console.log("%c[Partee] Build v19.64 (AdminProfile signOut · confirm dialog + ctxOut + marginBottom contra bottom-bar)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.64 — Bug fix específico reportado: course_admin (carlos.garzadlp@gmail.com) no podía
+//   hacer logout desde la sección de perfil. NO confundir con Pipo (carlos.garza@joindr.com.mx)
+//   que es player y SÍ pudo cerrar sesión sin problema (logs auth lo confirman, POST /logout 204).
+//
+//   • Síntoma: el course_admin clickea "Cerrar Sesión" en su perfil de admin y nada pasa.
+//     No hay feedback visual ni POST /logout en backend (verificado en auth logs entre
+//     23:20:13 y 23:26:31 UTC — gap de 6 min sin actividad de logout para 4e1cb419).
+//   • Causa raíz probable: el botón está al final del AdminProfile dentro de
+//     <div className="admin-content" style="padding:16; paddingBottom:70">. El paddingBottom:70
+//     es para una bottom-bar fija del admin (tabs Dashboard/Bookings/Slots/Promos/Payouts/etc).
+//     El botón quedaba parcialmente tapado por la bottom-bar y el click caía sobre la barra
+//     en vez del botón. Player Profile no tiene este problema porque su bottom-bar es distinta.
+//   • Asimetría con Player Profile (línea 4177, sí funciona):
+//     - Player: const{out}=useA() del context; click con confirm dialog (feedback visual).
+//     - Admin: const{s}=useA(); click directo onClick={onOut} via prop (sin feedback).
+//     - Si el click no se registra, el player ve que el confirm no apareció y reintenta;
+//       el admin no tiene forma de saber si el click llegó.
 //   • Fix:
-//       - signInWithOAuth ahora pasa `queryParams: { prompt: "select_account" }` para forzar
-//         a Google a mostrar el selector de cuentas siempre, incluso con sesión Google activa.
-//       - out() ahora también hace setLd(false) además de setS(null)+setP(null) para garantizar
-//         que la pantalla loader nunca quede pegada en transición.
-//       - Botón "Continuar con Google" ahora tiene disabled={busy} + opacity feedback para
-//         evitar doble-clicks durante el redirect (que generaban dos /authorize consecutivos
-//         en logs auth, visibles a 3s de distancia).
-//   • Backend sin tocar: este es un fix puramente de UX OAuth client-side.
+//       - AdminProfile destructura `out` del context: const{s,out:ctxOut}=useA(). Más
+//         confiable que depender de la prop onOut (mantenida como fallback).
+//       - Botón Cerrar Sesión usa el mismo patrón que Player Profile: confirm dialog
+//         (feedback visual inmediato) + out() del context.
+//       - Agregado marginBottom:14 al botón para garantizar separación de la bottom-bar
+//         y evitar que quede pegado al borde clickeable del fixed footer.
+//
+// v19.63 — OAuth · forzar selector de cuentas Google (mejoras laterales, no resolvían el bug
+//   v19.64). Los cambios siguen vigentes:
+//   • signInWithOAuth pasa `queryParams: { prompt: "select_account" }` para que Google muestre
+//     el selector de cuentas siempre, incluso con sesión activa Google.
+//   • out() también hace setLd(false) además de setS(null)+setP(null) para reset visual completo.
+//   • Botón "Continuar con Google" con disabled={busy} + opacity para evitar doble-clicks
+//     visibles en logs auth a 3s de distancia.
 //
 // v19.62 — Bug fix puntual reportado en reserva PT-20260509-2B37 (caso Pipo):
 //   • Síntoma: invitee que pagó split no veía botón "Salir de la reserva" cuando faltaban
@@ -4687,7 +4701,7 @@ function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=
     {selDate!==today&&<button onClick={()=>setSelDate(today)} style={{width:"100%",padding:10,marginTop:10,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Ir a hoy</button>}
   </div>}
 
-function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed}){const{s}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[desc,setDesc]=useState(course.description||"");const[phone,setPhone]=useState(course.phone_number||"");const[feeMin,setFeeMin]=useState(course.green_fee_min?.toString()||"");const[feeMax,setFeeMax]=useState(course.green_fee_max?.toString()||"");const[cancelHrs,setCancelHrs]=useState(course.cancellation_hours?.toString()||"24");const[cancelPct,setCancelPct]=useState(course.cancellation_refund_pct?.toString()||"100");const[opHours,setOpHours]=useState(course.operating_hours||"");const[opDays,setOpDays]=useState(course.operating_days||"");const[addr,setAddr]=useState(course.full_address||course.address||"");const[website,setWebsite]=useState(course.website||"");const[courseTz,setCourseTz]=useState(course.timezone||"America/Mexico_City");
+function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed}){const{s,out:ctxOut}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[desc,setDesc]=useState(course.description||"");const[phone,setPhone]=useState(course.phone_number||"");const[feeMin,setFeeMin]=useState(course.green_fee_min?.toString()||"");const[feeMax,setFeeMax]=useState(course.green_fee_max?.toString()||"");const[cancelHrs,setCancelHrs]=useState(course.cancellation_hours?.toString()||"24");const[cancelPct,setCancelPct]=useState(course.cancellation_refund_pct?.toString()||"100");const[opHours,setOpHours]=useState(course.operating_hours||"");const[opDays,setOpDays]=useState(course.operating_days||"");const[addr,setAddr]=useState(course.full_address||course.address||"");const[website,setWebsite]=useState(course.website||"");const[courseTz,setCourseTz]=useState(course.timezone||"America/Mexico_City");
   const[stCount,setStCount]=useState(course.stations_count?.toString()||"");const[cbCount,setCbCount]=useState(course.cabins_count?.toString()||"");const[simBrand,setSimBrand]=useState(course.simulator_brand||"");const[hasFood,setHasFood]=useState(course.has_food_service||false);const[hasShop,setHasShop]=useState(course.has_pro_shop||false);
   const[holes,setHoles]=useState([]);const[editHole,setEditHole]=useState(null);const[hPar,setHPar]=useState("4");const[hDist,setHDist]=useState("");const[hDesc,setHDesc]=useState("");
   const[photos,setPhotos]=useState(course.photo_urls||[]);const[upPh,setUpPh]=useState(false);
@@ -4721,7 +4735,16 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     {ft==="plataforma"&&<><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}}>Bahías ({parseInt(stCount||course.stations_count)||0})</h3><div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:14}}>{Array.from({length:Math.min(parseInt(stCount||course.stations_count)||0,72)},(_,i)=>i+1).map(n=><div key={n} style={{width:42,height:42,borderRadius:10,background:"#6c5ce712",border:"1px solid #6c5ce730",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#6c5ce7"}}>{n}</div>)}</div></>}
     {ft==="simulador"&&<><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}}>Cabinas ({parseInt(cbCount||course.cabins_count)||0})</h3><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{Array.from({length:Math.min(parseInt(cbCount||course.cabins_count)||0,20)},(_,i)=>i+1).map(n=><div key={n} style={{width:56,height:56,borderRadius:14,background:"#6c5ce710",border:"1px solid #6c5ce730",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:"#6c5ce7"}}>{n}</div>)}</div></>}
     {editHole&&<div className="modal-bg" onClick={()=>setEditHole(null)}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:14}}>Hoyo {editHole}</h3><div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>PAR</label><select value={hPar} onChange={x=>setHPar(x.target.value)} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="3">Par 3</option><option value="4">Par 4</option><option value="5">Par 5</option></select></div><div><label style={{fontSize:10,color:C.tm}}>DISTANCIA</label><input value={hDist} onChange={x=>setHDist(x.target.value)} type="number" placeholder="yds" style={{...inp0,marginTop:4}}/></div></div><textarea value={hDesc} onChange={x=>setHDesc(x.target.value)} placeholder={t("Descripción...")} style={{...inp0,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/><div style={{display:"flex",gap:8,marginTop:14}}><button onClick={saveHole} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button><button onClick={()=>setEditHole(null)} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
-    <ThemeToggle/><LangToggle/><button onClick={onOut} style={{width:"100%",padding:12,marginTop:16,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
+    <ThemeToggle/><LangToggle/><button onClick={()=>{
+      // v19.64: alineado con el patrón robusto del Player Profile (línea 4177).
+      // Antes: onClick={onOut} sin confirm → si el click no llegaba al backend (botón tapado
+      // por la bottom-bar fija del course_admin con paddingBottom:70 en admin-content), el
+      // usuario no tenía feedback visual de que algo pasó. El confirm dialog hace evidente
+      // que el click sí se registró, y el out() del context es más confiable que la prop.
+      const doOut=ctxOut||onOut;
+      if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>doOut());
+      else if(confirm(t("Cerrar sesión?")))doOut();
+    }} style={{width:"100%",padding:12,marginTop:16,marginBottom:14,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
     <button onClick={()=>{
       // v19.60: alineado con el flow elaborado del Profile — usa edge function delete-account
       // (soft-delete con blockers check + ban auth.users + anonymize profile + signOut global).
