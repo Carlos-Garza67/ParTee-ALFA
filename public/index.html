@@ -8,7 +8,26 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.58 (feature 'retos' retirado)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.59 (Google OAuth race condition fix)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.59 (Google OAuth race condition fix):
+//   • Síntoma: usuario hacía click "Iniciar con Google", Google autenticaba,
+//     pero al volver a Partee el sistema volvía a pedir auth. Segundo intento
+//     entraba bien.
+//   • Causa raíz: el frontend leía user_profiles antes de que el trigger DB
+//     handle_new_user terminara (~50-200ms latencia post-redirect).
+//   • Fix backend (ya deployado, no toca este archivo):
+//       - handle_new_user v2: OAuth users default user_role='player'
+//       - RPC public.ensure_user_profile() — IDEMPOTENTE, SECURITY DEFINER:
+//         si profile existe lo retorna, si no lo crea desde auth.users metadata.
+//   • Fix frontend (este archivo): el useEffect del componente Auth ahora
+//     llama ensure_user_profile() RPC antes de cargar el row completo. Esto
+//     garantiza que el profile exista sin importar si el trigger ya corrió.
+//     Bandera oauthInFlight previene doble ejecución entre INITIAL_SESSION
+//     y SIGNED_IN. Fallback a lp() legacy si la RPC falla 2 veces seguidas.
+//   • Preservado intacto: password recovery (recoveryRef), email signup
+//     (signUp con polling de signIn), reset password, signOut, lp() (sigue
+//     usándose desde ref() y como red de seguridad).
+//
 // v19.58 (eliminación feature 'retos'):
 //   • Razón: el flow de "retar a un jugador" estaba incompleto y no generaba
 //     valor concreto. Un reto NO incluía campo, fecha, formato ni stake; al
@@ -728,18 +747,78 @@ function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[sho
 const Ctx=createContext({});
 function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(null);const[ld,setLd]=useState(true);const[recovery,setRecovery]=useState(false);const recoveryRef=useRef(false);
   useEffect(()=>{
+    // v19.59: OAuth race-condition fix · usa RPC ensure_user_profile (idempotente)
+    // antes de cargar el row completo, garantizando que existe aunque el trigger
+    // handle_new_user todavía no haya terminado. Bandera oauthInFlight previene
+    // doble ejecución entre INITIAL_SESSION y SIGNED_IN sobre la misma sesión.
+    let mounted=true;
+    let oauthInFlight=false;
     const hasOAuthTokens=window.location.hash.includes("access_token")||window.location.search.includes("code=");
     let earlyFlag=window.__PARTEE_RECOVERY===true;
     try{if(sessionStorage.getItem("partee_recovery")==="1")earlyFlag=true}catch(e){}
     try{if(localStorage.getItem("partee_recovery")==="pending"&&hasOAuthTokens)earlyFlag=true}catch(e){}
     if(earlyFlag){recoveryRef.current=true;setRecovery(true)}
-    const authTimeout=setTimeout(()=>{if(ld){console.warn("Auth timeout");setLd(false)}},hasOAuthTokens?15000:8000);
-    const{data:{subscription}}=sb.auth.onAuthStateChange((event,ss)=>{clearTimeout(authTimeout);
+    const authTimeout=setTimeout(()=>{if(mounted){console.warn("Auth timeout");setLd(false)}},hasOAuthTokens?15000:8000);
+
+    // Handler unificado para SIGNED_IN (OAuth callback + restore de sesión existente).
+    // No se ejecuta en password recovery — ese path se maneja arriba en el listener.
+    const handleSignedIn=async(session)=>{
+      if(oauthInFlight||!mounted||!session?.user)return;
+      oauthInFlight=true;
+      clearTimeout(authTimeout);
+      try{
+        let{data:rpcRes,error:rpcErr}=await sb.rpc("ensure_user_profile");
+        if(rpcErr){
+          console.warn("[auth] ensure_user_profile error, retry en 500ms:",rpcErr);
+          await new Promise(r=>setTimeout(r,500));
+          const retry=await sb.rpc("ensure_user_profile");
+          if(retry.error){
+            console.error("[auth] ensure_user_profile retry falló, cayendo a lp():",retry.error);
+            // Red de seguridad: si la RPC falla 2x, usar el flow legacy lp() que tiene sus propios retries
+            if(mounted){setS(session);await lp(session.user.id)}
+            return;
+          }
+          rpcRes=retry.data;
+        }
+        if(!mounted)return;
+        // RPC retorna campos mínimos; el resto del app espera el row completo de user_profiles
+        const{data:fullProfile}=await sb.from("user_profiles").select("*").eq("id",rpcRes.user_id).maybeSingle();
+        if(!mounted)return;
+        // Limpia tokens OAuth del hash sin reload (idéntico al comportamiento previo)
+        if(hasOAuthTokens){const clean=window.location.origin+window.location.pathname;window.history.replaceState(null,"",clean)}
+        setS(session);
+        if(fullProfile)setP(fullProfile);
+        setLd(false);
+        if(fullProfile?.user_role==="player")initPush(fullProfile.id).catch(()=>{});
+      }catch(err){
+        console.error("[auth] handleSignedIn error:",err);
+        if(mounted)setLd(false);
+      }finally{
+        oauthInFlight=false;
+      }
+    };
+
+    const{data:{subscription}}=sb.auth.onAuthStateChange(async(event,ss)=>{
+      clearTimeout(authTimeout);
       if(event==="PASSWORD_RECOVERY"&&!recoveryRef.current){recoveryRef.current=true;setRecovery(true)}
       if(recoveryRef.current){setS(ss);if(ss)setLd(false);return}
-      setS(ss);if(ss){lp(ss.user.id);if(hasOAuthTokens){const clean=window.location.origin+window.location.pathname;window.history.replaceState(null,"",clean)}}else{setP(null);setLd(false)}});
-    if(!hasOAuthTokens&&!earlyFlag){sb.auth.getSession().then(({data:{session}})=>{if(recoveryRef.current)return;clearTimeout(authTimeout);if(session){setS(session);lp(session.user.id)}else{setLd(false)}}).catch(()=>{clearTimeout(authTimeout);setLd(false)})}
-    return()=>{clearTimeout(authTimeout);subscription.unsubscribe()}},[]);
+      if(event==="SIGNED_OUT"){if(mounted){setS(null);setP(null);setLd(false)}return}
+      if(event==="SIGNED_IN"&&ss){await handleSignedIn(ss);return}
+      // TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION sin nuevo SIGNED_IN: solo refrescar session
+      if(ss&&mounted)setS(ss);
+    });
+
+    // Restore de sesión existente en page-load (cuando NO viene de OAuth callback)
+    if(!hasOAuthTokens&&!earlyFlag){
+      sb.auth.getSession().then(async({data:{session}})=>{
+        if(recoveryRef.current||!mounted)return;
+        clearTimeout(authTimeout);
+        if(session){await handleSignedIn(session)}
+        else{setLd(false)}
+      }).catch(()=>{clearTimeout(authTimeout);if(mounted)setLd(false)})
+    }
+
+    return()=>{mounted=false;clearTimeout(authTimeout);subscription.unsubscribe()}},[]);
   async function lp(uid){try{
     // v18.3.13: BUG FIX CRÍTICO — antes lp() podía PISAR datos correctos del signUp upsert.
     // Si la primera SELECT retornaba null por timing, lp() hacía upsert con email prefix
