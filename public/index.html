@@ -8,7 +8,34 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.64 (AdminProfile signOut · confirm dialog + ctxOut + marginBottom contra bottom-bar)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.65 (out() a prueba de balas · cleanup-first + reload safety net para multi-identity)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.65 — Bug fix reportado: cgdlp77@gmail.com (player, creator del booking 2B37) no
+//   podía cerrar sesión. Logs auth confirman que entre 23:41:16 (login) y 23:45:18
+//   (signInGoogle de re-entrada) NO hubo POST /logout — el click en "Cerrar Sesión" ni
+//   siquiera llegaba a disparar el signOut backend.
+//
+//   • Diferencia clave con Pipo (que sí pudo logout): cgdlp77 tiene
+//     `providers_list: ["email","google"]` — cuenta original con email/password creada
+//     en abril, Google linkeado después. Pipo solo tiene `["google"]`. Las cuentas con
+//     múltiples identities pueden tener edge cases en el SDK Supabase JS donde signOut()
+//     no dispara correctamente o el listener SIGNED_OUT no llega.
+//   • Otra señal: el bug NO está en el botón ni en el confirm dialog (PlayerProfile línea
+//     4177 ya tiene el patrón robusto). El bug está dentro del `out()` del context.
+//
+//   • Fix: out() a prueba de balas con tres garantías:
+//       1. Cleanup local INMEDIATO antes del await — setS(null)/setP(null)/setLd(false)
+//          se ejecutan PRIMERO, así la UI responde al instante aunque el backend tarde.
+//       2. signOut backend dentro de try/catch — si lanza error o se cuelga, no bloquea
+//          el cleanup visual (antes el await podía dejar la promesa pendiente sin nunca
+//          completar el cleanup).
+//       3. location.reload() diferido 200ms como red de seguridad — fuerza un SDK reset
+//          total que rompe cualquier state corrupto de identities múltiples o listener
+//          SIGNED_OUT que no haya disparado. UX sacrifica un page refresh por garantizar
+//          que logout siempre funcione.
+//
+//   • Aplica a TODOS los signOut del app (player + admin + cualquier botón "Cerrar Sesión"
+//     que use out() del context), no solo a cgdlp77.
+//
 // v19.64 — Bug fix específico reportado: course_admin (carlos.garzadlp@gmail.com) no podía
 //   hacer logout desde la sección de perfil. NO confundir con Pipo (carlos.garza@joindr.com.mx)
 //   que es player y SÍ pudo cerrar sesión sin problema (logs auth lo confirman, POST /logout 204).
@@ -965,7 +992,19 @@ if(!signedIn&&data?.user){
 if(!signedIn){return{data,error:{message:"No se pudo iniciar sesión automáticamente. Intenta hacer login con tu email y contraseña."}}}
 // Para course_admin con cid, el trigger ya creó user_role='course_admin'; falta agregar managed_course_id
 if(role==='course_admin'&&cid&&data?.user){await sb.from("user_profiles").update({managed_course_id:cid}).eq("id",data.user.id)}
-return{data,error:null}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{await sb.auth.signOut();setS(null);setP(null);setLd(false)},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
+return{data,error:null}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{
+  // v19.65: out() a prueba de balas para casos donde el SDK Supabase tenga state corrupto
+  // (e.g. cuentas con múltiples identities email+google: cgdlp77 reportó que el botón no
+  // generaba POST /logout en backend). Estrategia:
+  //   1. Cleanup local INMEDIATO antes del await para que la UI responda al instante.
+  //   2. signOut backend en try/catch — si falla, no bloquea el cleanup visual.
+  //   3. location.reload() diferido 200ms como red de seguridad para forzar SDK reset
+  //      total (rompe cualquier state corrupto de identities múltiples o listener
+  //      SIGNED_OUT que no haya llegado).
+  setS(null);setP(null);setLd(false);
+  try{await sb.auth.signOut()}catch(e){console.error("[out] signOut backend error (state local ya limpio):",e)}
+  setTimeout(()=>{try{location.reload()}catch(e){}},200);
+},ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
 }
 const useA=()=>useContext(Ctx);
 
