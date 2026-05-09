@@ -8,7 +8,38 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.66 (HOTFIX: revert location.reload de v19.65 que causaba bucle OAuth)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v19.67 (cambio de cuenta · cleanup + location.replace a home limpia)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.67 — Bug fix reportado: al cambiar de cuenta Google OAuth en el mismo dispositivo
+//   (cgdlp77 → carlos.garza@joindr) el segundo login fallaba con state mixto del SDK.
+//
+//   • Evidencia en logs auth (Carlos IP 187.198.134.158, post-deploy v19.66):
+//       01:58:21  Login OAuth → carlos.garzadlp (admin) [callback OK, user logueado]
+//       02:01:14  ❌ POST /token 400 (intento email/pw fallido)
+//       02:01:26  /authorize Google (selector de cuentas)
+//       02:02:21  Login OAuth → carlos.garza@joindr (Pipo) [callback OK]
+//       02:02:24  ⚠️ token_revoked de cgdlp77 + login token grant
+//                  ← SDK refresca un token VIEJO de un tercer user que ya no debería estar
+//       02:02:38  Logout cgdlp77 (Carlos al ver que no funciona)
+//       02:02:39+ Múltiples /authorize y logins de Pipo intentando recuperarse
+//
+//   • Causa raíz: el SDK Supabase JS mantiene state in-memory (closures, listeners,
+//     refresh-token timer) que persiste a través de signOut + cleanup localStorage.
+//     Al cambiar de cuenta sin recargar la página, dos sesiones quedan mezcladas en
+//     memoria y el refresh-token timer del user viejo dispara token grants que invalidan
+//     el flujo del user nuevo.
+//
+//   • Por qué v19.65 falló: location.reload() mantenía el hash #access_token=... del
+//     callback OAuth en URL → el SDK procesaba el hash al recargar y se auto-logueaba.
+//   • Por qué v19.66 falló: solo cleanup localStorage no resetea el state in-memory.
+//
+//   • Fix v19.67: location.replace(location.origin + "/") después del cleanup. Va a la
+//     home page LIMPIA SIN HASH → fresh page load → SDK reinstancia desde cero →
+//     localStorage ya limpio → no hay sesión a restaurar → pantalla Auth aparece. User
+//     puede loguear con cuenta nueva sin state residual del user anterior. NO hay loop
+//     porque la URL destino no tiene #access_token.
+//
+//   • Aplica a TODOS los logout (player + admin + cualquier botón "Cerrar Sesión").
+//
 // v19.66 — HOTFIX urgente. El location.reload() introducido en v19.65 causó un bucle de
 //   logins en producción que afectó a múltiples usuarios (no solo cgdlp77).
 //
@@ -1001,20 +1032,23 @@ if(!signedIn){return{data,error:{message:"No se pudo iniciar sesión automática
 // Para course_admin con cid, el trigger ya creó user_role='course_admin'; falta agregar managed_course_id
 if(role==='course_admin'&&cid&&data?.user){await sb.from("user_profiles").update({managed_course_id:cid}).eq("id",data.user.id)}
 return{data,error:null}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{
-  // v19.66: REVERT del location.reload() que en v19.65 causó bucle de logins (logs auth
-  // mostraron múltiples users — JC Rocha + carlos.garzadlp — con patrón login → 10s →
-  // /authorize → login otra vez sin logout intermedio). El reload era demasiado agresivo;
-  // probablemente interactuaba mal con el SW de la PWA o las cookies OAuth, dejando
-  // a los users incapaces de completar la transición a la pantalla logueada.
-  // Estrategia v19.66 (más conservadora):
-  //   1. Cleanup local PRIMERO (igual que v19.65) para feedback visual inmediato.
-  //   2. signOut backend en try/catch.
-  //   3. Limpieza defensiva del localStorage Supabase (keys sb-*) para casos multi-identity
-  //      donde signOut() pueda dejar tokens residuales. Esto resuelve el bug de cgdlp77
-  //      sin recargar la app.
+  // v19.67: cleanup + navegación a home LIMPIA con location.replace. Combina lo robusto de
+  // v19.65 (SDK reset total) sin el bug del hash residual.
+  //
+  // Por qué v19.65 falló: location.reload() recargaba la URL CON el hash #access_token=...
+  //   del callback OAuth todavía pegado. El SDK procesaba el hash en cada reload → loop.
+  // Por qué v19.66 falló: cleanup de localStorage NO es suficiente. El SDK Supabase mantiene
+  //   state in-memory (closures, listeners, refresh-token timer) que persiste. Logs auth
+  //   post-v19.66 mostraron token_revoked de cgdlp77 sucediendo ENTRE el callback OAuth de
+  //   Pipo y un login token grant del user viejo — el SDK tenía sesiones MEZCLADAS de dos
+  //   users distintos al cambiar de cuenta sin recargar.
+  // Por qué v19.67 funciona: location.replace(origin+"/") va a URL SIN hash, fresh page load,
+  //   SDK reinstancia desde cero, localStorage ya limpio → no hay sesión a restaurar →
+  //   pantalla Auth aparece. User puede loguear con cuenta nueva sin state residual.
   setS(null);setP(null);setLd(false);
-  try{await sb.auth.signOut()}catch(e){console.error("[out] signOut backend error (state local ya limpio):",e)}
+  try{await sb.auth.signOut()}catch(e){console.error("[out] signOut error:",e)}
   try{Object.keys(localStorage).forEach(k=>{if(k.startsWith("sb-")||k==="supabase.auth.token")localStorage.removeItem(k)})}catch(e){}
+  setTimeout(()=>{try{location.replace(location.origin+"/")}catch(e){try{location.href=location.origin+"/"}catch(e2){}}},100);
 },ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
 }
 const useA=()=>useContext(Ctx);
