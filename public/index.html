@@ -8,33 +8,41 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.65 (out() a prueba de balas · cleanup-first + reload safety net para multi-identity)","color:#00b894;font-weight:bold;font-size:13px");
-// v19.65 — Bug fix reportado: cgdlp77@gmail.com (player, creator del booking 2B37) no
-//   podía cerrar sesión. Logs auth confirman que entre 23:41:16 (login) y 23:45:18
-//   (signInGoogle de re-entrada) NO hubo POST /logout — el click en "Cerrar Sesión" ni
-//   siquiera llegaba a disparar el signOut backend.
+console.log("%c[Partee] Build v19.66 (HOTFIX: revert location.reload de v19.65 que causaba bucle OAuth)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.66 — HOTFIX urgente. El location.reload() introducido en v19.65 causó un bucle de
+//   logins en producción que afectó a múltiples usuarios (no solo cgdlp77).
 //
-//   • Diferencia clave con Pipo (que sí pudo logout): cgdlp77 tiene
-//     `providers_list: ["email","google"]` — cuenta original con email/password creada
-//     en abril, Google linkeado después. Pipo solo tiene `["google"]`. Las cuentas con
-//     múltiples identities pueden tener edge cases en el SDK Supabase JS donde signOut()
-//     no dispara correctamente o el listener SIGNED_OUT no llega.
-//   • Otra señal: el bug NO está en el botón ni en el confirm dialog (PlayerProfile línea
-//     4177 ya tiene el patrón robusto). El bug está dentro del `out()` del context.
+//   • Síntoma observado en logs auth post-deploy v19.65:
+//       JC Rocha (jcrv27.jr@gmail.com) — IP 189.208.175.210:
+//         00:58:27 → 00:58:33  login OAuth #1
+//         00:58:43 → 00:58:46  login OAuth #2 (sin logout intermedio)
+//         00:58:50 → 00:58:53  login OAuth #3
+//       carlos.garzadlp@gmail.com — IP 200.68.166.3:
+//         01:00:00 → 01:00:03  login OAuth #1
+//         01:00:07 → 01:00:10  login OAuth #2 (sin logout intermedio)
+//         01:00:13 → 01:00:16  login OAuth #3
+//   • Patrón consistente: login completo → 7-10 segundos → user click "Continuar con
+//     Google" otra vez → login otra vez. Eso es comportamiento humano frustrado, no
+//     loop automático: la app no completaba la transición a la pantalla logueada
+//     después del callback OAuth, los users pensaban que el login no funcionó y
+//     reintentaban.
+//   • Causa raíz probable: el location.reload() interactuaba mal con el Service Worker
+//     de la PWA y/o con el procesamiento del #access_token en URL hash post-callback,
+//     dejando a Supabase JS en un estado donde getSession() no devolvía session válida.
+//   • Fix v19.66 (conservador):
+//       - QUITADO: setTimeout(location.reload, 200). Era demasiado agresivo.
+//       - MANTENIDO de v19.65: cleanup local FIRST + try/catch en signOut. Esos son
+//         mejoras legítimas que dan feedback visual inmediato y evitan que un signOut
+//         backend lento bloquee la UI.
+//       - AGREGADO: limpieza defensiva del localStorage Supabase (keys que empiezan
+//         con "sb-" o "supabase.auth.token") después del signOut. Esto cubre el caso
+//         de cuentas multi-identity (cgdlp77) donde signOut() pueda dejar tokens
+//         residuales, sin necesidad de recargar la página.
 //
-//   • Fix: out() a prueba de balas con tres garantías:
-//       1. Cleanup local INMEDIATO antes del await — setS(null)/setP(null)/setLd(false)
-//          se ejecutan PRIMERO, así la UI responde al instante aunque el backend tarde.
-//       2. signOut backend dentro de try/catch — si lanza error o se cuelga, no bloquea
-//          el cleanup visual (antes el await podía dejar la promesa pendiente sin nunca
-//          completar el cleanup).
-//       3. location.reload() diferido 200ms como red de seguridad — fuerza un SDK reset
-//          total que rompe cualquier state corrupto de identities múltiples o listener
-//          SIGNED_OUT que no haya disparado. UX sacrifica un page refresh por garantizar
-//          que logout siempre funcione.
+//   • Aplica a TODOS los users — el bucle introducido en v19.65 era sistémico, no
+//     específico de cgdlp77.
 //
-//   • Aplica a TODOS los signOut del app (player + admin + cualquier botón "Cerrar Sesión"
-//     que use out() del context), no solo a cgdlp77.
+// v19.65 — out() a prueba de balas (DESCARTADO por bucle de logins, ver v19.66 hotfix).
 //
 // v19.64 — Bug fix específico reportado: course_admin (carlos.garzadlp@gmail.com) no podía
 //   hacer logout desde la sección de perfil. NO confundir con Pipo (carlos.garza@joindr.com.mx)
@@ -993,17 +1001,20 @@ if(!signedIn){return{data,error:{message:"No se pudo iniciar sesión automática
 // Para course_admin con cid, el trigger ya creó user_role='course_admin'; falta agregar managed_course_id
 if(role==='course_admin'&&cid&&data?.user){await sb.from("user_profiles").update({managed_course_id:cid}).eq("id",data.user.id)}
 return{data,error:null}},resetPw:async e=>{try{localStorage.setItem("partee_recovery","pending")}catch(ex){}return sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin})},out:async()=>{
-  // v19.65: out() a prueba de balas para casos donde el SDK Supabase tenga state corrupto
-  // (e.g. cuentas con múltiples identities email+google: cgdlp77 reportó que el botón no
-  // generaba POST /logout en backend). Estrategia:
-  //   1. Cleanup local INMEDIATO antes del await para que la UI responda al instante.
-  //   2. signOut backend en try/catch — si falla, no bloquea el cleanup visual.
-  //   3. location.reload() diferido 200ms como red de seguridad para forzar SDK reset
-  //      total (rompe cualquier state corrupto de identities múltiples o listener
-  //      SIGNED_OUT que no haya llegado).
+  // v19.66: REVERT del location.reload() que en v19.65 causó bucle de logins (logs auth
+  // mostraron múltiples users — JC Rocha + carlos.garzadlp — con patrón login → 10s →
+  // /authorize → login otra vez sin logout intermedio). El reload era demasiado agresivo;
+  // probablemente interactuaba mal con el SW de la PWA o las cookies OAuth, dejando
+  // a los users incapaces de completar la transición a la pantalla logueada.
+  // Estrategia v19.66 (más conservadora):
+  //   1. Cleanup local PRIMERO (igual que v19.65) para feedback visual inmediato.
+  //   2. signOut backend en try/catch.
+  //   3. Limpieza defensiva del localStorage Supabase (keys sb-*) para casos multi-identity
+  //      donde signOut() pueda dejar tokens residuales. Esto resuelve el bug de cgdlp77
+  //      sin recargar la app.
   setS(null);setP(null);setLd(false);
   try{await sb.auth.signOut()}catch(e){console.error("[out] signOut backend error (state local ya limpio):",e)}
-  setTimeout(()=>{try{location.reload()}catch(e){}},200);
+  try{Object.keys(localStorage).forEach(k=>{if(k.startsWith("sb-")||k==="supabase.auth.token")localStorage.removeItem(k)})}catch(e){}
 },ref:async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await lp(session.user.id)}}}>{children}</Ctx.Provider>;
 }
 const useA=()=>useContext(Ctx);
