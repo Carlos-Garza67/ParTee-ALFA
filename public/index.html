@@ -8,14 +8,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v20.2 (F&B + Equipment Cross-sell — RLS extras + flow add-ons)","color:#00b894;font-weight:bold;font-size:13px");
-// v20.2 — F&B + Equipment Cross-sell. extras_catalog, course_inventory y booking_extras recibieron
-//         RLS policies (SELECT autenticado, INSERT/UPDATE/DELETE solo course_admin del campo).
-//         4 RPCs SECURITY DEFINER: get_course_extras_for_player, add_extras_to_booking,
-//         remove_extra_from_booking, get_admin_extras_dashboard.
-//         Frontend: BkTab gana modal "Agregar extras" con catálogo del campo agrupado por categoría
-//         + selector cantidad. AdminInventory CRUD para que el campo gestione su oferta.
-//         Modelo: extras se REGISTRAN en Partee pero se PAGAN en sitio (cash/tarjeta del campo).
+console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-time, lock-in revenue)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.3 — Memberships v1: período pre-pagado (NO Stripe Subscriptions). Schema:
+//         course_membership_tiers (tier per campo con benefits jsonb), course_memberships (instancias active/pending/expired).
+//         5 RPCs SECURITY DEFINER: get_course_membership_tiers, get_my_memberships, create_pending_membership,
+//         activate_membership, get_admin_memberships_dashboard.
+//         Edge function create-checkout v18 ahora soporta type='membership' embedded (Card Element).
+//         Flow: create_pending_membership → Stripe Payment Intent → Card Element → activate_membership.
+//         Frontend: BkTab agrega tab "Membresías"; AdminProfile gana sección "Membresías" con CRUD tiers + dashboard.
+//         Beneficios soportados en v1: discount_pct, free_bookings_per_period, priority_booking_days, guest_passes_per_period.
 //   • Editor multi-layout: lista todos los course_layouts del campo con stats (par/holes/rating/slope/default).
 //     Modal para crear/editar con name + holes_count + par + rating + slope + is_default. Set default
 //     respeta constraint only_one_default_per_course (drop default actual + set new en transacción cliente).
@@ -2856,6 +2857,15 @@ function Collapsible({title,icon,open,onToggle,children}){
 }
 
 function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);const[detailsOpen,setDetailsOpen]=useState(false);const[layoutOpen,setLayoutOpen]=useState(false);const[policyOpen,setPolicyOpen]=useState(false);const[payChooser,setPayChooser]=useState(null);
+  // v20.3: Memberships overlay
+  const[showMemberships,setShowMemberships]=useState(false);
+  const[hasActiveMembership,setHasActiveMembership]=useState(false);
+  useEffect(()=>{// v20.3: detectar si tengo alguna membresía activa para mostrar badge
+    sb.rpc("get_my_memberships").then(({data})=>{
+      const active=(data?.memberships||[]).some(m=>m.status==="active");
+      setHasActiveMembership(active);
+    }).catch(()=>{});
+  },[s?.user?.id]);
   // v20.2: F&B + Equipment cross-sell
   const[extrasSheet,setExtrasSheet]=useState(false);const[extrasCatalog,setExtrasCatalog]=useState([]);const[extrasLd,setExtrasLd]=useState(false);const[extrasQty,setExtrasQty]=useState({}); // {extra_id: quantity}
   const[savingExtras,setSavingExtras]=useState(false);const[removingExtra,setRemovingExtra]=useState(null);
@@ -3231,7 +3241,23 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         Sin el delay, React batchea ambos setState y a veces el invite sheet no aparece (solo se ve el chooser cerrarse). */}
     {payChooser&&<PaymentModeChooserSheet booking={payChooser} onClose={()=>setPayChooser(null)} onChosen={(fresh)=>{setDetail(fresh);setPayChooser(null);load();setTimeout(()=>setInvModal(fresh),50);}}/>}
   </div>;}
-  return<div style={{padding:16}}><div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Invitaciones")+(invitations.length>0?" ("+invitations.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
+  return<div style={{padding:16}}>
+    {/* v20.3: Memberships entry — full screen overlay */}
+    {showMemberships&&<MembershipsScreen onBack={()=>{setShowMemberships(false);
+      // refresh hasActiveMembership status on close
+      sb.rpc("get_my_memberships").then(({data})=>{setHasActiveMembership((data?.memberships||[]).some(m=>m.status==="active"))}).catch(()=>{});
+    }}/>}
+    {!showMemberships&&<>
+    {/* v20.3: CTA banner — Membresías */}
+    <div onClick={()=>setShowMemberships(true)} style={{padding:"10px 14px",background:hasActiveMembership?`linear-gradient(135deg,${C.gld}25,${C.grn}15)`:`linear-gradient(135deg,${C.gld}18,#fbbf2410)`,border:"1px solid "+(hasActiveMembership?C.gld+"50":C.gld+"35"),borderRadius:12,marginBottom:12,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
+      <div style={{fontSize:22}}>{hasActiveMembership?"💎":"⭐"}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>{hasActiveMembership?"Mis membresías":"Membresías Partee"}</div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>{hasActiveMembership?"Ver beneficios y vencimientos":"Ahorra en cada ronda · beneficios exclusivos"}</div>
+      </div>
+      <span style={{color:C.tm}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
+    </div>
+    <div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Invitaciones")+(invitations.length>0?" ("+invitations.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
     {tab==="requests"&&<>{invitations.length===0?<EmptyState icon="mail" iconColor={C.tm} title={t("Sin invitaciones pendientes")} sub={t("Cuando alguien te invite a una reserva, aparecerá aquí")}/>:invitations.map(inv=>{
       const bk=inv.booking||{};const sn=inv.inviter?.nickname||inv.inviter?.full_name||"Jugador";
       const pendingPay=inv.status==="accepted_pending_payment";
@@ -3310,6 +3336,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         </div>})()}
       </div>
     </div>}
+    </>}
   </div>;
 }
 
@@ -5195,6 +5222,19 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     <div style={{..._s.grid2lg,marginBottom:10}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("HOYOS")}</label><input value={lyHC} onChange={x=>setLyHC(x.target.value)} type="number" placeholder="9 o 18" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>PAR</label><input value={lyParEdit} onChange={x=>setLyParEdit(x.target.value)} type="number" placeholder="ej. 72" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>COURSE RATING</label><input value={lyRating} onChange={x=>setLyRating(x.target.value)} type="number" step="0.1" placeholder="ej. 72.4" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>SLOPE</label><input value={lySlope} onChange={x=>setLySlope(x.target.value)} type="number" placeholder="55-155" style={{...inp0,marginTop:4}}/></div></div>
     <button onClick={()=>setLyIsDefault(!lyIsDefault)} style={{width:"100%",padding:10,marginBottom:14,borderRadius:10,border:"1px solid "+(lyIsDefault?C.grn:C.bd),background:lyIsDefault?C.grn+"15":C.cd,cursor:"pointer",fontSize:12,fontWeight:600,color:lyIsDefault?C.grn:C.tm,textAlign:"left"}}>{lyIsDefault?"✓ ":""}{t("Marcar como layout default")}{lyIsDefault?"":""}<div style={{fontSize:10,fontWeight:400,color:C.ts,marginTop:2}}>{t("Es el layout que se usa por defecto al subir scorecards y mostrar al jugador")}</div></button>
     <div style={{display:"flex",gap:8}}><button onClick={saveLayout} disabled={lySaving} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:lySaving?"wait":"pointer",opacity:lySaving?.6:1}}>{lySaving?"...":t("Guardar")}</button><button onClick={closeLayoutEditor} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
+
+    {/* v20.3: Membresías del campo — CRUD tiers + dashboard */}
+    <div style={{marginTop:24,marginBottom:14,padding:16,background:`linear-gradient(135deg,${C.gld}08,${C.grn}05)`,border:"1px solid "+C.gld+"30",borderRadius:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <span style={{fontSize:18}}>💎</span>
+        <div style={{flex:1}}>
+          <h3 style={{margin:0,fontSize:15,fontWeight:800,color:C.txt}}>Membresías</h3>
+          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Convierte jugadores recurrentes en miembros. MRR predictible.</div>
+        </div>
+      </div>
+      <AdminMembershipTiers course={course}/>
+    </div>
+
     <ThemeToggle/><LangToggle/><button onClick={()=>{
       // v19.64: alineado con el patrón robusto del Player Profile (línea 4177).
       // Antes: onClick={onOut} sin confirm → si el click no llegaba al backend (botón tapado
@@ -6386,6 +6426,326 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
     <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<AdminInventory course={course}/>}{tab===5&&<AdminPayouts course={course} onRefresh={loadC}/>}{tab===6&&<PremiumInsights course={course}/>}{tab===7&&<AdminProfile course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit}/>}</div>
     <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
   </div>}
+
+// v20.3: MembershipsScreen — Player UI para explorar tiers, comprar y ver mis membresías activas.
+// Modos: 'list' (mis membresías + cards de campos con tiers), 'detail' (tiers de un campo), 'checkout' (Stripe Card Element).
+function MembershipsScreen({onBack}){const{s,p}=useA();
+  const[mode,setMode]=useState("list");const[ld,setLd]=useState(true);
+  const[myMems,setMyMems]=useState([]);const[coursesWithTiers,setCoursesWithTiers]=useState([]);
+  const[selectedCourse,setSelectedCourse]=useState(null);const[courseTiers,setCourseTiers]=useState([]);const[tiersLd,setTiersLd]=useState(false);
+  const[selectedTier,setSelectedTier]=useState(null);
+  // Checkout state
+  const[checkoutMembership,setCheckoutMembership]=useState(null); // {membership_id, tier_name, price_mxn, period_days, course_name}
+  const[checkoutPhase,setCheckoutPhase]=useState("init"); // init | ready | paying | success | error
+  const[checkoutErr,setCheckoutErr]=useState("");
+  const stripeRef=useRef(null);const cardRef=useRef(null);const secretRef=useRef("");const piRef=useRef("");const mountRef=useRef(null);
+
+  useEffect(()=>{loadAll()},[]);
+  async function loadAll(){setLd(true);
+    // Mis membresías
+    const{data:mems}=await sb.rpc("get_my_memberships");
+    setMyMems(mems?.memberships||[]);
+    // Cursos con tiers activos
+    const{data:cwt}=await sb.from("golf_courses").select("id,course_name,city,state,photo_urls,facility_type,course_membership_tiers!inner(id)").eq("status","active").eq("listing_status","active").eq("course_membership_tiers.is_active",true);
+    // Dedupe + count tiers per course
+    const seen={};(cwt||[]).forEach(c=>{if(!seen[c.id]){seen[c.id]={...c,tier_count:0}}seen[c.id].tier_count+=(c.course_membership_tiers||[]).length});
+    setCoursesWithTiers(Object.values(seen));
+    setLd(false);
+  }
+  async function openCourse(course){setSelectedCourse(course);setMode("detail");setTiersLd(true);
+    const{data,error}=await sb.rpc("get_course_membership_tiers",{p_course_id:course.id});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setTiersLd(false);return}
+    setCourseTiers(data?.tiers||[]);setTiersLd(false);
+  }
+  async function startCheckout(tier){
+    if(!window.Stripe){window.__toast?.("Stripe no disponible","warn");return}
+    setSelectedTier(tier);
+    // Crear pending membership
+    const{data,error}=await sb.rpc("create_pending_membership",{p_course_id:selectedCourse.id,p_tier_id:tier.id});
+    if(error){window.__toast?.(error.message.includes("already_active")?"Ya tienes membresía activa en este campo":"Error: "+error.message,"warn");return}
+    setCheckoutMembership({membership_id:data.membership_id,tier_name:data.tier_name,price_mxn:parseFloat(data.price_mxn),period_days:data.period_days,course_name:selectedCourse.course_name});
+    setCheckoutPhase("init");setCheckoutErr("");setMode("checkout");
+  }
+  // Stripe init effect (cuando entra modo checkout)
+  useEffect(()=>{
+    if(mode!=="checkout"||!checkoutMembership||checkoutPhase!=="init")return;
+    let dead=false;
+    (async()=>{
+      try{
+        const st=window.Stripe(STRIPE_PK,{locale:"es"});stripeRef.current=st;
+        const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+        const res=await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"membership",mode:"embedded",amount:checkoutMembership.price_mxn,membership_id:checkoutMembership.membership_id,tier_name:checkoutMembership.tier_name,course_name:checkoutMembership.course_name,period_days:checkoutMembership.period_days})});
+        const data=await res.json();
+        if(dead)return;
+        if(data.error){setCheckoutErr(data.error);setCheckoutPhase("error");return}
+        secretRef.current=data.client_secret;piRef.current=data.payment_intent_id;
+        const els=st.elements();
+        const isDk=document.documentElement.style.getPropertyValue("--app-bg").trim()==="#080810";
+        const card=els.create("card",{style:{base:{color:isDk?"#f4f4f6":"#0f172a",fontFamily:"-apple-system,system-ui,sans-serif",fontSize:"16px","::placeholder":{color:isDk?"#505868":"#94a3b8"},iconColor:"#00b894"},invalid:{color:"#e94560",iconColor:"#e94560"}},hidePostalCode:true});
+        cardRef.current=card;
+        const tryMount=()=>{if(mountRef.current&&!dead){card.mount(mountRef.current);setCheckoutPhase("ready")}else if(!dead){setTimeout(tryMount,200)}};
+        tryMount();
+      }catch(e){if(!dead){setCheckoutErr("Error: "+e.message);setCheckoutPhase("error")}}
+    })();
+    return()=>{dead=true}
+  },[mode,checkoutMembership,checkoutPhase]);
+  async function payNow(){
+    if(!stripeRef.current||!cardRef.current||!secretRef.current)return;
+    setCheckoutPhase("paying");setCheckoutErr("");
+    const{error:pmErr,paymentMethod}=await stripeRef.current.createPaymentMethod({type:"card",card:cardRef.current});
+    if(pmErr){setCheckoutErr(pmErr.message);setCheckoutPhase("ready");return}
+    const{error:err,paymentIntent}=await stripeRef.current.confirmCardPayment(secretRef.current,{payment_method:paymentMethod.id});
+    if(err){
+      try{const{paymentIntent:piCheck}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
+        if(piCheck?.status==="succeeded"){await activateMembership(piCheck.id);return}
+      }catch{}
+      setCheckoutErr(err.message);setCheckoutPhase("ready");return
+    }
+    if(paymentIntent?.status==="succeeded"){await activateMembership(paymentIntent.id);return}
+    setCheckoutErr("Estado inesperado: "+paymentIntent?.status);setCheckoutPhase("ready");
+  }
+  async function activateMembership(piId){
+    const{data,error}=await sb.rpc("activate_membership",{p_membership_id:checkoutMembership.membership_id,p_payment_intent_id:piId});
+    if(error){setCheckoutErr("Pago exitoso pero error al activar: "+error.message);setCheckoutPhase("error");return}
+    setCheckoutPhase("success");
+    setTimeout(()=>{setMode("list");setCheckoutMembership(null);setSelectedTier(null);loadAll();window.__toast?.("¡Bienvenido a la membresía!","success")},2200);
+  }
+
+  // === RENDER ===
+  if(mode==="checkout"&&checkoutMembership){
+    return<div className="fi" style={{padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+        <button onClick={()=>{setMode("detail");setCheckoutMembership(null)}} disabled={checkoutPhase==="paying"||checkoutPhase==="success"} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/>
+        <h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>Pagar membresía</h2>
+      </div>
+      {/* Resumen tier */}
+      <div style={{padding:16,background:`linear-gradient(135deg,${C.grn}15,#00cec912)`,border:"1px solid "+C.grn+"30",borderRadius:14,marginBottom:14}}>
+        <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:4}}>{checkoutMembership.course_name}</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.txt}}>{checkoutMembership.tier_name}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:4}}>Vigencia: {checkoutMembership.period_days} días</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:10,paddingTop:10,borderTop:"1px solid "+C.grn+"20"}}>
+          <span style={{fontSize:12,color:C.tm}}>Total a pagar</span>
+          <span style={{fontSize:24,fontWeight:900,color:C.grn,..._s.mono}}>${fm(checkoutMembership.price_mxn)} MXN</span>
+        </div>
+      </div>
+      {/* Card Element */}
+      {checkoutPhase==="success"?<div style={{padding:30,textAlign:"center",background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:14}}>
+        <div style={{fontSize:48,marginBottom:10}}>🎉</div>
+        <div style={{fontSize:16,fontWeight:800,color:C.grn,marginBottom:4}}>¡Membresía activa!</div>
+        <div style={{fontSize:12,color:C.ts}}>Tu membresía vence en {checkoutMembership.period_days} días</div>
+      </div>:<>
+        <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:6}}>DATOS DE TARJETA</div>
+        <div ref={mountRef} style={{padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,minHeight:48,marginBottom:10}}/>
+        {checkoutErr&&<div style={{padding:10,background:C.acc+"15",border:"1px solid "+C.acc+"40",borderRadius:10,color:C.acc,fontSize:12,marginBottom:10}}>⚠ {checkoutErr}</div>}
+        <button onClick={payNow} disabled={checkoutPhase!=="ready"} style={{width:"100%",padding:16,background:checkoutPhase!=="ready"?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:checkoutPhase!=="ready"?C.tm:"#fff",fontWeight:800,fontSize:14,cursor:checkoutPhase!=="ready"?"default":"pointer",letterSpacing:.3}}>{checkoutPhase==="init"?"Cargando…":checkoutPhase==="paying"?"Procesando pago…":checkoutPhase==="error"?"Reintentar":`Pagar $${fm(checkoutMembership.price_mxn)} MXN`}</button>
+        <div style={{fontSize:10,color:C.tm,marginTop:8,textAlign:"center"}}>🔒 Pago seguro procesado por Stripe</div>
+      </>}
+    </div>
+  }
+
+  if(mode==="detail"&&selectedCourse){
+    return<div className="fi" style={{padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <button onClick={()=>{setMode("list");setSelectedCourse(null);setCourseTiers([])}} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/>
+        <div>
+          <h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>{selectedCourse.course_name}</h2>
+          <div style={{fontSize:11,color:C.ts}}>{selectedCourse.city}, {selectedCourse.state}</div>
+        </div>
+      </div>
+      {tiersLd?<Skeleton w="100%" h={140}/>:courseTiers.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Este campo aún no tiene tiers configurados</div>:
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {courseTiers.map(tier=>{const benefits=tier.benefits||{};const benefitItems=[];
+        if(benefits.discount_pct)benefitItems.push({icon:"🏷️",label:`${benefits.discount_pct}% off en cada booking`});
+        if(benefits.free_bookings_per_period)benefitItems.push({icon:"⛳",label:`${benefits.free_bookings_per_period} bookings GRATIS en el período`});
+        if(benefits.priority_booking_days)benefitItems.push({icon:"⏰",label:`Reserva con ${benefits.priority_booking_days} días de anticipación`});
+        if(benefits.guest_passes_per_period)benefitItems.push({icon:"👥",label:`${benefits.guest_passes_per_period} pase(s) de invitado`});
+        if(benefits.skip_cancellation_fee)benefitItems.push({icon:"✓",label:"Sin penalización por cancelación"});
+        return<div key={tier.id} style={{background:C.cd,border:"2px solid "+(tier.badge_color||C.gld)+"50",borderRadius:18,overflow:"hidden",position:"relative"}}>
+          <div style={{padding:"10px 14px",background:`linear-gradient(135deg,${tier.badge_color||C.gld},${tier.badge_color||C.gld}cc)`,color:"#fff",fontSize:11,fontWeight:800,letterSpacing:1.5,textAlign:"center"}}>{tier.badge_label||"MEMBRESÍA"}</div>
+          <div style={{padding:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <h3 style={{margin:0,fontSize:18,fontWeight:800,color:C.txt}}>{tier.name}</h3>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:22,fontWeight:900,color:C.grn,..._s.mono,lineHeight:1}}>${fm(tier.price_mxn)}</div>
+                <div style={{fontSize:10,color:C.tm,marginTop:2}}>por {tier.period_days} días</div>
+              </div>
+            </div>
+            {tier.description&&<p style={{fontSize:12,color:C.ts,margin:"6px 0 12px",lineHeight:1.5}}>{tier.description}</p>}
+            {benefitItems.length>0&&<div style={{padding:"10px 0",borderTop:"1px solid "+C.bd,marginBottom:12}}>
+              {benefitItems.map((b,i)=><div key={i} style={{display:"flex",gap:8,fontSize:12,color:C.ts,marginBottom:4}}><span>{b.icon}</span><span>{b.label}</span></div>)}
+            </div>}
+            <button onClick={()=>startCheckout(tier)} style={{width:"100%",padding:14,background:`linear-gradient(135deg,${tier.badge_color||C.gld},${tier.badge_color||C.gld}dd)`,border:"none",borderRadius:12,color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",letterSpacing:.3}}>Suscribirme — ${fm(tier.price_mxn)} MXN</button>
+          </div>
+        </div>})}
+      </div>}
+    </div>
+  }
+
+  // mode === 'list'
+  return<div className="fi" style={{padding:16}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+      {onBack&&<button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/>}
+      <h2 style={{margin:0,fontSize:20,fontWeight:800,color:C.txt}}>Membresías</h2>
+    </div>
+    {/* Mis membresías */}
+    {ld?<Skeleton w="100%" h={100}/>:<>
+      {myMems.length>0&&<>
+        <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:8}}>MIS MEMBRESÍAS ({myMems.length})</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
+          {myMems.map(m=>{const isActive=m.status==="active";const expSoon=isActive&&m.days_remaining<=14;
+          return<div key={m.id} style={{padding:14,background:isActive?`linear-gradient(135deg,${m.badge_color||C.gld}15,${m.badge_color||C.gld}05)`:C.cd,border:"1px solid "+(isActive?(m.badge_color||C.gld)+"40":C.bd),borderRadius:14,opacity:isActive?1:.6}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                  <span style={{fontSize:9,fontWeight:800,color:"#fff",background:m.badge_color||C.gld,padding:"2px 7px",borderRadius:4,letterSpacing:.5}}>{m.badge_label||"M"}</span>
+                  <span style={{fontSize:10,fontWeight:700,color:isActive?C.grn:C.tm,textTransform:"uppercase"}}>{isActive?"Activa":m.status}</span>
+                </div>
+                <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{m.tier_name}</div>
+                <div style={{fontSize:11,color:C.ts,marginTop:2}}>{m.course_name}{m.course_city?" · "+m.course_city:""}</div>
+              </div>
+              {isActive&&<div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontSize:20,fontWeight:900,color:expSoon?C.acc:C.txt,..._s.mono,lineHeight:1}}>{m.days_remaining}</div>
+                <div style={{fontSize:9,color:C.tm,marginTop:2}}>días</div>
+              </div>}
+            </div>
+            {isActive&&(m.free_bookings_remaining>0||m.guest_passes_remaining>0)&&<div style={{display:"flex",gap:10,marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd}}>
+              {m.free_bookings_remaining>0&&<div style={{flex:1,fontSize:11,color:C.ts}}>⛳ <strong style={{color:C.grn}}>{m.free_bookings_remaining}</strong> bookings free</div>}
+              {m.guest_passes_remaining>0&&<div style={{flex:1,fontSize:11,color:C.ts}}>👥 <strong style={{color:C.grn}}>{m.guest_passes_remaining}</strong> pases invitado</div>}
+            </div>}
+          </div>})}
+        </div>
+      </>}
+      {/* Cursos con tiers */}
+      <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:8}}>{myMems.length>0?"EXPLORAR OTROS CAMPOS":"CAMPOS CON MEMBRESÍAS"}</div>
+      {coursesWithTiers.length===0?<div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>Aún no hay campos con membresías disponibles</div>:
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {coursesWithTiers.map(c=><div key={c.id} onClick={()=>openCourse(c)} style={{display:"flex",gap:12,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,cursor:"pointer",alignItems:"center"}}>
+          {c.photo_urls?.[0]?<img src={c.photo_urls[0]} alt={c.course_name} style={{width:60,height:60,borderRadius:10,objectFit:"cover",flexShrink:0}}/>:<div style={{width:60,height:60,borderRadius:10,background:C.bd,flexShrink:0}}/>}
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{c.course_name}</div>
+            <div style={{fontSize:11,color:C.tm,marginTop:2}}>{c.city}, {c.state}</div>
+            <div style={{fontSize:10,color:C.gld,marginTop:4,fontWeight:700}}>{c.tier_count} tier{c.tier_count===1?"":"s"} disponible{c.tier_count===1?"":"s"}</div>
+          </div>
+          <span style={{color:C.tm,fontSize:18}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
+        </div>)}
+      </div>}
+    </>}
+  </div>
+}
+
+// v20.3: AdminMembershipTiers — CRUD de tiers + dashboard de miembros activos.
+// Vive embebido en AdminProfile como sección colapsable.
+function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const[ld,setLd]=useState(true);const[dash,setDash]=useState(null);const[dashLd,setDashLd]=useState(false);
+  const[edit,setEdit]=useState(null); // null | {id?, name, description, price_mxn, period_days, badge_label, badge_color, sort_order, benefits...}
+  const[saving,setSaving]=useState(false);
+  useEffect(()=>{loadAll()},[course?.id]);
+  async function loadAll(){setLd(true);
+    const{data}=await sb.from("course_membership_tiers").select("*").eq("course_id",course.id).order("sort_order").order("price_mxn");
+    setTiers(data||[]);setLd(false);
+  }
+  async function loadDash(){setDashLd(true);
+    const{data,error}=await sb.rpc("get_admin_memberships_dashboard",{p_course_id:course.id,p_days:90});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setDashLd(false);return}
+    setDash(data);setDashLd(false);
+  }
+  function openCreate(){setEdit({name:"Plata "+course.course_name.split(" ")[0],description:"",price_mxn:"2500",period_days:90,badge_label:"PLATA",badge_color:"#94a3b8",sort_order:tiers.length,is_active:true,discount_pct:"10",free_bookings:"4",priority_days:"14",guest_passes:""})}
+  function openEdit(t){const b=t.benefits||{};setEdit({id:t.id,name:t.name,description:t.description||"",price_mxn:t.price_mxn?.toString()||"",period_days:t.period_days,badge_label:t.badge_label||"",badge_color:t.badge_color||"#fbbf24",sort_order:t.sort_order||0,is_active:t.is_active!==false,discount_pct:b.discount_pct?.toString()||"",free_bookings:b.free_bookings_per_period?.toString()||"",priority_days:b.priority_booking_days?.toString()||"",guest_passes:b.guest_passes_per_period?.toString()||""})}
+  async function saveTier(){if(saving||!edit)return;
+    if(!edit.name||!edit.price_mxn||!edit.period_days){window.__toast?.("Completa nombre, precio y duración","warn");return}
+    setSaving(true);
+    const benefits={};
+    if(edit.discount_pct)benefits.discount_pct=parseInt(edit.discount_pct);
+    if(edit.free_bookings)benefits.free_bookings_per_period=parseInt(edit.free_bookings);
+    if(edit.priority_days)benefits.priority_booking_days=parseInt(edit.priority_days);
+    if(edit.guest_passes)benefits.guest_passes_per_period=parseInt(edit.guest_passes);
+    const payload={course_id:course.id,name:edit.name,description:edit.description||null,price_mxn:parseFloat(edit.price_mxn),period_days:parseInt(edit.period_days),badge_label:edit.badge_label||null,badge_color:edit.badge_color||null,sort_order:parseInt(edit.sort_order)||0,is_active:edit.is_active!==false,benefits};
+    const{error}=edit.id?await sb.from("course_membership_tiers").update(payload).eq("id",edit.id):await sb.from("course_membership_tiers").insert(payload);
+    setSaving(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.(edit.id?"Tier actualizado":"Tier creado","success");setEdit(null);loadAll();
+  }
+  async function toggleActive(t){await sb.from("course_membership_tiers").update({is_active:!t.is_active}).eq("id",t.id);loadAll()}
+  async function delTier(t){
+    const doDel=async()=>{const{error}=await sb.from("course_membership_tiers").delete().eq("id",t.id);if(error){window.__toast?.("No se puede eliminar (¿tiene miembros?): "+error.message,"warn");return}window.__toast?.("Eliminado","success");loadAll()};
+    if(window.__confirm)window.__confirm("¿Eliminar tier? No podrás eliminarlo si tiene miembros activos.",doDel);else if(confirm("¿Eliminar tier?"))doDel();
+  }
+
+  if(edit){
+    return<div style={{padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginTop:10}}>
+      <div style={{..._s.flexB,marginBottom:12}}>
+        <h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{edit.id?"Editar tier":"Nuevo tier"}</h4>
+        <button onClick={()=>!saving&&setEdit(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:8}}>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>NOMBRE*</label><input value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})} placeholder="Ej. Plata Cabo del Sol" style={{...inp0,marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>DESCRIPCIÓN</label><input value={edit.description} onChange={e=>setEdit({...edit,description:e.target.value})} placeholder="Beneficios resumidos" style={{...inp0,marginTop:4}}/></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>PRECIO MXN*</label><input type="number" value={edit.price_mxn} onChange={e=>setEdit({...edit,price_mxn:e.target.value})} style={{...inp0,marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>DURACIÓN*</label><select value={edit.period_days} onChange={e=>setEdit({...edit,period_days:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="30">30 días</option><option value="90">90 días</option><option value="180">180 días</option><option value="365">365 días</option></select></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>ORDEN</label><input type="number" value={edit.sort_order} onChange={e=>setEdit({...edit,sort_order:e.target.value})} style={{...inp0,marginTop:4}}/></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:10}}>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>BADGE LABEL</label><input value={edit.badge_label} onChange={e=>setEdit({...edit,badge_label:e.target.value.toUpperCase().slice(0,12)})} placeholder="BRONCE / PLATA / ORO" style={{...inp0,marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>COLOR</label><input type="color" value={edit.badge_color} onChange={e=>setEdit({...edit,badge_color:e.target.value})} style={{...inp0,marginTop:4,height:38,padding:2}}/></div>
+      </div>
+      <div style={{padding:10,background:C.bd+"30",border:"1px solid "+C.bd,borderRadius:10,marginBottom:12}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4,marginBottom:6}}>BENEFICIOS</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div><label style={{fontSize:10,color:C.tm}}>% Descuento auto</label><input type="number" value={edit.discount_pct} onChange={e=>setEdit({...edit,discount_pct:e.target.value})} placeholder="10" style={{...inp0,marginTop:2}}/></div>
+          <div><label style={{fontSize:10,color:C.tm}}>Bookings gratis</label><input type="number" value={edit.free_bookings} onChange={e=>setEdit({...edit,free_bookings:e.target.value})} placeholder="4" style={{...inp0,marginTop:2}}/></div>
+          <div><label style={{fontSize:10,color:C.tm}}>Días anticipación</label><input type="number" value={edit.priority_days} onChange={e=>setEdit({...edit,priority_days:e.target.value})} placeholder="14" style={{...inp0,marginTop:2}}/></div>
+          <div><label style={{fontSize:10,color:C.tm}}>Pases invitado</label><input type="number" value={edit.guest_passes} onChange={e=>setEdit({...edit,guest_passes:e.target.value})} placeholder="0" style={{...inp0,marginTop:2}}/></div>
+        </div>
+      </div>
+      <button onClick={saveTier} disabled={saving} style={{width:"100%",padding:12,background:saving?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:saving?C.tm:"#fff",fontSize:13,fontWeight:800,cursor:saving?"default":"pointer"}}>{saving?"Guardando…":(edit.id?"Guardar cambios":"Crear tier")}</button>
+    </div>
+  }
+
+  return<div>
+    {/* Header */}
+    <div style={{..._s.flexB,marginBottom:10}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Tiers de membresía</div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>{tiers.length} configurado{tiers.length===1?"":"s"} · {tiers.filter(t=>t.is_active).length} activo{tiers.filter(t=>t.is_active).length===1?"":"s"}</div>
+      </div>
+      <button onClick={openCreate} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.grn},#55efc4)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ Nuevo</button>
+    </div>
+    {/* Mini dashboard */}
+    <div style={{padding:10,background:C.gld+"08",border:"1px solid "+C.gld+"30",borderRadius:10,marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:dash?6:0}}>
+        <div style={{fontSize:11,fontWeight:700,color:C.txt}}>📊 Performance 90 días</div>
+        <button onClick={loadDash} disabled={dashLd} style={{padding:"4px 8px",background:dashLd?C.bd:C.gld,border:"none",borderRadius:6,color:dashLd?C.tm:"#fff",fontSize:9,fontWeight:700,cursor:dashLd?"default":"pointer"}}>{dashLd?"…":(dash?"↻":"Cargar")}</button>
+      </div>
+      {dash&&dash.summary&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,paddingTop:6,borderTop:"1px solid "+C.gld+"20"}}>
+        <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt,..._s.mono}}>{dash.summary.active_members||0}</div><div style={{fontSize:9,color:C.tm}}>Activos</div></div>
+        <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.grn,..._s.mono}}>${fm(dash.summary.total_revenue||0)}</div><div style={{fontSize:9,color:C.tm}}>Revenue</div></div>
+        <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:dash.summary.expiring_soon_30d>0?C.acc:C.txt,..._s.mono}}>{dash.summary.expiring_soon_30d||0}</div><div style={{fontSize:9,color:C.tm}}>Vencen 30d</div></div>
+      </div>}
+    </div>
+    {/* Tier list */}
+    {ld?<Skeleton w="100%" h={70}/>:tiers.length===0?<div style={{textAlign:"center",padding:30,color:C.tm,fontSize:12}}>Sin tiers configurados.<br/><span style={{fontSize:10}}>Crea tu primer tier para empezar.</span></div>:
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {tiers.map(t=>{const benefits=t.benefits||{};const benefitsCount=Object.keys(benefits).length;
+      return<div key={t.id} style={{padding:10,background:C.cd,border:"1px solid "+(t.is_active?C.bd:C.bd+"60"),borderRadius:10,opacity:t.is_active?1:.6}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+              <span style={{fontSize:9,fontWeight:800,color:"#fff",background:t.badge_color||C.gld,padding:"2px 6px",borderRadius:4,letterSpacing:.5}}>{t.badge_label||"M"}</span>
+              <span style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.name}</span>
+            </div>
+            <div style={{fontSize:11,color:C.ts,..._s.mono}}>${fm(t.price_mxn)} · {t.period_days}d · {benefitsCount} beneficio{benefitsCount===1?"":"s"}</div>
+          </div>
+          <div style={{display:"flex",gap:4,flexShrink:0}}>
+            <button onClick={()=>toggleActive(t)} style={{padding:"6px 8px",background:t.is_active?C.grn+"20":C.bd,border:"none",borderRadius:6,color:t.is_active?C.grn:C.tm,fontSize:10,fontWeight:700,cursor:"pointer"}}>{t.is_active?"On":"Off"}</button>
+            <button onClick={()=>openEdit(t)} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.bd,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",11,C.ts)}}/>
+            <button onClick={()=>delTier(t)} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.acc+"25",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",11,C.acc)}}/>
+          </div>
+        </div>
+      </div>})}
+    </div>}
+  </div>
+}
 
 function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);const[ld,setLd]=useState(true);const[stats,setStats]=useState(null);const[courses,setCourses]=useState([]);const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");const[sel,setSel]=useState(null);
   const loadAll=async()=>{setLd(true);const today=new Date().toISOString().slice(0,10);const d30=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
