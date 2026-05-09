@@ -8,23 +8,23 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v19.70 (AdminProfile gaps: coordenadas, hole_count/holes_per_round/total_par, ratings USGA del layout default, placeholder logo+amenities)","color:#00b894;font-weight:bold;font-size:13px");
-// v19.70 — AdminProfile UI gaps cerrados: editor de coordenadas (latitude/longitude),
-// specs técnicos básicos (hole_count, holes_per_round, total_par en golf_courses),
-// y ratings USGA del layout default (course_layouts.rating/slope/par/holes_count).
-//   • Coordenadas: input lat/lng con paso "any". Tip integrado: copiar de Google Maps
-//     (click derecho en pin → coords aparecen en menú contextual).
-//   • Specs técnicos: hole_count, holes_per_round, total_par editables solo para
-//     facility_type='campo'. Persist en golf_courses (verificado: columnas existen).
-//   • Ratings USGA: editar el layout default (course_layouts WHERE is_default=true).
-//     Solo edita rating + slope del layout principal — campos con multi-layout (ej.
-//     Cabo del Sol Mountain/Ocean) requieren editor avanzado pendiente. Nota inline
-//     explicando esto al admin.
-//   • Logo upload separado y amenities estructurados: notas placeholder en sección
-//     "🔧 Próximamente" — el work se hará cuando volvamos a la pista.
-//   • Por qué ratings van en course_layouts y no golf_courses: el trigger
-//     scorecards_set_differential_before_insert lee rating/slope del layout asociado
-//     al scorecard. golf_courses NO tiene esas columnas (verificado en DB).
+console.log("%c[Partee] Build v19.71 (AdminProfile editor multi-layout, logo upload separado, amenities estructurados)","color:#00b894;font-weight:bold;font-size:13px");
+// v19.71 — AdminProfile feature pack: editor multi-layout completo, logo upload separado, amenities estructurados.
+//   • Editor multi-layout: lista todos los course_layouts del campo con stats (par/holes/rating/slope/default).
+//     Modal para crear/editar con name + holes_count + par + rating + slope + is_default. Set default
+//     respeta constraint only_one_default_per_course (drop default actual + set new en transacción cliente).
+//     Delete bloqueado si el layout es default O si tiene scorecards apuntando — los course_holes huérfanos
+//     se limpian automáticamente con cascade del delete. Empty state para campos sin layouts: CTA "Crear
+//     primer layout" que pre-llena con hole_count y total_par del course.
+//   • Logo upload: campo golf_courses.logo_url ya existe (text). Bucket `venue-photos` con path
+//     {course_id}/logo-{ts}.{ext}. Cuadro 80x80 con replace + remove. Solo imágenes, max 2MB.
+//   • Amenities: golf_courses.amenities (jsonb). Migración previa normalizó '{}' → null en 16 rows
+//     (sin data real existente). Shape nuevo: array de strings, e.g. ["caddies","lockers","wifi"].
+//     14 amenities predefinidos en grid de pills. NO duplica has_food_service / has_pro_shop que
+//     ya están conectados al detail jugador desde v19.69.
+//   • Notas no expuestas todavía al detail jugador: layouts y amenities solo viven en admin por ahora.
+//     El detail jugador continúa mostrando ratings vía cálculo del trigger sobre el layout default
+//     (sin cambios). Exposición visual al jugador queda para próxima vuelta.
 // v19.67 — Bug fix reportado: al cambiar de cuenta Google OAuth en el mismo dispositivo
 //   (cgdlp77 → carlos.garza@joindr) el segundo login fallaba con state mixto del SDK.
 //
@@ -4807,29 +4807,60 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
   // v19.68: campo `website` retirado del UI por estrategia de moat (controlar flow de comunicaciones via Partee).
   // La columna golf_courses.website permanece en DB con datos legacy intactos — decisión de drop diferida.
   const[stCount,setStCount]=useState(course.stations_count?.toString()||"");const[cbCount,setCbCount]=useState(course.cabins_count?.toString()||"");const[simBrand,setSimBrand]=useState(course.simulator_brand||"");const[hasFood,setHasFood]=useState(course.has_food_service||false);const[hasShop,setHasShop]=useState(course.has_pro_shop||false);
-  // v19.70: AdminProfile gaps — coordenadas + specs técnicos + ratings USGA del layout default.
+  // v19.70: AdminProfile gaps — coordenadas + specs técnicos.
   const[lat,setLat]=useState(course.latitude?.toString()||"");const[lng,setLng]=useState(course.longitude?.toString()||"");
   const[hCountSp,setHCountSp]=useState(course.hole_count?.toString()||"");const[hPerRSp,setHPerRSp]=useState(course.holes_per_round?.toString()||"");const[tParSp,setTParSp]=useState(course.total_par?.toString()||"");
-  // Layout default — se carga via useEffect; permite editar rating/slope sin tocar otros layouts del campo.
-  const[defLayout,setDefLayout]=useState(null);const[lyName,setLyName]=useState("");const[lyRating,setLyRating]=useState("");const[lySlope,setLySlope]=useState("");
+  // v19.71: editor multi-layout completo, logo upload separado, amenities estructurados.
+  const[layouts,setLayouts]=useState([]);const[editLayout,setEditLayout]=useState(null);const[lyName,setLyName]=useState("");const[lyHC,setLyHC]=useState("");const[lyParEdit,setLyParEdit]=useState("");const[lyRating,setLyRating]=useState("");const[lySlope,setLySlope]=useState("");const[lyIsDefault,setLyIsDefault]=useState(false);const[lySaving,setLySaving]=useState(false);
+  const[logoUrl,setLogoUrl]=useState(course.logo_url||"");const[upLogo,setUpLogo]=useState(false);
+  const[amenities,setAmenities]=useState(()=>{const a=course.amenities;if(!a)return[];if(Array.isArray(a))return a;if(typeof a==="object")return Object.keys(a).filter(k=>a[k]===true);return[]});
   const[holes,setHoles]=useState([]);const[editHole,setEditHole]=useState(null);const[hPar,setHPar]=useState("4");const[hDist,setHDist]=useState("");const[hDesc,setHDesc]=useState("");
   const[photos,setPhotos]=useState(course.photo_urls||[]);const[upPh,setUpPh]=useState(false);
   const[highlight,setHighlight]=useState(null);
   const ft=course.facility_type||"campo";
   const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};const FN={campo:t("Campo de Golf"),plataforma:t("Plataforma de Tiro"),simulador:t("Simulador de Golf")};
   useEffect(()=>{if(ft==="campo")sb.from("course_holes").select("*").eq("course_id",course.id).is("layout_id",null).order("hole_number").then(({data})=>setHoles(data||[])).catch(()=>{})},[]);
-  // v19.70: cargar layout default para edición de ratings USGA (rating/slope viven en course_layouts, no golf_courses).
-  useEffect(()=>{if(ft==="campo")sb.from("course_layouts").select("*").eq("course_id",course.id).eq("is_default",true).maybeSingle().then(({data})=>{if(data){setDefLayout(data);setLyName(data.name||"");setLyRating(data.rating!=null?data.rating.toString():"");setLySlope(data.slope!=null?data.slope.toString():"")}}).catch(()=>{})},[]);
+  // v19.71: cargar TODOS los layouts (no solo el default). Permite editor multi-layout completo.
+  // Orden: display_order asc (con NULLS al final), luego created_at asc para tiebreak determinístico.
+  const reloadLayouts=async()=>{const{data}=await sb.from("course_layouts").select("*").eq("course_id",course.id).order("display_order",{ascending:true,nullsFirst:false}).order("created_at",{ascending:true});setLayouts(data||[])};
+  useEffect(()=>{if(ft==="campo")reloadLayouts().catch(()=>{})},[]);
   useEffect(()=>{if(autoEdit)setEd(true);if(focusField){setTimeout(()=>{const el=document.getElementById("field-"+focusField);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});setHighlight(focusField);setTimeout(()=>setHighlight(null),2000)}},150)}if((autoEdit||focusField)&&onAutoEditConsumed)onAutoEditConsumed()},[autoEdit,focusField]);
-  const saveCourse=async()=>{setSv(true);const upd={description:desc||null,phone_number:phone||null,green_fee_min:feeMin?parseFloat(feeMin):null,green_fee_max:feeMax?parseFloat(feeMax):null,cancellation_hours:parseInt(cancelHrs)||24,cancellation_refund_pct:parseInt(cancelPct)||100,has_food_service:hasFood,has_pro_shop:hasShop,operating_hours:opHours||null,operating_days:opDays||null,full_address:addr||null,timezone:courseTz||"America/Mexico_City",latitude:lat?parseFloat(lat):null,longitude:lng?parseFloat(lng):null};if(ft==="campo"){upd.hole_count=hCountSp?parseInt(hCountSp):null;upd.holes_per_round=hPerRSp?parseInt(hPerRSp):null;upd.total_par=tParSp?parseInt(tParSp):null}if(ft==="plataforma")upd.stations_count=stCount?parseInt(stCount):null;if(ft==="simulador"){upd.cabins_count=cbCount?parseInt(cbCount):null;upd.simulator_brand=simBrand||null}await sb.from("golf_courses").update(upd).eq("id",course.id);
-    // v19.70: si hay layout default cargado, sincronizar rating/slope (viven en course_layouts).
-    if(ft==="campo"&&defLayout){const lupd={rating:lyRating?parseFloat(lyRating):null,slope:lySlope?parseInt(lySlope):null};await sb.from("course_layouts").update(lupd).eq("id",defLayout.id);setDefLayout({...defLayout,...lupd})}
+  const saveCourse=async()=>{setSv(true);const upd={description:desc||null,phone_number:phone||null,green_fee_min:feeMin?parseFloat(feeMin):null,green_fee_max:feeMax?parseFloat(feeMax):null,cancellation_hours:parseInt(cancelHrs)||24,cancellation_refund_pct:parseInt(cancelPct)||100,has_food_service:hasFood,has_pro_shop:hasShop,operating_hours:opHours||null,operating_days:opDays||null,full_address:addr||null,timezone:courseTz||"America/Mexico_City",latitude:lat?parseFloat(lat):null,longitude:lng?parseFloat(lng):null,logo_url:logoUrl||null,amenities:amenities&&amenities.length?amenities:null};if(ft==="campo"){upd.hole_count=hCountSp?parseInt(hCountSp):null;upd.holes_per_round=hPerRSp?parseInt(hPerRSp):null;upd.total_par=tParSp?parseInt(tParSp):null}if(ft==="plataforma")upd.stations_count=stCount?parseInt(stCount):null;if(ft==="simulador"){upd.cabins_count=cbCount?parseInt(cbCount):null;upd.simulator_brand=simBrand||null}await sb.from("golf_courses").update(upd).eq("id",course.id);
+    // v19.71: layouts ya NO se guardan aquí — se manejan con su propio modal/save (saveLayout). El editor multi-layout vive aparte.
     setSv(false);setEd(false);if(onRefresh)onRefresh()};
   const removePhoto=(idx)=>{const go=async()=>{const np=photos.filter((_,i)=>i!==idx);setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);if(onRefresh)onRefresh()};if(window.__confirm)window.__confirm("¿Eliminar esta foto?",go);else if(confirm("¿Eliminar esta foto?"))go()};
   const replacePhoto=async(e,idx)=>{const file=e.target.files?.[0];if(!file||!file.type.startsWith("image/")||file.size>5*1024*1024)return;setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){setUpPh(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos];np[idx]=publicUrl;setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);setUpPh(false);if(onRefresh)onRefresh()};
   const uploadPhoto=async(e)=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith("image/")){window.__toast?.("Solo imágenes","error");return}if(file.size>5*1024*1024){window.__toast?.(t("Máximo 5MB"),"error");return}setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){window.__toast?.(ue.message,"error");setUpPh(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos,publicUrl];setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);setUpPh(false);if(onRefresh)onRefresh()};
   const saveHole=async()=>{if(!editHole)return;const payload={course_id:course.id,hole_number:editHole,par:parseInt(hPar),distance_yards:hDist?parseInt(hDist):null,hole_description:hDesc||null};const ex=holes.find(h=>h.hole_number===editHole);if(ex)await sb.from("course_holes").update(payload).eq("id",ex.id);else await sb.from("course_holes").insert(payload);const{data}=await sb.from("course_holes").select("*").eq("course_id",course.id).is("layout_id",null).order("hole_number");setHoles(data||[]);setEditHole(null)};
   const openHole=n=>{const h=holes.find(x=>x.hole_number===n);setEditHole(n);setHPar(h?h.par.toString():"4");setHDist(h?h.distance_yards?.toString()||"":"");setHDesc(h?h.hole_description||"":"")};
+
+  // v19.71: logo upload/remove. Bucket venue-photos compartido con fotos pero path con prefijo logo-{ts}.
+  const uploadLogo=async(e)=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith("image/")){window.__toast?.(t("Solo imágenes"),"error");return}if(file.size>2*1024*1024){window.__toast?.(t("Logo máximo 2MB"),"error");return}setUpLogo(true);const ext=file.name.split(".").pop();const path=`${course.id}/logo-${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){window.__toast?.(ue.message,"error");setUpLogo(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);setLogoUrl(publicUrl);await sb.from("golf_courses").update({logo_url:publicUrl}).eq("id",course.id);setUpLogo(false);if(onRefresh)onRefresh();window.__toast?.(t("Logo actualizado"),"success")};
+  const removeLogo=()=>{const go=async()=>{setLogoUrl("");await sb.from("golf_courses").update({logo_url:null}).eq("id",course.id);if(onRefresh)onRefresh();window.__toast?.(t("Logo eliminado"),"success")};if(window.__confirm)window.__confirm(t("¿Eliminar el logo?"),go);else if(confirm(t("¿Eliminar el logo?")))go()};
+
+  // v19.71: editor multi-layout — open/close/save/delete/setDefault.
+  const openLayoutEditor=(ly)=>{if(ly){setEditLayout(ly);setLyName(ly.name||"");setLyHC(ly.holes_count!=null?ly.holes_count.toString():"");setLyParEdit(ly.par!=null?ly.par.toString():"");setLyRating(ly.rating!=null?ly.rating.toString():"");setLySlope(ly.slope!=null?ly.slope.toString():"");setLyIsDefault(!!ly.is_default)}else{setEditLayout({});setLyName("");setLyHC(course.holes_per_round?course.holes_per_round.toString():"18");setLyParEdit(course.total_par?course.total_par.toString():"72");setLyRating("");setLySlope("");setLyIsDefault(layouts.length===0)}};
+  const closeLayoutEditor=()=>{setEditLayout(null);setLyName("");setLyHC("");setLyParEdit("");setLyRating("");setLySlope("");setLyIsDefault(false)};
+  const saveLayout=async()=>{if(!lyName.trim()){window.__toast?.(t("El nombre es obligatorio"),"error");return}setLySaving(true);const payload={course_id:course.id,name:lyName.trim(),holes_count:lyHC?parseInt(lyHC):null,par:lyParEdit?parseInt(lyParEdit):null,rating:lyRating?parseFloat(lyRating):null,slope:lySlope?parseInt(lySlope):null,is_default:lyIsDefault};
+    // Si is_default=true y ya existe otro layout default distinto, demoter primero (constraint only_one_default_per_course)
+    if(lyIsDefault){const cur=layouts.find(l=>l.is_default&&(!editLayout?.id||l.id!==editLayout.id));if(cur){await sb.from("course_layouts").update({is_default:false}).eq("id",cur.id)}}
+    if(editLayout&&editLayout.id){await sb.from("course_layouts").update(payload).eq("id",editLayout.id)}else{await sb.from("course_layouts").insert(payload)}
+    await reloadLayouts();setLySaving(false);closeLayoutEditor();window.__toast?.(t("Layout guardado"),"success")};
+  const deleteLayout=(ly)=>{if(ly.is_default){window.__toast?.(t("No puedes eliminar el layout default. Marca otro como default primero."),"error");return}const go=async()=>{
+    // Bloquear delete si hay scorecards apuntando — destruirían cálculos de handicap pasados.
+    const{count:sc}=await sb.from("scorecards").select("id",{count:"exact",head:true}).eq("layout_id",ly.id);
+    if((sc||0)>0){window.__toast?.(t("No se puede eliminar: ")+sc+t(" scorecards apuntan a este layout"),"error");return}
+    // Hoyos del layout se borran primero (no hay cascade en course_holes.layout_id)
+    await sb.from("course_holes").delete().eq("layout_id",ly.id);
+    await sb.from("course_layouts").delete().eq("id",ly.id);
+    await reloadLayouts();window.__toast?.(t("Layout eliminado"),"success")};
+    if(window.__confirm)window.__confirm(`${t("¿Eliminar layout")} "${ly.name}"? ${t("Sus hoyos también se eliminarán.")}`,go);else if(confirm(`${t("¿Eliminar layout")} "${ly.name}"?`))go()};
+  const setAsDefault=async(ly)=>{if(ly.is_default)return;const cur=layouts.find(l=>l.is_default);if(cur)await sb.from("course_layouts").update({is_default:false}).eq("id",cur.id);await sb.from("course_layouts").update({is_default:true}).eq("id",ly.id);await reloadLayouts();window.__toast?.(t("Layout default actualizado"),"success")};
+
+  // v19.71: amenities — toggle on/off mientras ed=true. Se persiste con saveCourse (ya incluido en upd).
+  // Lista predefinida; NO duplica has_food_service/has_pro_shop (esos ya existen como booleans con su propia UI).
+  const AMENITIES=[{k:"caddies",l:"Caddies",i:"👤"},{k:"alquiler_palos",l:t("Alquiler de palos"),i:"🏌️"},{k:"carrito_electrico",l:t("Carritos eléctricos"),i:"🛺"},{k:"driving_range",l:"Driving Range",i:"🎯"},{k:"putting_green",l:"Putting Green",i:"🟢"},{k:"chipping_green",l:"Chipping Green",i:"⛳"},{k:"clases_pro",l:t("Clases con pro"),i:"🏆"},{k:"vestidores",l:"Vestidores",i:"🚪"},{k:"lockers",l:"Lockers",i:"🔒"},{k:"regaderas",l:"Regaderas",i:"🚿"},{k:"wifi",l:"WiFi",i:"📶"},{k:"estacionamiento",l:"Estacionamiento",i:"🅿️"},{k:"valet_parking",l:"Valet parking",i:"🚗"},{k:"transporte",l:"Transporte / shuttle",i:"🚐"}];
+  const toggleAmenity=(k)=>{if(!ed)return;setAmenities(prev=>prev.includes(k)?prev.filter(x=>x!==k):[...prev,k])};
   return<div className="fi">
     <div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt,margin:0}} dangerouslySetInnerHTML={{__html:FI[ft]+" Perfil"}}/><button onClick={()=>ed?saveCourse():setEd(true)} style={{background:C.acc,border:"none",color:"#fff",fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:10,cursor:"pointer",boxShadow:"0 4px 12px rgba(233,69,96,.25)"}}>{sv?"...":ed?"Guardar":"Editar"}</button></div>
     <div className="ar" style={{marginBottom:14}}><div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:C.txt}}>{course.course_name}</div><div style={{fontSize:12,color:C.ts,marginTop:2}}>{course.city}, {course.state}</div></div></div>
@@ -4846,14 +4877,27 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     <h4 style={{fontSize:12,fontWeight:700,color:C.tm,marginTop:6,marginBottom:8,letterSpacing:.5,textTransform:"uppercase"}}>{t("Coordenadas")}</h4>
     <div style={{..._s.grid2lg,marginBottom:8}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>LATITUD</label><input value={lat} onChange={x=>setLat(x.target.value)} disabled={!ed} type="number" step="any" placeholder="20.6766" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>LONGITUD</label><input value={lng} onChange={x=>setLng(x.target.value)} disabled={!ed} type="number" step="any" placeholder="-103.3475" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div></div>
     <div style={{fontSize:11,color:C.ts,marginBottom:14,padding:10,borderRadius:8,background:C.cd,border:"1px solid "+C.bd}}>📍 {t("Para encontrar las coordenadas: abre Google Maps, click derecho sobre la ubicación de tu campo y copia los números que aparecen. El primero es latitud, el segundo longitud.")}</div>
-    {/* v19.70: specs técnicos del campo + ratings USGA del layout default. Solo facility_type=campo. */}
+    {/* v19.70: specs técnicos del campo. Solo facility_type=campo. v19.71: ratings USGA del layout default movidos al editor multi-layout (sección Layouts más abajo). */}
     {ft==="campo"&&<><h4 style={{fontSize:12,fontWeight:700,color:C.tm,marginTop:6,marginBottom:8,letterSpacing:.5,textTransform:"uppercase"}}>{t("Specs técnicos")}</h4>
-    <div style={{..._s.grid2lg,marginBottom:10}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("HOYOS TOTALES")}</label><input value={hCountSp} onChange={x=>setHCountSp(x.target.value)} disabled={!ed} type="number" placeholder="9, 18, 27..." style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("HOYOS POR RONDA")}</label><input value={hPerRSp} onChange={x=>setHPerRSp(x.target.value)} disabled={!ed} type="number" placeholder="9 o 18" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div style={{gridColumn:"1 / -1"}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("PAR TOTAL DEL CAMPO")}</label><input value={tParSp} onChange={x=>setTParSp(x.target.value)} disabled={!ed} type="number" placeholder="ej. 72" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div></div>
-    {defLayout&&<><div style={{fontSize:11,color:C.ts,marginTop:10,marginBottom:6}}>{t("Ratings USGA del layout principal")}{lyName?` — ${lyName}`:""}</div>
-    <div style={{..._s.grid2lg,marginBottom:8}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>COURSE RATING</label><input value={lyRating} onChange={x=>setLyRating(x.target.value)} disabled={!ed} type="number" step="0.1" placeholder="ej. 72.4" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>SLOPE RATING</label><input value={lySlope} onChange={x=>setLySlope(x.target.value)} disabled={!ed} type="number" placeholder="55-155" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div></div></>}
-    <div style={{fontSize:11,color:C.ts,marginBottom:14,padding:10,borderRadius:8,background:C.cd,border:"1px solid "+C.bd}}>ℹ️ {t("Course Rating y Slope Rating son los valores oficiales USGA del campo. Se usan en el cálculo automático de handicap después de cada ronda. Si tu campo tiene varios layouts, aquí se edita el principal.")}</div></>}
-    {/* v19.70: notas placeholder para features pendientes — logo separado y amenities estructurados */}
-    <div style={{fontSize:11,color:C.tm,marginBottom:14,padding:10,borderRadius:8,background:C.cd,border:"1px dashed "+C.bd}}>🔧 <strong>{t("Próximamente")}:</strong> {t("editor de logo separado de las fotos, y amenities estructurados (carrito eléctrico, vestidores, alquiler de palos, lockers). Por ahora puedes mencionarlos en la descripción.")}</div>
+    <div style={{..._s.grid2lg,marginBottom:14}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("HOYOS TOTALES")}</label><input value={hCountSp} onChange={x=>setHCountSp(x.target.value)} disabled={!ed} type="number" placeholder="9, 18, 27..." style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("HOYOS POR RONDA")}</label><input value={hPerRSp} onChange={x=>setHPerRSp(x.target.value)} disabled={!ed} type="number" placeholder="9 o 18" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div><div style={{gridColumn:"1 / -1"}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("PAR TOTAL DEL CAMPO")}</label><input value={tParSp} onChange={x=>setTParSp(x.target.value)} disabled={!ed} type="number" placeholder="ej. 72" style={{...inp0,marginTop:4,background:ed?C.bg:C.cd,color:C.txt,border:"1px solid "+C.bd}}/></div></div></>}
+
+    {/* v19.71: editor multi-layout — lista layouts del campo, modal para crear/editar/eliminar/marcar default. Solo facility_type=campo. */}
+    {ft==="campo"&&<><div style={{..._s.flexB,marginTop:6,marginBottom:8}}><h4 style={{fontSize:12,fontWeight:700,color:C.tm,margin:0,letterSpacing:.5,textTransform:"uppercase"}}>{t("Layouts")} ({layouts.length})</h4><button onClick={()=>{if(ed)openLayoutEditor(null)}} disabled={!ed} style={{background:ed?C.acc:C.cd,border:"none",color:ed?"#fff":C.tm,fontSize:11,fontWeight:600,padding:"5px 12px",borderRadius:8,cursor:ed?"pointer":"default"}}>+ {t("Agregar")}</button></div>
+    {layouts.length===0?
+      <div style={{fontSize:11,color:C.ts,marginBottom:14,padding:12,borderRadius:8,background:C.cd,border:"1px dashed "+C.bd}}>⛳ {t("Este campo no tiene layouts configurados. Crea uno para registrar Course Rating y Slope Rating oficiales (USGA) — son necesarios para que el handicap de los jugadores se calcule correctamente al subir scorecards.")}</div>
+      :
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>{layouts.map(ly=><div key={ly.id} style={{padding:10,borderRadius:10,background:C.cd,border:"1px solid "+(ly.is_default?C.grn+"55":C.bd)}}><div style={{...(_s.flexB||{display:"flex",justifyContent:"space-between",alignItems:"center"}),marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}><span style={{fontSize:13,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ly.name||t("(sin nombre)")}</span>{ly.is_default&&<span style={{fontSize:9,fontWeight:700,color:C.grn,background:C.grn+"20",padding:"2px 6px",borderRadius:5,letterSpacing:.3}}>DEFAULT</span>}</div></div><div style={{fontSize:11,color:C.ts,marginBottom:8,display:"flex",gap:10,flexWrap:"wrap"}}><span>{ly.holes_count||"?"} {t("hoyos")}</span><span>•</span><span>Par {ly.par||"?"}</span><span>•</span><span>{t("Rating")} {ly.rating!=null?ly.rating:"—"}</span><span>•</span><span>Slope {ly.slope||"—"}</span></div><div style={{display:"flex",gap:6}}><button onClick={()=>{if(ed)openLayoutEditor(ly)}} disabled={!ed} style={{flex:1,padding:6,fontSize:11,fontWeight:600,background:"transparent",border:"1px solid "+C.bd,borderRadius:8,color:ed?C.txt:C.tm,cursor:ed?"pointer":"default"}}>{t("Editar")}</button>{!ly.is_default&&<button onClick={()=>{if(ed)setAsDefault(ly)}} disabled={!ed} style={{flex:1,padding:6,fontSize:11,fontWeight:600,background:"transparent",border:"1px solid "+C.bd,borderRadius:8,color:ed?C.grn:C.tm,cursor:ed?"pointer":"default"}}>{t("Default")}</button>}{!ly.is_default&&<button onClick={()=>{if(ed)deleteLayout(ly)}} disabled={!ed} style={{padding:"6px 10px",fontSize:11,fontWeight:600,background:"transparent",border:"1px solid "+C.bd,borderRadius:8,color:ed?C.acc:C.tm,cursor:ed?"pointer":"default"}}>×</button>}</div></div>)}</div>
+    }
+    <div style={{fontSize:11,color:C.ts,marginBottom:14,padding:10,borderRadius:8,background:C.cd,border:"1px solid "+C.bd}}>ℹ️ {t("Course Rating y Slope Rating son los valores oficiales USGA del layout. Se usan en el cálculo automático de handicap de cada jugador después de cada scorecard. Si tu campo tiene varios layouts (ej. Mountain/Ocean), agrega cada uno con sus ratings y marca como default el que se juega más.")}</div></>}
+
+    {/* v19.71: logo upload separado de las fotos. Persiste en golf_courses.logo_url. */}
+    <h4 style={{fontSize:12,fontWeight:700,color:C.tm,marginTop:6,marginBottom:8,letterSpacing:.5,textTransform:"uppercase"}}>{t("Logo del campo")}</h4>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>{logoUrl?<><div style={{width:80,height:80,borderRadius:10,overflow:"hidden",border:"1px solid "+C.bd,background:"#fff",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><img src={logoUrl} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}} onError={e=>{e.target.style.display="none"}}/></div><div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}><label style={{padding:"7px 12px",fontSize:11,fontWeight:600,background:"transparent",border:"1px solid "+C.bd,borderRadius:8,color:ed?C.txt:C.tm,cursor:ed?"pointer":"default",textAlign:"center"}}>{upLogo?"...":t("Reemplazar")}<input type="file" accept="image/*" onChange={uploadLogo} disabled={!ed||upLogo} style={{display:"none"}}/></label><button onClick={()=>{if(ed)removeLogo()}} disabled={!ed} style={{padding:"7px 12px",fontSize:11,fontWeight:600,background:"transparent",border:"1px solid "+C.bd,borderRadius:8,color:ed?C.acc:C.tm,cursor:ed?"pointer":"default"}}>{t("Eliminar")}</button></div></>:<><label style={{width:80,height:80,borderRadius:10,border:"2px dashed "+C.bd,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:ed?(upLogo?"wait":"pointer"):"default",flexShrink:0,background:C.cd}}><span style={{fontSize:20,color:C.tm}}>{upLogo?"...":"+"}</span><input type="file" accept="image/*" onChange={uploadLogo} disabled={!ed||upLogo} style={{display:"none"}}/></label><div style={{flex:1,fontSize:11,color:C.ts}}>{t("Sube el logo de tu campo (PNG con fondo transparente preferido). Máximo 2MB.")}</div></>}</div>
+
+    {/* v19.71: amenities estructurados — array de strings en golf_courses.amenities. NO duplica has_food_service/has_pro_shop. */}
+    <h4 style={{fontSize:12,fontWeight:700,color:C.tm,marginTop:6,marginBottom:8,letterSpacing:.5,textTransform:"uppercase"}}>{t("Amenities")} ({amenities.length})</h4>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{AMENITIES.map(am=>{const on=amenities.includes(am.k);return<button key={am.k} onClick={()=>toggleAmenity(am.k)} disabled={!ed} style={{padding:"7px 11px",borderRadius:18,border:"1px solid "+(on?C.grn:C.bd),background:on?C.grn+"15":C.cd,cursor:ed?"pointer":"default",fontSize:11,fontWeight:600,color:on?C.grn:C.tm,display:"flex",alignItems:"center",gap:5}}><span>{am.i}</span><span>{am.l}</span>{on&&<span style={{fontSize:10}}>✓</span>}</button>})}</div>
+    <div style={{fontSize:11,color:C.ts,marginBottom:14}}>{t("Selecciona los servicios que tu campo ofrece. Comida/Bar y Pro Shop están arriba en su propia sección.")}</div>
     {/* v19.68: campo "SITIO WEB" retirado del UI (estrategia de moat — el jugador no debe brincar fuera de Partee). */}
     <div id="field-photos" style={{transition:"box-shadow .3s",boxShadow:highlight==="photos"?"0 0 0 2px "+C.acc:"none",borderRadius:10,padding:highlight==="photos"?4:0,margin:highlight==="photos"?-4:0}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}} dangerouslySetInnerHTML={{__html:ic("camera",14,C.txt)+" Fotos ("+photos.length+")"}}></h3>
     <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:10}}>{photos.map((url,i)=><div key={i} style={{position:"relative",width:120,height:80,borderRadius:10,overflow:"hidden",border:"1px solid "+C.bd,flexShrink:0}}><img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>{e.target.style.display="none"}}/><div style={{position:"absolute",top:0,right:0,display:"flex",gap:2,padding:3}}><label style={{width:22,height:22,borderRadius:10,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,color:"#fff"}}><span dangerouslySetInnerHTML={{__html:ic("edit",10,"#fff")}}/><input type="file" accept="image/*" onChange={e=>replacePhoto(e,i)} style={{display:"none"}}/></label><button onClick={()=>removePhoto(i)} style={{width:22,height:22,borderRadius:10,background:"rgba(0,0,0,.7)",border:"none",color:C.acc,cursor:"pointer",fontSize:11}} dangerouslySetInnerHTML={{__html:ic("x",14,C.tm)}}/></div></div>)}<label style={{width:80,height:80,borderRadius:10,border:"2px dashed "+C.bd,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:upPh?"wait":"pointer",flexShrink:0,background:C.cd}}><span style={{fontSize:20,color:C.tm}}>{upPh?"...":"+"}</span><input type="file" accept="image/*" onChange={uploadPhoto} disabled={upPh} style={{display:"none"}}/></label></div></div>
@@ -4861,6 +4905,12 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     {ft==="plataforma"&&<><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}}>Bahías ({parseInt(stCount||course.stations_count)||0})</h3><div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:14}}>{Array.from({length:Math.min(parseInt(stCount||course.stations_count)||0,72)},(_,i)=>i+1).map(n=><div key={n} style={{width:42,height:42,borderRadius:10,background:"#6c5ce712",border:"1px solid #6c5ce730",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#6c5ce7"}}>{n}</div>)}</div></>}
     {ft==="simulador"&&<><h3 style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:10}}>Cabinas ({parseInt(cbCount||course.cabins_count)||0})</h3><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{Array.from({length:Math.min(parseInt(cbCount||course.cabins_count)||0,20)},(_,i)=>i+1).map(n=><div key={n} style={{width:56,height:56,borderRadius:14,background:"#6c5ce710",border:"1px solid #6c5ce730",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:"#6c5ce7"}}>{n}</div>)}</div></>}
     {editHole&&<div className="modal-bg" onClick={()=>setEditHole(null)}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:14}}>Hoyo {editHole}</h3><div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>PAR</label><select value={hPar} onChange={x=>setHPar(x.target.value)} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="3">Par 3</option><option value="4">Par 4</option><option value="5">Par 5</option></select></div><div><label style={{fontSize:10,color:C.tm}}>DISTANCIA</label><input value={hDist} onChange={x=>setHDist(x.target.value)} type="number" placeholder="yds" style={{...inp0,marginTop:4}}/></div></div><textarea value={hDesc} onChange={x=>setHDesc(x.target.value)} placeholder={t("Descripción...")} style={{...inp0,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/><div style={{display:"flex",gap:8,marginTop:14}}><button onClick={saveHole} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button><button onClick={()=>setEditHole(null)} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
+    {/* v19.71: modal editor de layout — create/edit con name, holes_count, par, rating, slope, is_default */}
+    {editLayout&&<div className="modal-bg" onClick={closeLayoutEditor}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:420}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:4}}>{editLayout.id?t("Editar layout"):t("Nuevo layout")}</h3><div style={{fontSize:11,color:C.ts,marginBottom:14}}>{t("Define un layout del campo (ej. Mountain, Ocean, 9 hoyos, Combo). Los ratings USGA se usan para calcular handicap.")}</div>
+    <div style={{marginBottom:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("NOMBRE")} *</label><input value={lyName} onChange={x=>setLyName(x.target.value)} placeholder={t("ej. Mountain Course, 18 hoyos, Combo Mountain+Ocean")} style={{...inp0,marginTop:4}} maxLength={80}/></div>
+    <div style={{..._s.grid2lg,marginBottom:10}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("HOYOS")}</label><input value={lyHC} onChange={x=>setLyHC(x.target.value)} type="number" placeholder="9 o 18" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>PAR</label><input value={lyParEdit} onChange={x=>setLyParEdit(x.target.value)} type="number" placeholder="ej. 72" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>COURSE RATING</label><input value={lyRating} onChange={x=>setLyRating(x.target.value)} type="number" step="0.1" placeholder="ej. 72.4" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>SLOPE</label><input value={lySlope} onChange={x=>setLySlope(x.target.value)} type="number" placeholder="55-155" style={{...inp0,marginTop:4}}/></div></div>
+    <button onClick={()=>setLyIsDefault(!lyIsDefault)} style={{width:"100%",padding:10,marginBottom:14,borderRadius:10,border:"1px solid "+(lyIsDefault?C.grn:C.bd),background:lyIsDefault?C.grn+"15":C.cd,cursor:"pointer",fontSize:12,fontWeight:600,color:lyIsDefault?C.grn:C.tm,textAlign:"left"}}>{lyIsDefault?"✓ ":""}{t("Marcar como layout default")}{lyIsDefault?"":""}<div style={{fontSize:10,fontWeight:400,color:C.ts,marginTop:2}}>{t("Es el layout que se usa por defecto al subir scorecards y mostrar al jugador")}</div></button>
+    <div style={{display:"flex",gap:8}}><button onClick={saveLayout} disabled={lySaving} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:lySaving?"wait":"pointer",opacity:lySaving?.6:1}}>{lySaving?"...":t("Guardar")}</button><button onClick={closeLayoutEditor} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
     <ThemeToggle/><LangToggle/><button onClick={()=>{
       // v19.64: alineado con el patrón robusto del Player Profile (línea 4177).
       // Antes: onClick={onOut} sin confirm → si el click no llegaba al backend (botón tapado
@@ -5555,463 +5605,4 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><button onClick={()=>navDay(-1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/><div style={{textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>{selDate===today&&<div style={{fontSize:10,color:C.acc,fontWeight:600}}>HOY</div>}<input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} style={{marginTop:4,background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"center"}}/></div><button onClick={()=>navDay(1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div className="sc"><div className="n" style={{color:C.grn,fontSize:18}}>{available.length}</div><div className="l">Disponibles</div></div><div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{booked.length}</div><div className="l">{t("Reservados")}</div></div><div className="sc"><div className="n" style={{color:C.tm,fontSize:18}}>{blocked.length}</div><div className="l">Bloqueados</div></div></div>
     {ld?<Skeleton w="100%" h={60}/>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}><div dangerouslySetInnerHTML={{__html:ic("calendar",28,C.tm)}} style={{marginBottom:8}}/><p>Sin slots para esta fecha</p><p style={{fontSize:12,marginTop:4}}>Click "Generar 30 días" para crear</p></div>:
-    bands.map(band=>{const bs=slots.filter(x=>{const h=parseInt(x.slot_time);return h>=band.r[0]&&h<band.r[1]});if(!bs.length)return null;return<div key={band.k} style={{marginBottom:14}}><div style={{fontSize:12,fontWeight:700,color:C.ts,marginBottom:6}}>{band.l} ({bs.length})</div>{bs.map(sl=><div key={sl.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:sl.status==="booked"?C.acc+"10":sl.status==="blocked"?C.tm+"15":C.cd,borderRadius:10,border:"1px solid "+(sl.status==="booked"?C.acc+"30":sl.is_offer?C.gld+"40":C.bd),marginBottom:4}}>
-      <div style={{width:50,textAlign:"center",flexShrink:0}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>{sl.slot_time?.slice(0,5)}</div></div>
-      <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
-        <span onClick={()=>{setEditSlot(sl);setEditPrice(sl.price?.toString()||"")}} style={{fontSize:13,fontWeight:700,color:C.grn,cursor:"pointer"}}>${fm(sl.price)}</span>
-        {sl.is_offer&&<span style={{fontSize:9,background:C.gld+"20",color:C.gld,padding:"1px 6px",borderRadius:4,fontWeight:700}}>DEAL</span>}
-        {sl.booked_count>0&&<span style={{fontSize:10,color:C.acc}}>{sl.booked_count}/{sl.capacity||4}</span>}
-      </div>
-      <div style={{display:"flex",gap:4}}>
-        <button onClick={()=>toggleOffer(sl)} title="Hot Deal" style={{width:28,height:28,borderRadius:8,border:"1px solid "+(sl.is_offer?C.gld:C.bd),background:sl.is_offer?C.gld+"15":"transparent",color:sl.is_offer?C.gld:C.tm,fontSize:12,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("flame",12,C.gld)}}/>
-        {sl.status!=="booked"&&<button onClick={()=>toggleSlot(sl)} title={sl.status==="available"?"Bloquear":"Desbloquear"} style={{width:28,height:28,borderRadius:8,border:"1px solid "+(sl.status==="blocked"?C.grn:C.acc)+30,background:sl.status==="blocked"?C.grn+"15":C.acc+"15",color:sl.status==="blocked"?C.grn:C.acc,fontSize:12,cursor:"pointer"}}>{sl.status==="blocked"?"✓":"✕"}</button>}
-        <button onClick={()=>deleteSlot(sl.id)} title="Eliminar" style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.acc+"25",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
-        {sl.status==="booked"&&<span style={{fontSize:10,color:C.acc,fontWeight:600,padding:"4px 8px"}}>Reservado</span>}
-      </div>
-    </div>)}</div>})}
-    {editSlot&&<div className="modal-bg" onClick={()=>setEditSlot(null)}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:14}}>Editar Slot {editSlot.slot_time?.slice(0,5)}</h3>
-      <label style={{fontSize:10,color:C.tm}}>{t("PRECIO (MXN)")}</label><input value={editPrice} onChange={e=>setEditPrice(e.target.value)} type="number" style={{...inp0,marginTop:4,marginBottom:14,color:C.txt}}/>
-      <div style={{display:"flex",gap:8}}><button onClick={savePrice} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button><button onClick={()=>setEditSlot(null)} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div>
-    </div></div>}
-    {selDate!==today&&<button onClick={()=>setSelDate(today)} style={{width:"100%",padding:10,marginTop:10,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Ir a hoy</button>}
-  </div>}
-
-// AdminPayouts (v19.0): panel de pagos para course_admin con filtro, banner Stripe Connect y toggle payout_method
-function AdminPayouts({course,onRefresh}){const[payouts,setPayouts]=useState([]);const[ld,setLd]=useState(true);const[filter,setFilter]=useState("all");const[exp,setExp]=useState(null);const[connectLd,setConnectLd]=useState(false);const[toggleLd,setToggleLd]=useState(false);
-  useEffect(()=>{load()},[course?.id]);
-  async function load(){setLd(true);const{data}=await sb.from("course_payouts").select("*,booking:bookings(booking_code,booking_date,booking_time,course_name)").eq("course_id",course.id).order("created_at",{ascending:false});setPayouts(data||[]);setLd(false)}
-  const cs=course.stripe_connect_status||"not_started";const cVerified=cs==="verified"&&course.stripe_connect_payouts_enabled;const pm=course.payout_method||"manual_spei";
-  async function openConnect(){setConnectLd(true);try{const{data,error}=await sb.functions.invoke("create-course-connect-account",{body:{course_id:course.id}});if(error)throw error;if(data?.already_verified){window.__toast?.("Tu cuenta ya está verificada","success");onRefresh?.();return}if(data?.url){window.location.href=data.url;return}window.__toast?.("No se obtuvo URL de Stripe","error")}catch(e){window.__toast?.("Error: "+(e.message||e),"error")}finally{setConnectLd(false)}}
-  async function togglePayoutMethod(newMode){if(toggleLd||newMode===pm)return;if(!cVerified&&newMode==="auto_via_connect"){window.__toast?.("Primero verifica tu cuenta Stripe Connect","warn");return}setToggleLd(true);const{error}=await sb.from("golf_courses").update({payout_method:newMode}).eq("id",course.id);setToggleLd(false);if(error){window.__toast?.("Error: "+error.message,"error");return}window.__toast?.("Método actualizado","success");onRefresh?.()}
-  // Stats del mes
-  const monthStart=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString();
-  const settledThisMonth=payouts.filter(p=>(p.status==="settled_auto"||p.status==="settled_manual")&&p.created_at>=monthStart);
-  const monthTotal=settledThisMonth.reduce((s,p)=>s+Number(p.amount_to_course||0),0);
-  const PEND=["awaiting_claim_window","pending_settlement","awaiting_course_connect","transferring"];
-  const pending=payouts.filter(p=>PEND.includes(p.status));const pendingTotal=pending.reduce((s,p)=>s+Number(p.amount_to_course||0),0);
-  // Filtros
-  const FILT={all:()=>true,pending:p=>PEND.includes(p.status),settled:p=>p.status==="settled_auto"||p.status==="settled_manual",other:p=>p.status==="refunded"||p.status==="failed"};
-  const filtered=payouts.filter(FILT[filter]||FILT.all);
-  // Status visual
-  const ST={awaiting_claim_window:{l:"Ventana 48h",c:C.gld,desc:"Esperando ventana de cancelación"},pending_settlement:{l:"Pendiente",c:C.gld,desc:"Listo para liquidar"},awaiting_course_connect:{l:"Connect pendiente",c:C.acc,desc:"Configura Stripe Connect para liquidar"},transferring:{l:"Transfiriendo",c:C.gld,desc:"En proceso"},settled_auto:{l:"Pagado",c:C.grn,desc:"Liquidado vía Stripe"},settled_manual:{l:"Pagado SPEI",c:C.grn,desc:"Liquidado vía SPEI manual"},refunded:{l:"Reembolsado",c:C.tm,desc:"Booking cancelado"},failed:{l:"Falló",c:C.acc,desc:"Error - revisar"}};
-  return<div className="fi">
-    {/* Hero stats */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
-        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>RECIBIDO ESTE MES</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.grn,marginTop:6}}>${fm(monthTotal)}</div>
-        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{settledThisMonth.length} {settledThisMonth.length===1?"pago":"pagos"}</div>
-      </div>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
-        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>POR LIQUIDAR</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.gld,marginTop:6}}>${fm(pendingTotal)}</div>
-        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{pending.length} {pending.length===1?"pago":"pagos"}</div>
-      </div>
-    </div>
-    {/* Banner Stripe Connect */}
-    {cs==="not_started"&&<div style={{padding:14,borderRadius:14,background:C.acc+"08",border:"1px solid "+C.acc+"30",marginBottom:14}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-        <div style={{width:36,height:36,borderRadius:12,background:C.acc+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("dollar",18,C.acc)}}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Activa pagos automáticos</div>
-          <div style={{fontSize:12,color:C.ts,marginTop:4,lineHeight:1.4}}>Configura Stripe Connect y recibe tus pagos directo en tu cuenta bancaria, sin esperar SPEI manual.</div>
-          <button onClick={openConnect} disabled={connectLd} style={{marginTop:10,padding:"10px 16px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:connectLd?"wait":"pointer",opacity:connectLd?.7:1}}>{connectLd?"Cargando...":"Configurar Stripe Connect"}</button>
-        </div>
-      </div>
-    </div>}
-    {cs==="onboarding"&&<div style={{padding:14,borderRadius:14,background:C.gld+"08",border:"1px solid "+C.gld+"30",marginBottom:14}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-        <div style={{width:36,height:36,borderRadius:12,background:C.gld+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("clock",18,C.gld)}}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Completa tu configuración</div>
-          <div style={{fontSize:12,color:C.ts,marginTop:4,lineHeight:1.4}}>Tu cuenta Stripe Connect está pendiente. Completa los pasos para activar pagos automáticos.</div>
-          <button onClick={openConnect} disabled={connectLd} style={{marginTop:10,padding:"10px 16px",background:C.gld,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:connectLd?"wait":"pointer",opacity:connectLd?.7:1}}>{connectLd?"Cargando...":"Continuar configuración"}</button>
-        </div>
-      </div>
-    </div>}
-    {cs==="restricted"&&<div style={{padding:14,borderRadius:14,background:C.acc+"08",border:"1px solid "+C.acc+"30",marginBottom:14}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-        <div style={{width:36,height:36,borderRadius:12,background:C.acc+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("alert",18,C.acc)}}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Tu cuenta requiere atención</div>
-          <div style={{fontSize:12,color:C.ts,marginTop:4,lineHeight:1.4}}>Stripe necesita información adicional para procesar pagos. Resuelve los pendientes en tu dashboard.</div>
-          <button onClick={openConnect} disabled={connectLd} style={{marginTop:10,padding:"10px 16px",background:C.acc,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:connectLd?"wait":"pointer",opacity:connectLd?.7:1}}>{connectLd?"Cargando...":"Resolver en Stripe"}</button>
-        </div>
-      </div>
-    </div>}
-    {cs==="verified"&&<div style={{padding:14,borderRadius:14,background:C.grn+"08",border:"1px solid "+C.grn+"30",marginBottom:14}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-        <div style={{width:36,height:36,borderRadius:12,background:C.grn+"15",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("check",18,C.grn)}}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Stripe Connect verificado</div>
-          <div style={{fontSize:11,color:C.ts,marginTop:2}}>Puedes recibir pagos automáticos</div>
-        </div>
-      </div>
-      <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em",marginBottom:8}}>MÉTODO DE PAGO</div>
-      <div style={{display:"flex",gap:6}}>
-        <button onClick={()=>togglePayoutMethod("manual_spei")} disabled={toggleLd} style={{flex:1,padding:10,borderRadius:10,border:"2px solid "+(pm==="manual_spei"?C.grn:C.bd),background:pm==="manual_spei"?C.grn+"15":"transparent",color:pm==="manual_spei"?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:toggleLd?"wait":"pointer"}}>SPEI Manual</button>
-        <button onClick={()=>togglePayoutMethod("auto_via_connect")} disabled={toggleLd} style={{flex:1,padding:10,borderRadius:10,border:"2px solid "+(pm==="auto_via_connect"?C.grn:C.bd),background:pm==="auto_via_connect"?C.grn+"15":"transparent",color:pm==="auto_via_connect"?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:toggleLd?"wait":"pointer"}}>Automático</button>
-      </div>
-    </div>}
-    {/* Filtros */}
-    <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto"}}>
-      {[{k:"all",l:"Todos"},{k:"pending",l:"Pendientes"},{k:"settled",l:"Pagados"},{k:"other",l:"Otros"}].map(f=>
-        <button key={f.k} onClick={()=>setFilter(f.k)} style={{padding:"7px 12px",borderRadius:10,border:"1px solid "+(filter===f.k?C.grn:C.bd),background:filter===f.k?C.grn+"15":"transparent",color:filter===f.k?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{f.l}</button>
-      )}
-    </div>
-    {/* Lista */}
-    {ld?<Skeleton w="100%" h={70}/>:filtered.length===0?
-      <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>Sin pagos en esta categoría</div>
-      :filtered.map(po=>{const st=ST[po.status]||{l:po.status,c:C.tm,desc:""};const bk=po.booking;const isExp=exp===po.id;return(
-        <div key={po.id} onClick={()=>setExp(isExp?null:po.id)} style={{padding:12,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,marginBottom:8,cursor:"pointer"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:14,fontWeight:800,color:C.txt}}>${fm(po.amount_to_course)}</span>
-                <span style={{padding:"2px 8px",borderRadius:6,background:st.c+"15",color:st.c,fontSize:9,fontWeight:700,letterSpacing:".05em"}}>{st.l.toUpperCase()}</span>
-              </div>
-              <div style={{fontSize:11,color:C.ts,marginTop:3}}>{bk?.booking_code||"—"} · {bk?.booking_date?new Date(bk.booking_date+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"}):""}</div>
-            </div>
-            <div style={{transform:isExp?"rotate(180deg)":"rotate(0deg)",transition:"transform .2s",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/>
-          </div>
-          {isExp&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd}}>
-            <div style={{fontSize:11,color:C.ts,marginBottom:8,lineHeight:1.5}}>{st.desc}</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
-              <div><span style={{color:C.tm}}>Total cobrado: </span><span style={{color:C.txt,fontWeight:600}}>${fm(po.total_collected)}</span></div>
-              <div><span style={{color:C.tm}}>Comisión: </span><span style={{color:C.txt,fontWeight:600}}>${fm(po.platform_fee_amount)}</span></div>
-              {po.release_at&&<div><span style={{color:C.tm}}>Disponible: </span><span style={{color:C.txt,fontWeight:600}}>{new Date(po.release_at).toLocaleDateString("es-MX",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span></div>}
-              {po.transferred_at&&<div><span style={{color:C.tm}}>Transferido: </span><span style={{color:C.txt,fontWeight:600}}>{new Date(po.transferred_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
-              {po.manual_spei_paid_at&&<div><span style={{color:C.tm}}>SPEI: </span><span style={{color:C.txt,fontWeight:600}}>{new Date(po.manual_spei_paid_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
-              {po.manual_spei_reference&&<div style={{gridColumn:"span 2"}}><span style={{color:C.tm}}>Ref: </span><span style={{color:C.txt,fontWeight:600}}>{po.manual_spei_reference}</span></div>}
-              <div><span style={{color:C.tm}}>Método: </span><span style={{color:C.txt,fontWeight:600}}>{po.payout_method==="auto_via_connect"?"Stripe Connect":"SPEI"}</span></div>
-            </div>
-            {po.last_error&&<div style={{marginTop:8,padding:8,background:C.acc+"10",borderRadius:8,fontSize:10,color:C.acc}}>⚠ {po.last_error}</div>}
-          </div>}
-        </div>
-      )})}
-  </div>}
-
-function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);
-  const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).single().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
-  useEffect(()=>{loadC()},[p]);const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};
-  const navTo=(t,opts={})=>{setTab(t);setAutoEdit(!!opts.autoEdit);setFocusField(opts.focusField||null)};
-  const clearAutoEdit=()=>{setAutoEdit(false);setFocusField(null)};
-  if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
-  if(!course)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Cerrar Sesión")}</button></div></div>;
-  const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Dashboard"},{i:ic("calendar",20,C.txt),l:"Reservas"},{i:ic("clock",20,C.txt),l:"Slots"},{i:ic("tag",20,C.txt),l:"Promos"},{i:ic("dollar",20,C.txt),l:"Pagos"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Perfil"}];
-  const lst=course.listing_status||"draft";const LST={draft:{l:"BORRADOR",c:C.acc},pending_review:{l:"EN REVISIÓN",c:C.gld},active:{l:"PUBLICADO",c:C.grn},suspended:{l:"SUSPENDIDO",c:C.acc}}[lst]||{l:"BORRADOR",c:C.acc};
-  return<div className="admin-container" style={{background:C.bg}}>
-    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div onClick={()=>setTab(0)} style={{padding:"3px 9px",borderRadius:7,background:LST.c+"15",border:"1px solid "+LST.c+"35",cursor:lst==="active"?"default":"pointer"}} title={lst==="active"?"":"Ver detalles en Dashboard"}><span style={{fontSize:9,fontWeight:700,color:LST.c,letterSpacing:".05em"}}>{LST.l}</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
-    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<AdminPayouts course={course} onRefresh={loadC}/>}{tab===5&&<PremiumInsights course={course}/>}{tab===6&&<AdminProfile course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit}/>}</div>
-    <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
-  </div>}
-
-function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);const[ld,setLd]=useState(true);const[stats,setStats]=useState(null);const[courses,setCourses]=useState([]);const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");const[sel,setSel]=useState(null);
-  const loadAll=async()=>{setLd(true);const today=new Date().toISOString().slice(0,10);const d30=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
-    const[{data:cs},{data:bks},{data:us},{data:sl}]=await Promise.all([
-      sb.from("golf_courses").select("*").order("created_at",{ascending:false}),
-      sb.from("bookings").select("course_id,total_cost,booking_date,platform_fee_pct,settlement_amount,status").eq("status","confirmed"),
-      sb.from("user_profiles").select("id,user_role,is_deleted"),
-      sb.from("time_slots").select("course_name,slot_date").gte("slot_date",today)
-    ]);
-    const allC=cs||[];const allB=bks||[];const allU=us||[];const allS=sl||[];
-    const byStatus={draft:0,pending_review:0,active:0,suspended:0};allC.forEach(c=>{byStatus[c.listing_status||"draft"]=(byStatus[c.listing_status||"draft"]||0)+1});
-    const revByCourse={};const rev30ByCourse={};let platformRev=0;let platformFee=0;
-    allB.forEach(b=>{const tc=Number(b.total_cost||0);platformRev+=tc;platformFee+=tc*Number(b.platform_fee_pct||10)/100;if(b.course_id){revByCourse[b.course_id]=(revByCourse[b.course_id]||0)+tc;if(b.booking_date>=d30)rev30ByCourse[b.course_id]=(rev30ByCourse[b.course_id]||0)+tc}});
-    const slotsByCourse={};allS.forEach(s=>{slotsByCourse[s.course_name]=(slotsByCourse[s.course_name]||0)+1});
-    const enriched=allC.map(c=>({...c,_rev:revByCourse[c.id]||0,_rev30:rev30ByCourse[c.id]||0,_slots:slotsByCourse[c.course_name]||0}));
-    const topRev=enriched.filter(c=>c._rev30>0).sort((a,b)=>b._rev30-a._rev30).slice(0,5);
-    const inactive=enriched.filter(c=>(c.listing_status||"draft")==="active"&&c._rev30===0&&c._slots===0);
-    const pendingN=byStatus.pending_review;
-    const activePlayers=allU.filter(u=>!u.is_deleted&&u.user_role==="player").length;
-    const activeAdmins=allU.filter(u=>!u.is_deleted&&u.user_role==="course_admin").length;
-    setStats({byStatus,platformRev,platformFee,topRev,inactive,pendingN,activePlayers,activeAdmins,totalCourses:allC.length});
-    setCourses(enriched);setLd(false)
-  };
-  useEffect(()=>{loadAll()},[]);
-  const filtered=courses.filter(c=>{if(filter!=="all"&&(c.listing_status||"draft")!==filter)return false;if(search){const q=search.toLowerCase();if(!c.course_name?.toLowerCase().includes(q)&&!c.city?.toLowerCase().includes(q))return false}return true});
-  const STAT_CFG={draft:{l:t("Borrador"),c:C.acc},pending_review:{l:t("Pendiente"),c:C.gld},active:{l:t("Activo"),c:C.grn},suspended:{l:t("Suspendido"),c:C.acc}};
-  const tabs=[{i:ic("chart",20,C.txt),l:"Overview"},{i:ic("golf",20,C.txt),l:"Campos"},{i:ic("user",20,C.txt),l:"Perfil"}];
-  if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
-  return<div className="admin-container" style={{background:C.bg}}>
-    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.acc}/><div><div style={{fontSize:12,color:C.ts,fontWeight:700}}>Partee Platform</div></div></div>
-      <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{padding:"3px 9px",borderRadius:7,background:C.acc+"15",border:"1px solid "+C.acc+"35"}}><span style={{fontSize:9,fontWeight:700,color:C.acc,letterSpacing:".05em"}}>PLATFORM</span></div><NotifBell/></div>
-    </div>
-    <div className="admin-content" style={{padding:16,paddingBottom:70}}>
-      {tab===0&&<div className="fi">
-        <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14,letterSpacing:"-0.02em"}}>Overview de Plataforma</h3>
-        {stats.pendingN>0&&<div onClick={()=>{setFilter("pending_review");setTab(1)}} style={{background:C.gld+"15",border:"1px solid "+C.gld+"35",borderRadius:14,padding:14,marginBottom:16,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:36,height:36,borderRadius:"50%",background:C.gld+"25",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("clock",18,C.gld)}}/>
-          <div style={{flex:1}}><div style={{fontSize:13,fontWeight:800,color:C.gld}}>{stats.pendingN} campo{stats.pendingN===1?"":"s"} esperando revisión</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>Toca para revisar y aprobar</div></div>
-          <span dangerouslySetInnerHTML={{__html:ic("right",16,C.gld)}}/>
-        </div>}
-        <div style={{..._s.grid2lg,marginBottom:16}}>
-          <div className="sc"><div className="n" style={{color:C.grn}}>${fm(stats.platformRev)}</div><div className="l">GMV total</div></div>
-          <div className="sc"><div className="n" style={{color:C.gld}}>${fm(Math.round(stats.platformFee))}</div><div className="l">Fee plataforma</div></div>
-        </div>
-        <h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10}}>Campos por estado</h4>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-          {Object.entries(stats.byStatus).map(([k,v])=>{const cfg=STAT_CFG[k];return<div key={k} onClick={()=>{setFilter(k);setTab(1)}} className="sc" style={{cursor:"pointer",border:"1px solid "+cfg.c+"30"}}><div className="n" style={{color:cfg.c}}>{v}</div><div className="l">{cfg.l}</div></div>})}
-        </div>
-        <div style={{..._s.grid2lg,marginBottom:16}}>
-          <div className="sc"><div className="n" style={{color:C.grn}}>{stats.activePlayers}</div><div className="l">Jugadores</div></div>
-          <div className="sc"><div className="n" style={{color:C.acc}}>{stats.activeAdmins}</div><div className="l">Admins de campo</div></div>
-        </div>
-        {stats.topRev.length>0&&<><h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10}}>Top 5 — últimos 30 días</h4>
-        <div style={{marginBottom:16}}>{stats.topRev.map((c,i)=><div key={c.id} onClick={()=>setSel(c)} className="ar" style={{cursor:"pointer",marginBottom:6}}><div style={{width:28,height:28,borderRadius:10,background:C.grn+"15",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:C.grn,fontSize:13}}>{i+1}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.course_name}</div><div style={{fontSize:11,color:C.ts}}>{c.city}, {c.state}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:13,fontWeight:800,color:C.grn,..._s.mono}}>${fm(c._rev30)}</div></div></div>)}</div></>}
-        {stats.inactive.length>0&&<><h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10}}>Activos sin movimiento ({stats.inactive.length})</h4>
-        <div style={{fontSize:11,color:C.ts,marginBottom:10}}>Publicados pero sin reservas ni slots futuros</div>
-        <div style={{marginBottom:16}}>{stats.inactive.slice(0,10).map(c=><div key={c.id} onClick={()=>setSel(c)} className="ar" style={{cursor:"pointer",marginBottom:6,border:"1px solid "+C.acc+"20"}}><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.course_name}</div><div style={{fontSize:11,color:C.ts}}>{c.city}, {c.state}</div></div><span dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>)}</div></>}
-      </div>}
-      {tab===1&&<div className="fi">
-        <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:12}}>Campos ({filtered.length})</h3>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nombre o ciudad..." style={{...inp0,marginBottom:10}}/>
-        <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto"}}>
-          {[["all",t("Todos")],["pending_review",t("Pendientes")],["draft",t("Borrador")],["active",t("Activos")],["suspended",t("Suspendidos")]].map(([k,l])=><button key={k} onClick={()=>setFilter(k)} style={{padding:"7px 14px",borderRadius:10,border:"1px solid "+(filter===k?C.acc:C.bd),background:filter===k?C.acc+"15":"transparent",color:filter===k?C.acc:C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{l}</button>)}
-        </div>
-        {filtered.length===0?<div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>Sin resultados</div>:
-        filtered.map(c=>{const cfg=STAT_CFG[c.listing_status||"draft"];const photo=(c.photo_urls||[])[0];return<div key={c.id} onClick={()=>setSel(c)} className="ar" style={{cursor:"pointer",marginBottom:8}}>
-          {photo?<img src={photo} style={{width:48,height:48,borderRadius:12,objectFit:"cover",flexShrink:0}}/>:<div style={{width:48,height:48,borderRadius:12,background:C.cd,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("golf",22,C.tm)}}/>}
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}><div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.course_name}</div></div>
-            <div style={{fontSize:11,color:C.ts}}>{c.city}, {c.state} · {c._slots} slots</div>
-          </div>
-          <div style={{textAlign:"right",flexShrink:0}}>
-            <div style={{padding:"2px 8px",borderRadius:6,background:cfg.c+"15",fontSize:9,fontWeight:700,color:cfg.c,letterSpacing:".04em",marginBottom:2}}>{cfg.l.toUpperCase()}</div>
-            {c._rev30>0&&<div style={{fontSize:11,color:C.grn,..._s.mono}}>${fm(c._rev30)}</div>}
-          </div>
-        </div>})}
-      </div>}
-      {tab===2&&<div className="fi">
-        <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14}}>Perfil Plataforma</h3>
-        <div className="sc" style={{marginBottom:10}}><div style={{fontSize:12,color:C.ts}}>Administrador</div><div style={{fontSize:15,fontWeight:700,color:C.txt,marginTop:4}}>{p?.full_name||p?.email}</div></div>
-        <ThemeToggle/><LangToggle/>
-        <button onClick={out} style={{width:"100%",padding:12,marginTop:16,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
-      </div>}
-    </div>
-    <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.acc+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.acc+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.acc:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.acc,boxShadow:"0 0 8px "+C.acc+"60"}}/>}</div>)}</div>
-    {sel&&<PlatformCourseDetail course={sel} onClose={()=>setSel(null)} onRefresh={()=>{loadAll();setSel(null)}} adminId={p?.id}/>}
-  </div>
-}
-
-function PlatformCourseDetail({course,onClose,onRefresh,adminId}){const[counts,setCounts]=useState({photos:(course.photo_urls||[]).length,slots:0,holes:0});const[action,setAction]=useState(null);const[reason,setReason]=useState("");const[busy,setBusy]=useState(false);const[owner,setOwner]=useState(null);
-  useEffect(()=>{const today=new Date().toISOString().slice(0,10);
-    Promise.all([
-      sb.from("time_slots").select("id",{count:"exact",head:true}).eq("course_name",course.course_name).gte("slot_date",today),
-      course.facility_type==="campo"?sb.from("course_holes").select("id",{count:"exact",head:true}).eq("course_id",course.id).is("layout_id",null):Promise.resolve({count:0}),
-      sb.from("user_profiles").select("full_name,email,phone").eq("managed_course_id",course.id).eq("user_role","course_admin").maybeSingle()
-    ]).then(([s,h,o])=>{setCounts({photos:(course.photo_urls||[]).length,slots:s.count||0,holes:h.count||0});setOwner(o.data)}).catch(()=>{})
-  },[course.id]);
-  const comp=getCourseCompleteness(course,counts);const lst=course.listing_status||"draft";
-  const STAT_CFG={draft:{l:t("Borrador"),c:C.acc},pending_review:{l:t("Pendiente"),c:C.gld},active:{l:t("Activo"),c:C.grn},suspended:{l:t("Suspendido"),c:C.acc}};const cfg=STAT_CFG[lst];
-  async function doAction(){setBusy(true);const upd={};let emailType=null;
-    if(action==="approve"){upd.listing_status="active";upd.approved_at=new Date().toISOString();upd.approved_by=adminId||null;upd.suspension_reason=null;emailType="course_approved"}
-    else if(action==="reject"){upd.listing_status="draft";upd.suspension_reason=reason||"Requiere mejoras adicionales";emailType="course_rejected"}
-    else if(action==="suspend"){if(!reason)return window.__toast?.(t("Razón requerida"),"warn")||setBusy(false);upd.listing_status="suspended";upd.suspension_reason=reason;emailType="course_suspended"}
-    else if(action==="reactivate"){upd.listing_status="active";upd.suspension_reason=null;emailType="course_reactivated"}
-    const{error}=await sb.from("golf_courses").update(upd).eq("id",course.id);
-    if(error){window.__toast?.(error.message,"error");setBusy(false);return}
-    if(owner?.email&&emailType)fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:emailType,to:owner.email,data:{name:owner.full_name,course_name:course.course_name,reason:reason||null}})}).catch(()=>{});
-    window.__toast?.("Aplicado","success");setBusy(false);onRefresh()
-  }
-  return<div className="modal-bg" onClick={onClose}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:480,maxHeight:"85vh",overflowY:"auto"}}>
-    <div style={{..._s.flexB,marginBottom:14}}>
-      <h3 style={{color:C.txt,fontSize:16,fontWeight:800,margin:0}}>{course.course_name}</h3>
-      <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:C.tm}} dangerouslySetInnerHTML={{__html:ic("x",20,C.tm)}}/>
-    </div>
-    <div style={{fontSize:12,color:C.ts,marginBottom:10}}>{course.city}, {course.state} · {{campo:"Campo",plataforma:"Plataforma",simulador:"Simulador"}[course.facility_type||"campo"]}</div>
-    <div style={{padding:"8px 12px",background:cfg.c+"15",border:"1px solid "+cfg.c+"30",borderRadius:10,marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
-      <div style={{fontSize:11,fontWeight:800,color:cfg.c,letterSpacing:".05em"}}>{cfg.l.toUpperCase()}</div>
-      {course.suspension_reason&&<div style={{fontSize:11,color:C.ts,marginLeft:"auto"}}>· {course.suspension_reason.slice(0,40)}</div>}
-    </div>
-    {owner&&<div className="sc" style={{marginBottom:12}}><div style={{fontSize:10,color:C.tm,fontWeight:600,marginBottom:4}}>PROPIETARIO</div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{owner.full_name}</div><div style={{fontSize:12,color:C.ts,marginTop:2}}>{owner.email}{owner.phone?" · "+owner.phone:""}</div></div>}
-    <div style={{..._s.grid2lg,marginBottom:12}}>
-      <div className="sc"><div className="n" style={{color:C.grn}}>${fm(course._rev30||0)}</div><div className="l">Revenue 30d</div></div>
-      <div className="sc"><div className="n" style={{color:C.acc}}>{counts.slots}</div><div className="l">Slots futuros</div></div>
-    </div>
-    <h4 style={{fontSize:12,fontWeight:800,color:C.txt,marginBottom:8,marginTop:10}}>Completeness {comp.pct}%</h4>
-    <div style={{height:6,background:C.bg,borderRadius:6,overflow:"hidden",marginBottom:10}}><div style={{width:comp.pct+"%",height:"100%",background:comp.allDone?C.grn:C.gld,borderRadius:6}}/></div>
-    <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:14}}>{comp.items.map(it=><div key={it.k} style={{display:"flex",alignItems:"center",gap:8,fontSize:11}}><div style={{width:14,height:14,borderRadius:"50%",background:it.p?C.grn+"20":C.bd,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(it.p?"check":"x",8,it.p?C.grn:C.tm)}}/><span style={{color:it.p?C.ts:C.txt}}>{it.l}</span></div>)}</div>
-    {action?<div style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:12,padding:12,marginBottom:12}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.txt,marginBottom:8}}>{{approve:"Aprobar campo",reject:"Rechazar — regresa a borrador",suspend:"Suspender campo",reactivate:"Reactivar campo"}[action]}</div>
-      {(action==="reject"||action==="suspend")&&<textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder={action==="reject"?t("Razones para rechazar (el admin la verá)"):t("Razón de suspensión")} rows={3} style={{...inp0,marginBottom:8,resize:"vertical",fontFamily:"inherit"}}/>}
-      <div style={{display:"flex",gap:8}}>
-        <button onClick={doAction} disabled={busy||((action==="reject"||action==="suspend")&&!reason.trim())} style={{flex:1,padding:10,background:action==="approve"||action==="reactivate"?C.grn:C.acc,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:12,cursor:busy?"wait":"pointer",opacity:busy?.6:1}}>{busy?"...":"Confirmar"}</button>
-        <button onClick={()=>{setAction(null);setReason("")}} style={{padding:"10px 16px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,fontSize:12,cursor:"pointer"}}>Cancelar</button>
-      </div>
-    </div>:<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-      {lst==="pending_review"&&<>
-        <button onClick={()=>setAction("approve")} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Aprobar</button>
-        <button onClick={()=>setAction("reject")} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontWeight:700,fontSize:13,cursor:"pointer"}}>Rechazar</button>
-      </>}
-      {lst==="active"&&<button onClick={()=>setAction("suspend")} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontWeight:700,fontSize:13,cursor:"pointer"}}>Suspender</button>}
-      {lst==="suspended"&&<button onClick={()=>setAction("reactivate")} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Reactivar</button>}
-      {lst==="draft"&&<div style={{flex:1,padding:12,textAlign:"center",color:C.tm,fontSize:12}}>Sin acción — admin no ha enviado a revisión</div>}
-    </div>}
-  </div></div>
-}
-
-function GoogleRoleSelector(){const{s,p,setP,ref,out}=useA();const[step,setStep]=useState("role");const[role,setRole]=useState("");const[facType,setFacType]=useState("");
-  const[locName,setLocName]=useState("");const[bizName,setBizName]=useState("");const[locAddress,setLocAddress]=useState("");const[locCity,setLocCity]=useState("");const[locState,setLocState]=useState("");const[locDays,setLocDays]=useState("");const[locHours,setLocHours]=useState("");const[contactName,setContactName]=useState(p?.full_name||"");const[contactRole,setContactRole]=useState("");
-  const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);
-  const DAYS_OPTIONS=["Lun-Vie","Lun-Sáb","Lun-Dom","Sáb-Dom","Personalizado"];
-  const MX_STATES=["Aguascalientes","Baja California","Baja California Sur","Campeche","Chiapas","Chihuahua","Ciudad de México","Coahuila","Colima","Durango","Estado de México","Guanajuato","Guerrero","Hidalgo","Jalisco","Michoacán","Morelos","Nayarit","Nuevo León","Oaxaca","Puebla","Querétaro","Quintana Roo","San Luis Potosí","Sinaloa","Sonora","Tabasco","Tamaulipas","Tlaxcala","Veracruz","Yucatán","Zacatecas"];
-  const HOURS_OPTIONS=["5:00 - 18:00","6:00 - 18:00","6:00 - 20:00","7:00 - 19:00","7:00 - 21:00","8:00 - 20:00","8:00 - 22:00","9:00 - 21:00","9:00 - 23:00","10:00 - 22:00","24 horas"];
-  const inpSm={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"12px 14px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:10};
-  const selSm={...inpSm,appearance:"auto",color:C.txt,backgroundColor:C.glass||C.w04};
-  async function go(){
-    if(step==="role"){if(!role)return setMsg(t("Selecciona tipo"));if(role==="player"){setBusy(true);const{error:upErr}=await sb.from("user_profiles").update({user_role:"player"}).eq("id",s.user.id);if(upErr){setMsg(upErr.message);setBusy(false);return}fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"welcome",to:s.user.email,data:{name:s.user.user_metadata?.full_name||s.user.email}})}).catch(()=>{});setP(prev=>prev?{...prev,user_role:"player"}:prev);ref().catch(err=>console.error("[role] ref failed:",err));return}setStep("pickFacType");setMsg("");return}
-    if(step==="pickFacType"){if(!facType)return setMsg(t("Selecciona tipo"));setStep("locOnboarding");setMsg("");return}
-    if(step==="locOnboarding"){if(!locName)return setMsg(t("Nombre obligatorio"));if(!locAddress)return setMsg(t("Dirección obligatoria"));if(!locCity)return setMsg(t("Ciudad obligatoria"));if(!locState)return setMsg("Estado obligatorio");if(!contactName)return setMsg(t("Nombre obligatorio"));
-      setBusy(true);setMsg("");
-      const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:s.user.email||"",course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().single();
-      if(ne){setMsg(ne.message);setBusy(false);return}
-      await sb.from("user_profiles").update({user_role:"course_admin",managed_course_id:nc.id,admin_facility_type:facType}).eq("id",s.user.id);
-      fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_welcome",to:s.user.email,data:{name:s.user.user_metadata?.full_name||contactName,course_name:locName,facility_type:facType,city:locCity,state:locState}})}).catch(()=>{});
-      await ref();setBusy(false);return}}
-  const prevStep=()=>{if(step==="locOnboarding")setStep("pickFacType");else if(step==="pickFacType")setStep("role");setMsg("")};
-  const stepNum=step==="role"?1:step==="pickFacType"?2:3;
-  return<div className="auth-wrap" style={{background:C.bg}}><div className="fi auth-card" style={{maxWidth:420}}>
-    <div style={{textAlign:"center",marginBottom:step==="locOnboarding"?16:28}}><ParteeLogo h={step==="locOnboarding"?18:30} mc={C.acc} tc={C.txt} bg={C.bg}/>{step!=="locOnboarding"&&<p style={{fontSize:13,color:C.txt,marginTop:12,fontWeight:600}}>{t("Bienvenido")}, {p?.full_name}!</p>}</div>
-    <div style={{display:"flex",gap:4,marginBottom:16}}>{[1,2,3].map(s2=><div key={s2} style={{flex:1,height:3,borderRadius:2,background:s2<=stepNum?C.grn:C.bd,transition:"background .3s"}}/>)}</div>
-    {step==="role"&&<><p style={{color:C.txt,fontSize:15,fontWeight:700,marginBottom:14,textAlign:"center"}}>¿Cómo usarás Partee?</p><div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-      <div onClick={()=>setRole("player")} style={{padding:18,borderRadius:16,border:"2px solid "+(role==="player"?C.grn:C.bd),background:role==="player"?C.grn+"10":C.glass||C.w04,cursor:"pointer",transition:"all .2s"}}><div style={{display:"flex",alignItems:"center",gap:14}}><div style={{width:48,height:48,borderRadius:16,background:C.grn+"15",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("user",22,role==="player"?C.grn:C.tm)}}/><div><h3 style={{color:C.txt,fontSize:15,margin:0,fontWeight:800}}>{t("Jugador")}</h3><p style={{color:C.ts,fontSize:12,marginTop:4,lineHeight:1.4}}>{t("Reserva tee times, únete a partidas y conecta con otros jugadores")}</p></div></div></div>
-      <div onClick={()=>setRole("course_admin")} style={{padding:18,borderRadius:16,border:"2px solid "+(role==="course_admin"?C.grn:C.bd),background:role==="course_admin"?C.grn+"10":C.glass||C.w04,cursor:"pointer",transition:"all .2s"}}><div style={{display:"flex",alignItems:"center",gap:14}}><div style={{width:48,height:48,borderRadius:16,background:C.grn+"15",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("golf",22,role==="course_admin"?C.grn:C.tm)}}/><div><h3 style={{color:C.txt,fontSize:15,margin:0,fontWeight:800}}>{t("Locación")}</h3><p style={{color:C.ts,fontSize:12,marginTop:4,lineHeight:1.4}}>{t("Registra y administra tu campo, simulador o plataforma")}</p></div></div></div>
-    </div></>}
-    {step==="pickFacType"&&<><p style={{color:C.txt,fontSize:15,fontWeight:700,marginBottom:14,textAlign:"center"}}>{t("Tipo de locación")}</p><div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>{[{k:"campo",i:"golf",l:t("Campo de Golf"),d:"18/9 hoyos, driving range"},{k:"plataforma",i:"target",l:t("Plataforma de Tiro"),d:"Bahías tipo Topgolf, TopTracer"},{k:"simulador",i:"smartphone",l:t("Simulador de Golf"),d:"Cabinas con TrackMan, Foresight"}].map(f=><div key={f.k} onClick={()=>setFacType(f.k)} style={{padding:16,borderRadius:16,border:"2px solid "+(facType===f.k?C.grn:C.bd),background:facType===f.k?C.grn+"10":C.glass||C.w04,cursor:"pointer",transition:"all .2s"}}><div style={{display:"flex",alignItems:"center",gap:12}}><div style={{width:42,height:42,borderRadius:14,background:C.grn+"15",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic(f.i,20,facType===f.k?C.grn:C.tm)}}/><div><h4 style={{color:C.txt,fontSize:14,fontWeight:700,margin:0}}>{f.l}</h4><p style={{color:C.ts,fontSize:11,marginTop:3}}>{f.d}</p></div></div></div>)}</div></>}
-    {step==="locOnboarding"&&<><p style={{color:C.txt,fontSize:15,fontWeight:700,marginBottom:4,textAlign:"center"}}>{t("Datos de tu locación")}</p><p style={{color:C.ts,fontSize:12,marginBottom:16,textAlign:"center"}}>{({campo:t("Campo de Golf"),plataforma:t("Plataforma de Tiro"),simulador:t("Simulador de Golf")})[facType]}</p>
-      <label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Nombre de la locación")} *</label><input value={locName} onChange={x=>setLocName(x.target.value)} placeholder="ej: Club de Golf San Gil" style={inpSm}/>
-      <label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Razón social")}</label><input value={bizName} onChange={x=>setBizName(x.target.value)} placeholder="ej: Golf San Gil S.A. de C.V." style={inpSm}/>
-      <label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Dirección")} *</label><input value={locAddress} onChange={x=>setLocAddress(x.target.value)} placeholder={t("Av. Principal #100, Col. Centro")} style={inpSm}/>
-      <div style={{..._s.grid2}}>
-        <div><label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Ciudad")} *</label><input value={locCity} onChange={x=>setLocCity(x.target.value)} placeholder={t("Ciudad")} style={inpSm}/></div>
-        <div><label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Estado")} *</label><select value={locState} onChange={x=>setLocState(x.target.value)} style={selSm}><option value="">-- {t("Estado")} --</option>{MX_STATES.map(s2=><option key={s2} value={s2}>{s2}</option>)}</select></div>
-      </div>
-      <div style={{..._s.grid2}}>
-        <div><label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Días de operación")}</label><select value={locDays} onChange={x=>setLocDays(x.target.value)} style={selSm}><option value="">-- Selecciona --</option>{DAYS_OPTIONS.map(d=><option key={d} value={d}>{d}</option>)}</select></div>
-        <div><label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Horarios")}</label><select value={locHours} onChange={x=>setLocHours(x.target.value)} style={selSm}><option value="">-- Selecciona --</option>{HOURS_OPTIONS.map(h=><option key={h} value={h}>{h}</option>)}</select></div>
-      </div>
-      <div style={{height:1,background:C.bd,margin:"6px 0 12px"}}/>
-      <p style={{fontSize:11,fontWeight:700,color:C.ts,marginBottom:8}}>{t("Responsable de la locación")}</p>
-      <div style={{..._s.grid2}}>
-        <div><label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Nombre")} *</label><input value={contactName} onChange={x=>setContactName(x.target.value)} placeholder={t("Nombre completo")} style={inpSm}/></div>
-        <div><label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Cargo")}</label><input value={contactRole} onChange={x=>setContactRole(x.target.value)} placeholder="ej: Director" style={inpSm}/></div>
-      </div>
-    </>}
-    {msg&&<p style={{color:C.acc,fontSize:13,marginBottom:10,textAlign:"center"}}>{msg}</p>}
-    <button onClick={go} disabled={busy} style={{width:"100%",padding:16,background:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1,boxShadow:"0 8px 28px rgba(233,69,96,.45)"}}>{busy?"...":({role:t("Continuar"),pickFacType:t("Siguiente"),locOnboarding:t("Crear Cuenta")})[step]}</button>
-    {step!=="role"&&<p onClick={prevStep} style={{textAlign:"center",marginTop:14,fontSize:13,color:C.ts,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.ts)+" "+t("Volver")}}></p>}
-    {step==="role"&&<p onClick={()=>out()} style={{textAlign:"center",marginTop:14,fontSize:13,color:C.tm,cursor:"pointer"}}>{t("Cerrar Sesión")}</p>}
-  </div></div>}
-
-function PlayerOnboarding(){const{s,p,setP,ref}=useA();const[nm,setNm]=useState(p?.full_name||"");const[city,setCity]=useState(p?.city||"");const[st,setSt]=useState(p?.state||"");const[ph,setPh]=useState(p?.phone||"");const[bd,setBd]=useState(p?.birth_date||"");const[hand,setHand]=useState(p?.handedness||"diestro");const[nick,setNick]=useState(p?.nickname||"");const[hc,setHc]=useState(p?.handicap?.toString()||"");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);
-  const save=async()=>{if(!nm.trim())return setMsg(t("Nombre obligatorio"));if(!city.trim())return setMsg(t("Ciudad obligatoria"));if(!st.trim())return setMsg("Estado obligatorio");if(!ph.trim())return setMsg(t("Teléfono obligatorio"));if(!bd)return setMsg(t("Fecha de nacimiento obligatoria"));
-    // Bug B v18.2.1 — validar que la fecha sea pasada y razonable (defense in depth)
-    const bdDate=new Date(bd+"T00:00:00");const today=new Date();today.setHours(23,59,59,999);
-    if(isNaN(bdDate.getTime())||bdDate>today)return setMsg(t("La fecha de nacimiento debe ser pasada"));
-    const minDate=new Date();minDate.setFullYear(minDate.getFullYear()-120);
-    if(bdDate<minDate)return setMsg(t("Fecha de nacimiento inválida"));
-    setBusy(true);setMsg("");
-    const updateData={full_name:nm.trim(),city:city.trim(),state:st.trim(),phone:ph.trim(),birth_date:bd,handedness:hand,nickname:nick.trim()||null,handicap:hc?parseFloat(hc):null,onboarding_complete:true};
-    const{error}=await sb.from("user_profiles").update(updateData).eq("id",s.user.id);
-    if(error){setMsg(error.message);setBusy(false);return}
-    // v18.3.10: optimistic local update; previene quedarse atascado si lp() falla en background
-    setP(prev=>prev?{...prev,...updateData}:prev);
-    ref().catch(err=>console.error("[save] ref failed:",err));
-    /* No setBusy(false) — el componente desmonta naturalmente cuando Main re-renders con needsOnboarding=false */};
-  const inpS={width:"100%",background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"12px 14px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box"};
-  return<div className="auth-wrap" style={{background:C.bg}}><div className="fi auth-card" style={{maxWidth:420}}>
-    <div style={{textAlign:"center",marginBottom:20}}><div style={{width:64,height:64,borderRadius:32,background:`linear-gradient(135deg,${C.grn}30,${C.acc}20)`,border:"1px solid rgba(255,255,255,.1)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12,boxShadow:"0 0 30px "+C.grn+"15"}}><ParteeMark size={36} color="#e94560"/></div><h2 style={{color:C.txt,fontSize:24,fontWeight:800,letterSpacing:"-0.02em"}}>¡Bienvenido!</h2><p style={{color:C.ts,fontSize:13,marginTop:6}}>{t("Completa tu perfil para comenzar")}</p></div>
-    <div style={{..._s.grid2lg}}>
-      <div style={{gridColumn:"1/3"}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>NOMBRE*</label><input value={nm} onChange={x=>setNm(x.target.value)} placeholder={t("Nombre completo")} style={{...inpS,marginTop:4}}/></div>
-      <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>CIUDAD*</label><input value={city} onChange={x=>setCity(x.target.value)} style={{...inpS,marginTop:4}}/></div>
-      <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>ESTADO*</label><input value={st} onChange={x=>setSt(x.target.value)} style={{...inpS,marginTop:4}}/></div>
-      <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("TELÉFONO")}*</label><input value={ph} onChange={x=>setPh(x.target.value)} placeholder="+52" style={{...inpS,marginTop:4}}/></div>
-      <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>NACIMIENTO*</label><input type="date" value={bd} onChange={x=>setBd(x.target.value)} max={new Date().toISOString().slice(0,10)} min={new Date(Date.now()-120*365*24*60*60*1000).toISOString().slice(0,10)} style={{...inpS,marginTop:4}}/></div>
-      <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>MANO*</label><div style={{display:"flex",gap:6,marginTop:4}}>{[{k:"diestro",l:"Diestro"},{k:"zurdo",l:"Zurdo"}].map(h=><button key={h.k} onClick={()=>setHand(h.k)} style={{flex:1,padding:10,borderRadius:10,border:"2px solid "+(hand===h.k?C.acc:C.bd),background:hand===h.k?C.acc+"15":"transparent",color:hand===h.k?C.acc:C.ts,fontSize:13,fontWeight:700,cursor:"pointer"}}>{h.l}</button>)}</div></div>
-      <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>APODO</label><input value={nick} onChange={x=>setNick(x.target.value)} style={{...inpS,marginTop:4}}/></div>
-      <div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>HCP</label><input value={hc} onChange={x=>setHc(x.target.value)} type="number" placeholder="0-54" style={{...inpS,marginTop:4}}/></div>
-    </div>
-    {msg&&<p style={{color:C.acc,fontSize:13,marginTop:10,textAlign:"center"}}>{msg}</p>}
-    <button onClick={save} disabled={busy} style={{width:"100%",padding:16,marginTop:16,background:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.5:1}}>{busy?"...":"Comenzar"}</button>
-    <button onClick={async()=>{await sb.from("user_profiles").update({onboarding_complete:true}).eq("id",s.user.id);await ref()}} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid "+C.bd,borderRadius:12,color:C.ts,fontSize:13,cursor:"pointer"}}>{t("Explorar primero")} →</button>
-  </div></div>}
-
-function ResetPasswordForm(){const{setRecovery,out}=useA();const[pw,setPw]=useState("");const[pw2,setPw2]=useState("");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);const[done,setDone]=useState(false);const[showPw,setShowPw]=useState(false);
-  const submit=async()=>{if(!pw||!pw2)return setMsg(t("Completa campos"));if(pw!==pw2)return setMsg(t("Las contraseñas no coinciden"));if(pw.length<6)return setMsg(t("Contraseña mínimo 6 caracteres"));setBusy(true);const{error}=await sb.auth.updateUser({password:pw});setBusy(false);if(error){setMsg(error.message);return}try{localStorage.removeItem("partee_recovery");sessionStorage.removeItem("partee_recovery")}catch(e){}setDone(true)};
-  const inp={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"14px 16px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12};
-  if(done)return<div className="auth-wrap"><div className="fi auth-card" style={{width:"100%",maxWidth:420,textAlign:"center"}}><div style={{width:80,height:80,borderRadius:40,background:`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg></div><h2 style={{color:C.txt,fontSize:22,fontWeight:800,marginBottom:8}}>Contraseña actualizada</h2><p style={{color:C.ts,fontSize:13,marginBottom:24}}>Tu contraseña ha sido cambiada exitosamente.</p><button onClick={()=>{try{localStorage.removeItem("partee_recovery");sessionStorage.removeItem("partee_recovery")}catch(e){}setRecovery(false);window.location.href=window.location.origin}} style={{padding:"14px 40px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}}>Continuar a Partee</button></div></div>;
-  return<div className="auth-wrap"><div className="fi auth-card" style={{maxWidth:420}}><div style={{textAlign:"center",marginBottom:30}}><ParteeLogo h={30} mc={C.acc} tc={C.txt} bg={C.bg}/><h2 style={{color:C.txt,fontSize:20,fontWeight:800,marginTop:16}}>{t("Nueva contraseña")}</h2><p style={{color:C.ts,fontSize:13,marginTop:6}}>{t("Ingresa tu nueva contraseña para restablecer el acceso")}</p></div><div style={{position:"relative",marginBottom:12}}><input placeholder={t("Nueva contraseña (mín 6)")} type={showPw?"text":"password"} value={pw} onChange={x=>setPw(x.target.value)} style={{...inp,marginBottom:0,paddingRight:48}}/><EyeBtn on={showPw} toggle={()=>setShowPw(!showPw)}/></div><div style={{position:"relative",marginBottom:12}}><input placeholder={t("Confirmar contraseña")} type={showPw?"text":"password"} value={pw2} onChange={x=>setPw2(x.target.value)} onKeyDown={x=>x.key==="Enter"&&submit()} style={{...inp,marginBottom:0,paddingRight:48}}/></div>{msg&&<p style={{color:C.acc,fontSize:13,marginBottom:10,textAlign:"center"}}>{msg}</p>}<button onClick={submit} disabled={busy} style={{width:"100%",padding:16,background:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",opacity:busy?.6:1}}>{t("Cambiar contraseña")}</button><p onClick={()=>{try{localStorage.removeItem("partee_recovery");sessionStorage.removeItem("partee_recovery")}catch(e){}setRecovery(false);out()}} style={{textAlign:"center",marginTop:16,fontSize:13,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</p></div></div>}
-
-function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,setTab]=useState(0);const[scr,setScr]=useState("home");const[co,setCo]=useState(null);const[sl,setSl]=useState(null);const[okd,setOkd]=useState(null);const[payResult,setPayResult]=useState(null);const[installEvt,setInstallEvt]=useState(null);const[showInstall,setShowInstall]=useState(true);
-  const needsOnboarding=p?.user_role==="player"&&!p?.onboarding_complete;
-  useEffect(()=>{const h=e=>{e.preventDefault();setInstallEvt(e)};window.addEventListener("beforeinstallprompt",h);return()=>window.removeEventListener("beforeinstallprompt",h)},[]);
-  const{toast:_t,confirm:_c}=useToast();
-  useEffect(()=>{window.__toast=_t;window.__confirm=_c;window.__navigate=(target)=>{if(!target)return;const parts=target.split(":");if(parts[0]==="tab"){const tabIdx=parseInt(parts[1]);if(!isNaN(tabIdx)){setTab(tabIdx);setScr("home")}if(parts[2]==="requests")setTimeout(()=>{const evt=new CustomEvent("partee:subtab",{detail:{tab:"requests"}});window.dispatchEvent(evt)},100)}};return()=>{delete window.__toast;delete window.__confirm;delete window.__navigate}},[_t,_c]);
-  useEffect(()=>{try{const url=new URL(location.href);const pay=url.searchParams.get("payment");if(pay)setPayResult(pay);if(pay){url.searchParams.delete("payment");url.searchParams.delete("booking_id");url.searchParams.delete("plan");history.replaceState(null,"",url.pathname)}}catch(e){}},[]);
-  // v18.4.0 Modelo A — Stripe Connect return flow.
-  //   ?connect=ok|refresh: legacy creator path (deprecated, mantener por si un user_profile legacy regresa)
-  //   ?course_connect=ok|refresh: new course admin path (Modelo A)
-  useEffect(()=>{try{const url=new URL(location.href);const cn=url.searchParams.get("connect");const cc=url.searchParams.get("course_connect");if(!cn&&!cc)return;if(cn==="ok"||cc==="ok"){window.__toast?.("¡Cuenta Stripe verificada!","success");setTab(4);setScr("home")}else if(cn==="refresh"||cc==="refresh"){window.__toast?.(t("Completa la verificación en Stripe para recibir pagos"),"info");setTab(4);setScr("home")}url.searchParams.delete("connect");url.searchParams.delete("course_connect");history.replaceState(null,"",url.pathname+url.search)}catch(e){}},[]);
-  if(payResult)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}}><div className={"success-check"+(payResult!=="cancelled"?" glow-ring":"")} style={{width:90,height:90,borderRadius:50,background:payResult==="cancelled"?"linear-gradient(135deg,#e74c3c,#c0392b)":`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24}}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">{payResult==="cancelled"?<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>:<path d="M20 6L9 17l-5-5"/>}</svg></div><h2 className="success-text" style={{fontSize:24,fontWeight:800,color:C.txt,marginBottom:8}}>{payResult==="success"?t("¡Pago Exitoso!"):payResult==="premium_success"?t("¡Premium Activado!"):t("Pago Cancelado")}</h2><p className="success-text" style={{fontSize:13,color:C.ts,marginBottom:24,maxWidth:300}}>{payResult==="success"?t("Tu reserva está confirmada."):payResult==="premium_success"?t("Acceso completo a inteligencia de mercado."):t("El pago fue cancelado.")}</p><button className="success-actions" onClick={()=>setPayResult(null)} style={{padding:"14px 40px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}}>{payResult==="cancelled"?t("Volver"):t("Continuar")}</button></div>;
-  if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:24}}><div style={{textAlign:"center",maxWidth:420,width:"100%",position:"relative"}}><div style={{position:"absolute",top:"20%",left:"50%",transform:"translate(-50%,-50%)",width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,#e9456012,transparent 70%)",pointerEvents:"none"}}/><ParteeLogo h={55} mc="#e94560" tc={C.txt}/><p style={{fontSize:12,color:C.ts,marginTop:14,letterSpacing:".18em",fontWeight:500}}>FIND · CONNECT · PLAY</p><div style={{display:"flex",gap:4,marginTop:20,justifyContent:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:3,background:C.acc,opacity:.4,animation:"pl 1.2s infinite",animationDelay:i*.2+"s"}}/>)}</div></div></div>;
-  if(recovery)return<ResetPasswordForm/>;
-  if(!s)return<Login/>;
-  // v18.3.15: si hay sesión pero p aún no carga, mostrar loading en lugar de flashear la app principal
-  if(s&&!p)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:24}}><div style={{textAlign:"center",maxWidth:420,width:"100%",position:"relative"}}><div style={{position:"absolute",top:"20%",left:"50%",transform:"translate(-50%,-50%)",width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,#e9456012,transparent 70%)",pointerEvents:"none"}}/><ParteeLogo h={55} mc="#e94560" tc={C.txt}/><p style={{fontSize:12,color:C.ts,marginTop:14,letterSpacing:".18em",fontWeight:500}}>FIND · CONNECT · PLAY</p><div style={{display:"flex",gap:4,marginTop:20,justifyContent:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:3,background:C.acc,opacity:.4,animation:"pl 1.2s infinite",animationDelay:i*.2+"s"}}/>)}</div></div></div>;
-  if(p?.is_deleted)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>{t("Cuenta eliminada")}</h2><button onClick={()=>sb.auth.signOut().then(()=>location.reload())} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Salir")}</button></div></div>;
-  if(s&&p&&(p.user_role==="pending"||!p.user_role))return<GoogleRoleSelector/>;
-  if(needsOnboarding)return<PlayerOnboarding/>;
-  if(p?.user_role==="platform_admin")return<PlatformAdminApp/>;
-  if(p?.user_role==="course_admin")return<AdminApp/>;
-  const home=()=>{setScr("home");setCo(null);setSl(null);setTab(0)};
-  const sc=theme==="dark"?"#fff":"#111827";
-  const vsIcon="<svg width='20' height='20' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><line x1='17' y1='3' x2='7' y2='18' stroke='"+sc+"' stroke-width='2' stroke-linecap='round'/><line x1='7' y1='18' x2='4' y2='16.5' stroke='"+sc+"' stroke-width='2.8' stroke-linecap='round'/><line x1='7' y1='3' x2='17' y2='18' stroke='"+sc+"' stroke-width='2' stroke-linecap='round'/><line x1='17' y1='18' x2='20' y2='16.5' stroke='"+sc+"' stroke-width='2.8' stroke-linecap='round'/><circle cx='17' cy='3' r='1.2' fill='"+sc+"'/><circle cx='7' cy='3' r='1.2' fill='"+sc+"'/></svg>";
-  const ptabs=[{i:ic("compass",20,C.txt),l:t("Explorar")},{i:ic("calendar",20,C.txt),l:t("Reservas")},{i:ic("swords",20,C.txt),l:"Versus"},{i:ic("users",20,C.txt),l:t("Amigos")},{i:ic("user",20,C.txt),l:t("Perfil")}];
-  return<div className="app-container" style={{background:C.bg}}>
-    {tab!==0&&<div style={{background:C.bg,padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd}}><div style={{display:"flex",alignItems:"center",gap:6}}><ParteeMark size={22} color={C.txt}/><span style={{fontSize:18,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>{ptabs[tab]?.l||""}</span></div><div style={{display:"flex",alignItems:"center",gap:8}}><NotifBell/></div></div>}
-    <div style={{paddingBottom:scr==="home"?60:0}}>
-      {p&&!p.city&&p.onboarding_complete&&scr==="home"&&tab===0&&<div onClick={()=>setScr("home")||setTab(4)} style={{margin:"0 16px 8px",padding:"10px 14px",background:`linear-gradient(135deg,${C.pri}20,${C.acc}15)`,borderRadius:12,border:"1px solid "+C.pri+"30",cursor:"pointer",display:"flex",alignItems:"center",gap:10}}><span dangerouslySetInnerHTML={{__html:ic("user",18,C.txt)}}/><div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:C.txt}}>{t("Completa tu perfil")}</div><div style={{fontSize:11,color:C.ts}}>{t("Para reservar tee times y más")}</div></div><span style={{color:C.acc,fontSize:12,fontWeight:700}}>{t("Perfil")} →</span></div>}
-      {installEvt&&showInstall&&scr==="home"&&tab===0&&<div style={{margin:"0 16px 8px",padding:"10px 14px",background:`linear-gradient(135deg,${C.grn}15,${C.grn}08)`,borderRadius:12,border:"1px solid "+C.grn+"30",display:"flex",alignItems:"center",gap:10}}><span dangerouslySetInnerHTML={{__html:ic("smartphone",16,C.txt)}}/><div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:C.txt}}>{t("Instalar Partee")}</div><div style={{fontSize:11,color:C.ts}}>{t("Acceso rápido desde tu pantalla")}</div></div><button onClick={()=>{installEvt.prompt();installEvt.userChoice.then(()=>{setInstallEvt(null);setShowInstall(false)})}} style={{padding:"6px 14px",background:C.grn,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>{t("Instalar")}</button><span onClick={()=>setShowInstall(false)} style={{color:C.tm,cursor:"pointer",fontSize:16}} dangerouslySetInnerHTML={{__html:ic("x",14,C.tm)}}/></div>}
-      {scr==="home"&&tab===0&&<Home onPick={c=>{setCo(c);setScr("detail")}}/>}
-      {scr==="home"&&tab===1&&<BkTab/>}
-      {scr==="home"&&tab===2&&<VersusTab/>}
-      {scr==="home"&&tab===3&&<FriendsTab/>}
-      {scr==="home"&&tab===4&&<Profile onRanking={()=>setScr("ranking")} onPerformance={()=>setScr("performance")}/>}
-      {scr==="ranking"&&<RankingScreen onBack={()=>setScr("home")}/>}
-      {scr==="performance"&&<PerformanceScreen onBack={()=>setScr("home")}/>}
-      {scr==="detail"&&co&&<Detail c={co} onBack={home} onBook={(c,s)=>{const missing=[];if(!p?.city)missing.push(t("Ciudad"));if(!p?.phone)missing.push(t("Teléfono"));if(missing.length>0){window.__toast?.(t("Completa tu perfil para reservar")+": "+missing.join(", "),"info");setTab(4);setScr("home");return}setSl(s);setScr("confirm")}}/>}
-      {scr==="confirm"&&co&&sl&&<Confirm c={co} sl={sl} onBack={()=>setScr("detail")} onOk={d=>{setOkd(d);setScr("ok")}}/>}
-      {scr==="ok"&&<Ok d={okd} onHome={home}/>}
-    </div>
-    {scr==="home"&&<div className="bnav" role="navigation" aria-label="Navegación principal">{ptabs.map((tb,i)=>{const isVS=i===2;const acol=isVS?C.acc:C.grn;return<div key={i} onClick={()=>{hap();setTab(i);setScr("home")}} style={{background:tab===i?(acol+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(acol+"10"):"transparent"}}><div style={{fontSize:18,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?acol:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-1,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:acol,boxShadow:"0 0 8px "+acol+"60"}}/>}</div>})}</div>}
-  </div>}
-
-function App(){const[theme,setTheme]=useState(()=>{try{return localStorage.getItem("pt_theme")||"dark"}catch(e){return"dark"}});C=theme==="dark"?DARK:LIGHT;const toggle=()=>{const n=theme==="dark"?"light":"dark";setTheme(n);try{localStorage.setItem("pt_theme",n)}catch(e){}};useEffect(()=>{applyCSS(theme)},[theme]);return<ThemeCtx.Provider value={{theme,toggle}}><Auth><ToastProvider><Main/></ToastProvider></Auth></ThemeCtx.Provider>}
-class ErrorBoundary extends React.Component{constructor(p){super(p);this.state={err:null}}static getDerivedStateFromError(e){if(e&&String(e.message||"").includes("ResizeObserver"))return null;return{err:e}}componentDidCatch(e,i){console.error("Partee Error:",e,i)}render(){if(this.state.err)return React.createElement("div",{style:{position:"fixed",inset:0,zIndex:9999,background:"#080810",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}},React.createElement("div",{style:{fontSize:48,marginBottom:16},dangerouslySetInnerHTML:{__html:pMark(48,"#e94560")}}),React.createElement("h2",{style:{color:"#fff",fontSize:20,marginBottom:8}},"Algo salió mal"),React.createElement("p",{style:{color:"#8a8f98",fontSize:13,marginBottom:20,maxWidth:300}},String(this.state.err?.message||"Error inesperado")),React.createElement("button",{onClick:()=>{this.setState({err:null});location.reload()},style:{padding:"14px 30px",background:"linear-gradient(135deg,#e94560,#ff6b6b)",color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"}},"Recargar"));return this.props.children}}
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(ErrorBoundary,null,React.createElement(App)));
-</script>
-<script>
-(function(){
-  var root=document.getElementById("root");
-  var errHTML=function(msg){return'<div style="position:fixed;inset:0;z-index:9999;background:#080810;display:flex;align-items:center;justify-content:center;padding:24px"><div style="text-align:center;color:#fff;font-family:-apple-system,sans-serif;max-width:320px"><div style="margin-bottom:16px"><svg width="68" height="64" viewBox="270 320 340 320" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="#e94560" d="M531.7,343.2 C544.9,345.7 557,349.9 568,356.8 C589,369.8 600.5,388.9 603,413.3 C606.9,451.6 590.1,480.2 561,503.1 C536.7,522.2 508.8,534.3 480.2,544.7 C455.4,553.6 430.2,561.7 405.2,570.2 C404.8,570.3 404.4,570.4 403.4,570.6 C402.2,556.7 403.2,543.6 410.3,531.5 C413.4,526.3 418.5,523.8 424.3,522 C456.5,511.7 488.8,501.5 517.9,483.8 C534.8,473.5 549.7,460.9 557.4,442.2 C564.1,425.8 565.1,409.3 552.9,394.9 C543.8,384.1 531,379.9 517.4,377.9 C499.5,375.3 481.7,377.3 464.2,380.2 C438.7,384.4 413.4,389.5 388.2,395 C375.1,397.8 362.6,402.8 351.8,411.1 C340.5,419.9 334.4,431.4 333,445.4 C332.6,449.2 331.3,451.6 327.7,453.5 C313.2,461.2 299,469.3 284.5,477.4 C285,474.1 285.4,470.5 286,466.9 C289,451.2 290.9,435.1 295.2,419.7 C300.6,400.2 313.9,386.1 331.2,375.7 C349.6,364.7 369.6,358 390.4,353.9 C413.9,349.4 437.5,345.1 461.2,342.3 C484.5,339.6 508,338.7 531.7,343.2z"/><path fill="#e94560" d="M402.3,443.3 C431.9,433 461.2,422.8 490.6,413.1 C495,411.7 500.2,411.6 504.9,412.3 C516.8,414.1 521.3,427.7 513,437.3 C509.7,441.1 505.5,444.7 501,446.6 C478.8,455.7 456.6,464.5 434.2,472.9 C409.5,482.3 384.5,490.9 359.8,500.3 C331.4,511.1 304.5,524.6 282.5,547 C279.6,535.1 278.6,523.6 280.3,512.2 C282.1,500.2 290.6,492.5 300.3,486 C318.9,473.6 339.6,465.8 360.4,458 C374.1,452.9 388.1,448.3 402.3,443.3z"/><path fill="#e94560" d="M381.5,568.6 C380.9,575.3 380.4,581.5 380,587.8 C379.5,596.6 375.3,603.3 368.7,608.6 C355.4,619.4 339.4,624 322.7,628.7 C323.6,621.1 324.4,614.1 325.2,607 C326.5,596.2 327.8,585.3 329,574.5 C330.1,565.3 330.5,555.9 332.2,546.8 C334.6,534.7 343.4,527.7 354.3,523.1 C367.5,517.6 381.5,516.4 396,515.8 C393.3,521.8 389.8,527.3 388.3,533.2 C385.5,544.7 383.8,556.5 381.5,568.6z"/></svg></div><h2>Partee Golf</h2><p style="color:#a0aec0;margin-top:12px;font-size:14px">'+msg+'</p><button onclick="location.reload()" style="margin-top:20px;padding:12px 32px;background:#e94560;color:#fff;border:none;border-radius:12px;font-size:16px;cursor:pointer">{t("Recargar")}</button></div></div>'};
-  var missing=[];
-  if(typeof React==="undefined")missing.push("React");
-  if(typeof ReactDOM==="undefined")missing.push("ReactDOM");
-  if(typeof Babel==="undefined")missing.push("Babel");
-  if(!window.supabase)missing.push("Supabase");
-  if(missing.length>0){root.innerHTML=errHTML("Error: "+missing.join(", "));return}
-  var needsEnv=false;try{new Function("return {}?.x")()}catch(e){needsEnv=true}
-  var loadTimer=setTimeout(function(){if(root&&root.innerHTML.indexOf("Cargando")>-1)root.innerHTML=errHTML("Tiempo excedido.")},15000);
-  try{
-    var src=document.getElementById("jsx-source").textContent;
-    var config=needsEnv?{presets:[["env",{loose:true,modules:false}],"react"],sourceType:"script"}:{presets:["react"],sourceType:"script"};
-    var out=Babel.transform(src,config);
-    clearTimeout(loadTimer);
-    (1,eval)(out.code);
-  }catch(e){clearTimeout(loadTimer);console.error("Partee boot error:",e);root.innerHTML=errHTML(String(e.message||e).slice(0,150))}
-})();
-</script>
-</body>
-</html>
+    bands.map(band=>{const bs=slots.filter(x=>{const h=parseInt(x.slot_time);return h>=band.r[0]&&h<band.r[1]});if(!b
