@@ -8,6 +8,31 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.4 (Tournaments admin lifecycle — torneos públicos pagados)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.4 — Tournaments admin lifecycle. Extiende tournaments + tournament_players para soportar
+//         torneos públicos pagados, manteniendo retro-compat con Sistema Versus existente.
+//         tournament_type discrimina: 'versus_match' (legacy, max 4) vs 'public_tournament' (nuevo, hasta N players).
+//         Lifecycle: draft → registration_open → registration_closed → in_progress → finished.
+//         7 RPCs SECURITY DEFINER: get_public_tournaments, get_tournament_details,
+//         register_for_tournament, confirm_tournament_registration, create_public_tournament,
+//         get_admin_tournaments, cancel_tournament_registration.
+//         Edge fn create-checkout v19 soporta type='tournament' embedded.
+//         Auto-calculate prize pool: registrations_paid * entry_fee * (1 - platform_fee_pct%).
+//         Trigger fn_auto_update_tournament_status mueve status según ventanas de tiempo.
+//         Frontend: TournamentsScreen player con CTA en BkTab; AdminTournaments en AdminProfile.
+//         Bug fix: validate_tournament_facility_type tenía SET search_path TO 'public, pg_temp' (comilla mala);
+//         arreglado a SET search_path = public, pg_catalog. Esto desbloqueó creación de tournaments en general.
+console.log("%c[Partee] Build v20.3.1 (Memberships v1 — beneficios aplicados al booking flow)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.3.1 — Aplicar beneficios de membresía al booking flow.
+//           Backend: ALTER bookings ADD COLUMN membership_id (FK), membership_benefit (free_booking|discount),
+//           membership_discount_amount. RPC get_membership_benefit_preview (read-only, devuelve opciones según
+//           tier active del caller). RPC apply_membership_benefit_to_booking (atomic, FOR UPDATE on course_memberships,
+//           decrementa free_bookings_remaining si mode='free_booking'). Trigger trg_revert_membership_benefit_on_cancel
+//           en bookings: si status→cancelled y benefit='free_booking', devuelve el counter al user.
+//           Frontend: en Confirm (booking flow), si caller tiene membresía active del campo y n=1, muestra panel
+//           "Membresía aplicable" con opciones radio (none/free_booking/discount). Recalcula grand antes del Payment Intent.
+//           Después de crear booking, llama apply_membership_benefit_to_booking.
+//           Limitación v20.3.1: solo Path 1 (n=1). Multi-jugador (Path 2) queda para v20.3.2 si tiene tracción.
 console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-time, lock-in revenue)","color:#00b894;font-weight:bold;font-size:13px");
 // v20.3 — Memberships v1: período pre-pagado (NO Stripe Subscriptions). Schema:
 //         course_membership_tiers (tier per campo con benefits jsonb), course_memberships (instancias active/pending/expired).
@@ -1455,11 +1480,32 @@ async function sendBookingEmails(bk,course,playerEmail,playerName,partySize,tota
   }catch(e){}
 }
 
-function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});const[extrasOpen,setExtrasOpen]=useState(false);const[promoCode,setPromoCode]=useState("");const[promoResult,setPromoResult]=useState(null);const[promoLoading,setPromoLoading]=useState(false);const[appliedPromo,setAppliedPromo]=useState(null);const[payData,setPayData]=useState(null);const[paymentMode,setPaymentMode]=useState("compartir");const[selectedFriends,setSelectedFriends]=useState([]);const[friendsList,setFriendsList]=useState([]);const[friendSearch,setFriendSearch]=useState("");const[friendsOpen,setFriendsOpen]=useState(false);const cardOk=!!(pr?.card_last4);
+function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});const[extrasOpen,setExtrasOpen]=useState(false);const[promoCode,setPromoCode]=useState("");const[promoResult,setPromoResult]=useState(null);const[promoLoading,setPromoLoading]=useState(false);const[appliedPromo,setAppliedPromo]=useState(null);const[payData,setPayData]=useState(null);const[paymentMode,setPaymentMode]=useState("compartir");const[selectedFriends,setSelectedFriends]=useState([]);const[friendsList,setFriendsList]=useState([]);const[friendSearch,setFriendSearch]=useState("");const[friendsOpen,setFriendsOpen]=useState(false);
+  // v20.3.1: Membership benefit state
+  const[memPreview,setMemPreview]=useState(null);  // {has_membership, membership_id, tier_name, badge_label, badge_color, days_remaining, options:{free_booking, discount}}
+  const[memMode,setMemMode]=useState("none");      // 'none' | 'free_booking' | 'discount'
+  const cardOk=!!(pr?.card_last4);
   useEffect(()=>{sb.from("extras_catalog").select("*").eq("is_active",true).order("sort_order").then(({data})=>setExtras(data||[]))},[]);
   useEffect(()=>{if(!s?.user?.id)return;sb.from("friends").select("*,friend:friend_id(id,full_name,nickname,player_id)").eq("user_id",s.user.id).eq("status","accepted").then(({data})=>setFriendsList(data||[]))},[s?.user?.id]);
   useEffect(()=>{if(n<=1){setSelectedFriends([]);setPaymentMode("compartir")}else if(selectedFriends.length>n-1){setSelectedFriends(prev=>prev.slice(0,n-1))}},[n]);
-  const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;const grand=Math.max(0,gT-discount+eT);
+  const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;
+  // v20.3.1: cargar preview de membresía cuando course/gT/n cambian. Solo Path 1 (n=1).
+  useEffect(()=>{
+    if(!s?.user?.id||!c?.id||gT<=0||n>1){setMemPreview(null);setMemMode("none");return}
+    let cancelled=false;
+    sb.rpc("get_membership_benefit_preview",{p_course_id:c.id,p_base_price:gT,p_party_size:n}).then(({data,error})=>{
+      if(cancelled||error){if(error)console.warn("[v20.3.1] membership preview err:",error);setMemPreview(null);return}
+      if(data?.has_membership){setMemPreview(data)}else{setMemPreview(null);setMemMode("none")}
+    }).catch(e=>{console.warn("[v20.3.1] membership preview catch:",e);if(!cancelled){setMemPreview(null);setMemMode("none")}});
+    return()=>{cancelled=true}
+  },[c?.id,gT,n,s?.user?.id]);
+  // v20.3.1: si elije promo o cambia n>1, resetear membership benefit (no acumular)
+  useEffect(()=>{if(appliedPromo||n>1)setMemMode("none")},[appliedPromo?.id,n]);
+  // v20.3.1: calcular monto del descuento de membresía según mode elegido
+  const memDiscount=(memPreview&&memMode!=="none")
+    ? (memMode==="free_booking" ? gT : Number(memPreview.options?.discount?.discount_amount||0))
+    : 0;
+  const grand=Math.max(0,gT-discount-memDiscount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
   const go=async()=>{if(!s)return;
     const{data:conflictCheck}=await sb.rpc("check_booking_conflict",{p_user_id:s.user.id,p_booking_date:sl.slot_date,p_booking_time:sl.slot_time});if(conflictCheck?.conflict){window.__toast?.(t("Ya tienes una reservación en ")+conflictCheck.existing_course+" a las "+conflictCheck.existing_time?.slice(0,5)+" ese día","error");return}
@@ -1482,6 +1528,13 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       if(ei.length>0)await sb.from("booking_extras").insert(ei);
       await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
       if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
+      // v20.3.1: si el booking quedó gratis por free_booking de membresía, aplicar el benefit
+      if(memPreview?.has_membership&&memMode!=="none"&&n===1&&memDiscount>0){
+        try{
+          const{error:mErr}=await sb.rpc("apply_membership_benefit_to_booking",{p_booking_id:bk.id,p_membership_id:memPreview.membership_id,p_mode:memMode,p_discount_amount:memDiscount});
+          if(mErr)console.warn("[v20.3.1] apply_membership_benefit_to_booking err:",mErr);
+        }catch(e){console.warn("[v20.3.1] apply_membership catch:",e)}
+      }
       createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada. Código: "+(bk.booking_code||""),{course_name:c.course_name,booking_id:bk.id,action_route:"tab:1",action_label:"Ver reserva"});
       sendBookingEmails(bk,c,s.user.email,pr?.full_name||s.user.email,n,0);
       setBusy(false);onOk({bk,tot:0});return
@@ -1494,6 +1547,15 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     if(payData?.extras?.length>0){const ei=payData.extras.map(e=>({...e,booking_id:bk.id}));await sb.from("booking_extras").insert(ei)}
     await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
     if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
+    // v20.3.1: si user eligió aplicar membership benefit, marcarlo en la booking + decrementar counter
+    if(memPreview?.has_membership&&memMode!=="none"&&n===1&&memDiscount>0){
+      try{
+        const{error:mErr}=await sb.rpc("apply_membership_benefit_to_booking",{p_booking_id:bk.id,p_membership_id:memPreview.membership_id,p_mode:memMode,p_discount_amount:memDiscount});
+        if(mErr)console.warn("[v20.3.1] apply_membership_benefit_to_booking err:",mErr);
+        // Si falla por race condition, la booking ya está creada/pagada con el monto descontado.
+        // El user gana el descuento aunque el counter no decrementó. Edge case auditable.
+      }catch(e){console.warn("[v20.3.1] apply_membership catch:",e)}
+    }
     createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada. Código: "+(bk.booking_code||""),{course_name:c.course_name,booking_id:bk.id,action_route:"tab:1",action_label:"Ver reserva"});
     sendBookingEmails(bk,c,s.user.email,pr?.full_name||s.user.email,n,grand);
     return bk
@@ -1567,13 +1629,60 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:10}}>{cats.map(ct=><button key={ct.k} className={"etab "+(cat===ct.k?"on":"off")} onClick={()=>setCat(ct.k)} dangerouslySetInnerHTML={{__html:ct.l}}/>)}</div>
     {extras.filter(e=>e.category===cat).map(ex=>{const qty=cart[ex.id]||0;return<div key={ex.id} className={"ecard"+(qty>0?" sel":"")}><span style={{fontSize:22}} dangerouslySetInnerHTML={{__html:ex.icon}}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{ex.name}</div><div style={{fontSize:13,fontWeight:800,color:qty>0?C.grn:C.acc,marginTop:2}}>${fm(ex.price)}</div></div><div style={{display:"flex",alignItems:"center",gap:5}}>{qty>0&&<><button onClick={()=>setQty(ex.id,-1)} style={{width:24,height:24,borderRadius:14,border:"1px solid "+C.bd,background:C.bg,color:C.txt,cursor:"pointer",fontSize:13}}>-</button><span style={{fontSize:13,fontWeight:700,color:C.txt,minWidth:14,textAlign:"center"}}>{qty}</span></>}<button onClick={()=>setQty(ex.id,1)} style={{width:24,height:24,borderRadius:14,border:"1px solid "+(qty?C.bd:C.grn),background:qty?C.bg:C.grn+"25",color:qty?C.txt:C.grn,cursor:"pointer",fontSize:13}}>+</button></div></div>})}
     </div>}
+    {/* v20.3.1: Selector de beneficio de membresía. Solo aparece si caller tiene membresía active del campo Y n=1. */}
+    {memPreview?.has_membership&&n===1&&!appliedPromo&&<div style={{background:`linear-gradient(135deg,${memPreview.badge_color||C.gld}10,${C.grn}06)`,borderRadius:14,padding:14,border:"1px solid "+(memPreview.badge_color||C.gld)+"40",marginTop:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <span style={{fontSize:9,fontWeight:800,color:"#fff",background:memPreview.badge_color||C.gld,padding:"3px 7px",borderRadius:4,letterSpacing:.5}}>{memPreview.badge_label||"M"}</span>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Membresía {memPreview.tier_name}</div>
+          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Vence en {memPreview.days_remaining} días · Aplica beneficios a esta reserva</div>
+        </div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {/* Opción: Sin descuento */}
+        <button onClick={()=>setMemMode("none")} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:memMode==="none"?"2px solid "+C.tm:"1px solid "+C.bd,background:memMode==="none"?C.bd+"40":C.cd,cursor:"pointer",textAlign:"left"}}>
+          <div style={{width:18,height:18,borderRadius:9,border:"2px solid "+(memMode==="none"?C.tm:C.bd),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{memMode==="none"&&<div style={{width:10,height:10,borderRadius:5,background:C.tm}}/>}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:600,color:C.txt}}>No usar membresía</div>
+            <div style={{fontSize:10,color:C.tm,marginTop:1}}>Pagar precio normal — guardar beneficios para otra reserva</div>
+          </div>
+        </button>
+        {/* Opción: Free booking */}
+        {memPreview.options?.free_booking?.available&&<button onClick={()=>setMemMode("free_booking")} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:memMode==="free_booking"?"2px solid "+C.grn:"1px solid "+C.bd,background:memMode==="free_booking"?C.grn+"15":C.cd,cursor:"pointer",textAlign:"left"}}>
+          <div style={{width:18,height:18,borderRadius:9,border:"2px solid "+(memMode==="free_booking"?C.grn:C.bd),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{memMode==="free_booking"&&<div style={{width:10,height:10,borderRadius:5,background:C.grn}}/>}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:1}}>
+              <span style={{fontSize:14}}>⛳</span>
+              <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Usar 1 booking gratis</span>
+            </div>
+            <div style={{fontSize:10,color:C.ts}}>Te quedan {memPreview.options.free_booking.remaining} · Total: <span style={{color:C.grn,fontWeight:700,..._s.mono}}>$0 MXN</span></div>
+          </div>
+        </button>}
+        {/* Opción: % Discount */}
+        {memPreview.options?.discount?.available&&<button onClick={()=>setMemMode("discount")} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:memMode==="discount"?"2px solid "+C.grn:"1px solid "+C.bd,background:memMode==="discount"?C.grn+"15":C.cd,cursor:"pointer",textAlign:"left"}}>
+          <div style={{width:18,height:18,borderRadius:9,border:"2px solid "+(memMode==="discount"?C.grn:C.bd),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{memMode==="discount"&&<div style={{width:10,height:10,borderRadius:5,background:C.grn}}/>}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:1}}>
+              <span style={{fontSize:14}}>🏷️</span>
+              <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Aplicar {memPreview.options.discount.discount_pct}% off</span>
+            </div>
+            <div style={{fontSize:10,color:C.ts}}>Ahorras <span style={{color:C.grn,fontWeight:700,..._s.mono}}>${fm(memPreview.options.discount.discount_amount)}</span> · Total: <span style={{color:C.grn,fontWeight:700,..._s.mono}}>${fm(memPreview.options.discount.price_after)} MXN</span></div>
+          </div>
+        </button>}
+      </div>
+    </div>}
+    {/* v20.3.1: Si tiene membresía pero n>1, hint de que aplica solo en individuales por ahora */}
+    {memPreview?.has_membership&&n>1&&<div style={{padding:"8px 12px",background:C.gld+"10",borderRadius:10,border:"1px solid "+C.gld+"30",marginTop:14,fontSize:11,color:C.ts,display:"flex",alignItems:"center",gap:8}}>
+      <span style={{fontSize:14}}>💎</span>
+      <span>Tienes membresía <strong style={{color:C.txt}}>{memPreview.tier_name}</strong>. Los beneficios aplican en reservas individuales (1 jugador).</span>
+    </div>}
     <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginTop:14}}>
       <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{t("Código Promocional")}</div>
       {appliedPromo?<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:10,background:C.grn+"15",borderRadius:10,border:"1px solid "+C.grn+"30"}}><div><div style={{fontSize:12,fontWeight:700,color:C.grn}}>{appliedPromo.code} aplicado</div><div style={{fontSize:11,color:C.ts}}>{promoResult?.msg}</div></div><button onClick={()=>{setAppliedPromo(null);setPromoResult(null);setPromoCode("")}} style={{background:"none",border:"none",color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t("Quitar")}</button></div>
       :<div style={{display:"flex",gap:8}}><input value={promoCode} onChange={e=>setPromoCode(e.target.value.toUpperCase())} placeholder={t("Ej: OMNIMAN")} maxLength={20} style={{flex:1,padding:10,background:C.bg,border:"1px solid "+(promoResult&&!promoResult.ok?C.acc:C.bd),borderRadius:10,color:C.txt,fontSize:13,..._s.mono,letterSpacing:2,outline:"none"}}/><button onClick={async()=>{setPromoLoading(true);const r=await validatePromo(promoCode,s.user.id,"player");setPromoResult(r);if(r.ok)setAppliedPromo(r.promo);setPromoLoading(false)}} disabled={promoLoading||!promoCode.trim()} style={{padding:"10px 16px",background:promoCode.trim()?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:"none",borderRadius:10,color:promoCode.trim()?"#fff":C.tm,fontWeight:700,fontSize:12,cursor:"pointer"}}>{promoLoading?"...":"Aplicar"}</button></div>}
       {promoResult&&!promoResult.ok&&<div style={{fontSize:11,color:C.acc,marginTop:4}}>{promoResult.msg}</div>}
     </div>
-    <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.grn}} dangerouslySetInnerHTML={{__html:ic("tag",12,C.grn)+" Descuento ("+appliedPromo?.code+")"}}></span><span style={{color:C.grn,fontWeight:700}}>-${fm(discount)}</span></div>}{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>{t("Extras")}</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>{t("Total")}</span><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
+    <div style={{background:C.cd,borderRadius:14,padding:16,border:"1px solid "+C.bd,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>Green fee x{n}</span><span style={{color:C.txt}}>${fm(gT)}</span></div>{discount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.grn}} dangerouslySetInnerHTML={{__html:ic("tag",12,C.grn)+" Descuento ("+appliedPromo?.code+")"}}></span><span style={{color:C.grn,fontWeight:700}}>-${fm(discount)}</span></div>}{memDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:memPreview?.badge_color||C.gld,fontWeight:600}}>{memMode==="free_booking"?"⛳ Booking gratis (membresía)":`🏷️ Membresía ${memPreview?.options?.discount?.discount_pct}% off`}</span><span style={{color:memPreview?.badge_color||C.gld,fontWeight:700}}>-${fm(memDiscount)}</span></div>}{eT>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.ts}}>{t("Extras")}</span><span style={{color:C.gld}}>${fm(eT)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+C.bd,paddingTop:10}}><span style={{fontSize:18,fontWeight:700,color:C.txt}}>{t("Total")}</span><span style={{fontSize:18,fontWeight:800,color:C.grn}}>${fm(grand)} MXN</span></div></div>
     <button onClick={go} disabled={busy} style={{width:"100%",padding:"16px 20px",marginTop:14,background:`linear-gradient(135deg,${C.acc},#d63d55)`,color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1,boxShadow:busy?"none":"0 6px 20px rgba(233,69,96,.40)",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>{busy?<><div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>{t("Procesando...")}</>:n>1?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>{paymentMode==="split"?t("Reservar y pagar tu parte $")+fm(Math.round((gT/n)*100)/100):t("Reservar y pagar $")+fm(grand)} MXN</span></>:grand>0?<><span dangerouslySetInnerHTML={{__html:ic("lock",14,"#fff")}}/><span>{t("Pagar")} ${fm(grand)} MXN</span></>:t("Confirmar Reserva Gratis")}</button>
     {payData&&<div className="bsheet-overlay" style={{display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPayData(null)}>
       <div onClick={e=>e.stopPropagation()} className="bsheet" style={{background:C.cd,borderTop:"1px solid "+C.bd}}>
@@ -2860,10 +2969,19 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
   // v20.3: Memberships overlay
   const[showMemberships,setShowMemberships]=useState(false);
   const[hasActiveMembership,setHasActiveMembership]=useState(false);
+  // v20.4: Tournaments overlay
+  const[showTournaments,setShowTournaments]=useState(false);
+  const[openTournamentsCount,setOpenTournamentsCount]=useState(0);
   useEffect(()=>{// v20.3: detectar si tengo alguna membresía activa para mostrar badge
     sb.rpc("get_my_memberships").then(({data})=>{
       const active=(data?.memberships||[]).some(m=>m.status==="active");
       setHasActiveMembership(active);
+    }).catch(()=>{});
+  },[s?.user?.id]);
+  // v20.4: contar torneos públicos abiertos para mostrar badge
+  useEffect(()=>{
+    sb.rpc("get_public_tournaments",{p_course_id:null}).then(({data})=>{
+      setOpenTournamentsCount((data?.tournaments||[]).filter(t=>t.status==="registration_open").length);
     }).catch(()=>{});
   },[s?.user?.id]);
   // v20.2: F&B + Equipment cross-sell
@@ -3247,13 +3365,28 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       // refresh hasActiveMembership status on close
       sb.rpc("get_my_memberships").then(({data})=>{setHasActiveMembership((data?.memberships||[]).some(m=>m.status==="active"))}).catch(()=>{});
     }}/>}
-    {!showMemberships&&<>
+    {/* v20.4: Tournaments entry — full screen overlay */}
+    {showTournaments&&<TournamentsScreen onBack={()=>{setShowTournaments(false);
+      sb.rpc("get_public_tournaments",{p_course_id:null}).then(({data})=>{
+        setOpenTournamentsCount((data?.tournaments||[]).filter(t=>t.status==="registration_open").length);
+      }).catch(()=>{});
+    }}/>}
+    {!showMemberships&&!showTournaments&&<>
     {/* v20.3: CTA banner — Membresías */}
-    <div onClick={()=>setShowMemberships(true)} style={{padding:"10px 14px",background:hasActiveMembership?`linear-gradient(135deg,${C.gld}25,${C.grn}15)`:`linear-gradient(135deg,${C.gld}18,#fbbf2410)`,border:"1px solid "+(hasActiveMembership?C.gld+"50":C.gld+"35"),borderRadius:12,marginBottom:12,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
+    <div onClick={()=>setShowMemberships(true)} style={{padding:"10px 14px",background:hasActiveMembership?`linear-gradient(135deg,${C.gld}25,${C.grn}15)`:`linear-gradient(135deg,${C.gld}18,#fbbf2410)`,border:"1px solid "+(hasActiveMembership?C.gld+"50":C.gld+"35"),borderRadius:12,marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
       <div style={{fontSize:22}}>{hasActiveMembership?"💎":"⭐"}</div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>{hasActiveMembership?"Mis membresías":"Membresías Partee"}</div>
         <div style={{fontSize:10,color:C.tm,marginTop:1}}>{hasActiveMembership?"Ver beneficios y vencimientos":"Ahorra en cada ronda · beneficios exclusivos"}</div>
+      </div>
+      <span style={{color:C.tm}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
+    </div>
+    {/* v20.4: CTA banner — Torneos */}
+    <div onClick={()=>setShowTournaments(true)} style={{padding:"10px 14px",background:openTournamentsCount>0?`linear-gradient(135deg,${C.acc}20,#d63d5512)`:`linear-gradient(135deg,${C.acc}10,#d63d5505)`,border:"1px solid "+(openTournamentsCount>0?C.acc+"50":C.acc+"30"),borderRadius:12,marginBottom:12,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
+      <div style={{fontSize:22}}>🏆</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>Torneos públicos {openTournamentsCount>0&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:C.acc,padding:"2px 6px",borderRadius:4,marginLeft:6,letterSpacing:.4}}>{openTournamentsCount} abierto{openTournamentsCount===1?"":"s"}</span>}</div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>{openTournamentsCount>0?"Inscríbete y compite por la bolsa":"Próximamente — los campos publicarán torneos aquí"}</div>
       </div>
       <span style={{color:C.tm}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
     </div>
@@ -5235,6 +5368,18 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
       <AdminMembershipTiers course={course}/>
     </div>
 
+    {/* v20.4: Torneos públicos del campo — CRUD + lifecycle */}
+    {course?.facility_type==="campo"&&<div style={{marginBottom:14,padding:16,background:`linear-gradient(135deg,${C.acc}08,#d63d5505)`,border:"1px solid "+C.acc+"30",borderRadius:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <span style={{fontSize:18}}>🏆</span>
+        <div style={{flex:1}}>
+          <h3 style={{margin:0,fontSize:15,fontWeight:800,color:C.txt}}>Torneos públicos</h3>
+          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Vende inscripciones y organiza eventos con bolsa de premios.</div>
+        </div>
+      </div>
+      <AdminTournaments course={course}/>
+    </div>}
+
     <ThemeToggle/><LangToggle/><button onClick={()=>{
       // v19.64: alineado con el patrón robusto del Player Profile (línea 4177).
       // Antes: onClick={onOut} sin confirm → si el click no llegaba al backend (botón tapado
@@ -6741,6 +6886,389 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
             <button onClick={()=>openEdit(t)} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.bd,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",11,C.ts)}}/>
             <button onClick={()=>delTier(t)} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.acc+"25",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",11,C.acc)}}/>
           </div>
+        </div>
+      </div>})}
+    </div>}
+  </div>
+}
+
+// v20.4: TournamentsScreen — Player UI. Lista torneos públicos abiertos, detail con players, registro pagado o gratis.
+// Modos: 'list' (lista) / 'detail' (info del torneo) / 'checkout' (Stripe Card Element).
+function TournamentsScreen({onBack}){const{s,p}=useA();
+  const[mode,setMode]=useState("list");const[ld,setLd]=useState(true);
+  const[tournaments,setTournaments]=useState([]);
+  const[selected,setSelected]=useState(null);  // tournament_id seleccionado
+  const[detail,setDetail]=useState(null);      // {tournament, players, my_registration, is_caller_registered, spots_left}
+  const[detailLd,setDetailLd]=useState(false);
+  const[regBusy,setRegBusy]=useState(false);
+  // Checkout state (cuando entry_fee > 0)
+  const[checkoutData,setCheckoutData]=useState(null); // {tournament_player_id, tournament_name, course_name, play_date, entry_fee_mxn}
+  const[checkoutPhase,setCheckoutPhase]=useState("init");
+  const[checkoutErr,setCheckoutErr]=useState("");
+  const stripeRef=useRef(null);const cardRef=useRef(null);const secretRef=useRef("");const mountRef=useRef(null);
+
+  useEffect(()=>{loadList()},[]);
+  async function loadList(){setLd(true);
+    const{data,error}=await sb.rpc("get_public_tournaments",{p_course_id:null});
+    if(error){console.warn("[v20.4] tournaments list err:",error);setLd(false);return}
+    setTournaments(data?.tournaments||[]);
+    setLd(false);
+  }
+  async function openDetail(tId){setSelected(tId);setMode("detail");setDetailLd(true);
+    const{data,error}=await sb.rpc("get_tournament_details",{p_tournament_id:tId});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setDetailLd(false);return}
+    setDetail(data);setDetailLd(false);
+  }
+  async function startRegistration(){
+    if(!detail?.tournament||regBusy)return;
+    setRegBusy(true);
+    const{data,error}=await sb.rpc("register_for_tournament",{p_tournament_id:detail.tournament.id});
+    setRegBusy(false);
+    if(error){
+      const msg=error.message;
+      const friendly=msg.includes("already_registered")?"Ya estás registrado en este torneo":
+        msg.includes("registration not open")?"Inscripciones cerradas":
+        msg.includes("handicap_too")?"Tu handicap no califica para este torneo":
+        "Error: "+msg;
+      window.__toast?.(friendly,"warn");return;
+    }
+    if(data.payment_required&&data.entry_fee_mxn>0){
+      // Abrir checkout Stripe
+      setCheckoutData({
+        tournament_player_id:data.tournament_player_id,
+        tournament_name:data.tournament_name,
+        course_name:detail.tournament.course_name,
+        play_date:detail.tournament.play_date,
+        entry_fee_mxn:Number(data.entry_fee_mxn)
+      });
+      setCheckoutPhase("init");setCheckoutErr("");setMode("checkout");
+    } else {
+      // Free tournament: ya quedó registered
+      window.__toast?.(data.registration_status==="waitlisted"?"Estás en lista de espera":"¡Inscripción confirmada!","success");
+      openDetail(detail.tournament.id);  // refresh detail
+    }
+  }
+  // Stripe init effect
+  useEffect(()=>{
+    if(mode!=="checkout"||!checkoutData||checkoutPhase!=="init")return;
+    let dead=false;
+    (async()=>{
+      try{
+        if(!window.Stripe){setCheckoutErr("Stripe no disponible");setCheckoutPhase("error");return}
+        const st=window.Stripe(STRIPE_PK,{locale:"es"});stripeRef.current=st;
+        const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+        const res=await fetch(SB_FN_URL+"/create-checkout",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({type:"tournament",mode:"embedded",amount:checkoutData.entry_fee_mxn,tournament_player_id:checkoutData.tournament_player_id,tournament_name:checkoutData.tournament_name,course_name:checkoutData.course_name,play_date:checkoutData.play_date})});
+        const data=await res.json();
+        if(dead)return;
+        if(data.error){setCheckoutErr(data.error);setCheckoutPhase("error");return}
+        secretRef.current=data.client_secret;
+        const els=st.elements();
+        const isDk=document.documentElement.style.getPropertyValue("--app-bg").trim()==="#080810";
+        const card=els.create("card",{style:{base:{color:isDk?"#f4f4f6":"#0f172a",fontFamily:"-apple-system,system-ui,sans-serif",fontSize:"16px","::placeholder":{color:isDk?"#505868":"#94a3b8"},iconColor:"#00b894"},invalid:{color:"#e94560",iconColor:"#e94560"}},hidePostalCode:true});
+        cardRef.current=card;
+        const tryMount=()=>{if(mountRef.current&&!dead){card.mount(mountRef.current);setCheckoutPhase("ready")}else if(!dead){setTimeout(tryMount,200)}};
+        tryMount();
+      }catch(e){if(!dead){setCheckoutErr("Error: "+e.message);setCheckoutPhase("error")}}
+    })();
+    return()=>{dead=true}
+  },[mode,checkoutData,checkoutPhase]);
+  async function payNow(){
+    if(!stripeRef.current||!cardRef.current||!secretRef.current)return;
+    setCheckoutPhase("paying");setCheckoutErr("");
+    const{error:pmErr,paymentMethod}=await stripeRef.current.createPaymentMethod({type:"card",card:cardRef.current});
+    if(pmErr){setCheckoutErr(pmErr.message);setCheckoutPhase("ready");return}
+    const{error:err,paymentIntent}=await stripeRef.current.confirmCardPayment(secretRef.current,{payment_method:paymentMethod.id});
+    if(err){
+      try{const{paymentIntent:piCheck}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
+        if(piCheck?.status==="succeeded"){await confirmReg(piCheck.id);return}
+      }catch{}
+      setCheckoutErr(err.message);setCheckoutPhase("ready");return
+    }
+    if(paymentIntent?.status==="succeeded"){await confirmReg(paymentIntent.id);return}
+    setCheckoutErr("Estado inesperado: "+paymentIntent?.status);setCheckoutPhase("ready");
+  }
+  async function confirmReg(piId){
+    const{data,error}=await sb.rpc("confirm_tournament_registration",{p_tournament_player_id:checkoutData.tournament_player_id,p_payment_intent_id:piId});
+    if(error){setCheckoutErr("Pago exitoso pero error confirmando: "+error.message);setCheckoutPhase("error");return}
+    setCheckoutPhase("success");
+    setTimeout(()=>{
+      setMode("list");setCheckoutData(null);setSelected(null);setDetail(null);
+      loadList();
+      window.__toast?.("¡Inscripción confirmada!","success");
+    },2200);
+  }
+
+  function statusLabel(st){return{
+    'draft':'Borrador','registration_open':'Inscripciones abiertas','registration_closed':'Cerrado','in_progress':'En curso','finished':'Finalizado','cancelled':'Cancelado'
+  }[st]||st}
+  function statusColor(st){return{
+    'registration_open':C.grn,'registration_closed':C.gld,'in_progress':C.acc,'finished':C.tm,'draft':C.tm,'cancelled':C.tm
+  }[st]||C.tm}
+
+  // === RENDER ===
+  if(mode==="checkout"&&checkoutData){
+    return<div className="fi" style={{padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+        <button onClick={()=>{setMode("detail");setCheckoutData(null)}} disabled={checkoutPhase==="paying"||checkoutPhase==="success"} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/>
+        <h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>Pagar inscripción</h2>
+      </div>
+      <div style={{padding:16,background:`linear-gradient(135deg,${C.acc}15,#d63d5512)`,border:"1px solid "+C.acc+"30",borderRadius:14,marginBottom:14}}>
+        <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:4}}>{checkoutData.course_name}</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.txt}}>{checkoutData.tournament_name}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:4}}>Fecha: {checkoutData.play_date}</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:10,paddingTop:10,borderTop:"1px solid "+C.acc+"20"}}>
+          <span style={{fontSize:12,color:C.tm}}>Inscripción</span>
+          <span style={{fontSize:24,fontWeight:900,color:C.acc,..._s.mono}}>${fm(checkoutData.entry_fee_mxn)} MXN</span>
+        </div>
+      </div>
+      {checkoutPhase==="success"?<div style={{padding:30,textAlign:"center",background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:14}}>
+        <div style={{fontSize:48,marginBottom:10}}>🏆</div>
+        <div style={{fontSize:16,fontWeight:800,color:C.grn,marginBottom:4}}>¡Inscripción confirmada!</div>
+        <div style={{fontSize:12,color:C.ts}}>Te esperamos en el torneo</div>
+      </div>:<>
+        <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:6}}>DATOS DE TARJETA</div>
+        <div ref={mountRef} style={{padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,minHeight:48,marginBottom:10}}/>
+        {checkoutErr&&<div style={{padding:10,background:C.acc+"15",border:"1px solid "+C.acc+"40",borderRadius:10,color:C.acc,fontSize:12,marginBottom:10}}>⚠ {checkoutErr}</div>}
+        <button onClick={payNow} disabled={checkoutPhase!=="ready"} style={{width:"100%",padding:16,background:checkoutPhase!=="ready"?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:14,color:checkoutPhase!=="ready"?C.tm:"#fff",fontWeight:800,fontSize:14,cursor:checkoutPhase!=="ready"?"default":"pointer",letterSpacing:.3}}>{checkoutPhase==="init"?"Cargando…":checkoutPhase==="paying"?"Procesando pago…":checkoutPhase==="error"?"Reintentar":`Pagar $${fm(checkoutData.entry_fee_mxn)} MXN`}</button>
+        <div style={{fontSize:10,color:C.tm,marginTop:8,textAlign:"center"}}>🔒 Pago seguro procesado por Stripe</div>
+      </>}
+    </div>
+  }
+
+  if(mode==="detail"&&selected){
+    if(detailLd||!detail){return<div className="fi" style={{padding:16}}><Skeleton w="100%" h={200}/></div>}
+    const tr=detail.tournament;const players=detail.players||[];
+    const isOpen=tr.status==="registration_open";
+    const myReg=detail.my_registration;
+    return<div className="fi" style={{padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <button onClick={()=>{setMode("list");setSelected(null);setDetail(null)}} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/>
+        <h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>{tr.name}</h2>
+      </div>
+      {/* Header card */}
+      <div style={{padding:16,background:`linear-gradient(135deg,${C.acc}10,#d63d5505)`,border:"1px solid "+C.acc+"30",borderRadius:14,marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+          <div>
+            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:4}}>{tr.course_name}</div>
+            <div style={{fontSize:11,fontWeight:800,color:statusColor(tr.status),letterSpacing:.5}}>{statusLabel(tr.status).toUpperCase()}</div>
+          </div>
+          {Number(tr.entry_fee_mxn)>0&&<div style={{textAlign:"right"}}>
+            <div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:.5}}>INSCRIPCIÓN</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.acc,..._s.mono,lineHeight:1}}>${fm(tr.entry_fee_mxn)}</div>
+          </div>}
+        </div>
+        {tr.description&&<p style={{fontSize:12,color:C.ts,margin:"8px 0 0",lineHeight:1.5}}>{tr.description}</p>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12,paddingTop:12,borderTop:"1px solid "+C.acc+"20"}}>
+          <div><div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:.5}}>FECHA</div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{tr.play_date||"Por definir"}{tr.play_time?" · "+tr.play_time:""}</div></div>
+          <div><div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:.5}}>FORMATO</div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{tr.holes_count}h · {tr.game_format==="stroke_play"?"Stroke play":tr.game_format}</div></div>
+          <div><div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:.5}}>JUGADORES</div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{players.length}/{tr.max_players}</div></div>
+          <div><div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:.5}}>BOLSA</div><div style={{fontSize:13,fontWeight:700,color:C.gld}}>${fm(tr.prize_pool_mxn||0)}</div></div>
+        </div>
+        {tr.prize_distribution&&Number(tr.prize_pool_mxn)>0&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.acc+"20"}}>
+          <div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:4}}>REPARTICIÓN DE PREMIOS</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {Object.entries(tr.prize_distribution).map(([pos,pct])=>{const amt=(Number(tr.prize_pool_mxn)*Number(pct)/100);return<div key={pos} style={{padding:"4px 8px",background:C.gld+"15",borderRadius:6,fontSize:10}}>
+              <span style={{color:C.gld,fontWeight:800}}>{pos}°</span> <span style={{color:C.txt}}>${fm(amt)}</span>
+            </div>})}
+          </div>
+        </div>}
+      </div>
+      {/* Action button */}
+      {detail.is_caller_registered?<div style={{padding:12,background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:12,marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:20}}>✓</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.grn}}>Ya estás registrado</div>
+          <div style={{fontSize:10,color:C.ts,marginTop:1}}>Status: {myReg?.registration_status||"registered"}{myReg?.payment_status==="pending"?" · Pago pendiente":""}</div>
+        </div>
+      </div>:isOpen&&<button onClick={startRegistration} disabled={regBusy} style={{width:"100%",padding:14,marginBottom:14,background:regBusy?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:14,color:regBusy?C.tm:"#fff",fontWeight:800,fontSize:14,cursor:regBusy?"default":"pointer"}}>{regBusy?"Registrando…":Number(tr.entry_fee_mxn)>0?`Inscribirme — $${fm(tr.entry_fee_mxn)} MXN`:"Inscribirme gratis"}</button>}
+      {!isOpen&&!detail.is_caller_registered&&<div style={{padding:12,background:C.tm+"15",border:"1px solid "+C.bd,borderRadius:12,marginBottom:14,fontSize:12,color:C.tm,textAlign:"center"}}>{statusLabel(tr.status)}</div>}
+      {/* Players list */}
+      <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:8}}>JUGADORES INSCRITOS ({players.length})</div>
+      {players.length===0?<div style={{textAlign:"center",padding:20,color:C.tm,fontSize:12}}>Aún no hay jugadores inscritos</div>:
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {players.map(pl=><div key={pl.user_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
+            {pl.position&&<span style={{fontSize:10,fontWeight:800,color:pl.position===1?C.gld:pl.position===2?"#94a3b8":pl.position===3?"#cd7f32":C.tm,minWidth:18}}>{pl.position}°</span>}
+            <span style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.player_name}</span>
+            {pl.player_pid&&<span style={{fontSize:9,color:C.tm,..._s.mono}}>{pl.player_pid}</span>}
+          </div>
+          {tr.status==="in_progress"||tr.status==="finished"?<div style={{fontSize:11,color:pl.total_vs_par<=0?C.grn:C.acc,..._s.mono}}>{pl.total_vs_par>0?"+":""}{pl.total_vs_par}</div>:
+           pl.payment_status==="pending"?<span style={{fontSize:9,color:C.gld,fontWeight:700}}>PEND PAGO</span>:
+           <span style={{fontSize:9,color:C.grn,fontWeight:700}}>OK</span>}
+        </div>)}
+      </div>}
+    </div>
+  }
+
+  // mode === 'list'
+  return<div className="fi" style={{padding:16}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+      {onBack&&<button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/>}
+      <h2 style={{margin:0,fontSize:20,fontWeight:800,color:C.txt}}>Torneos</h2>
+    </div>
+    {ld?<Skeleton w="100%" h={120}/>:tournaments.length===0?<div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>Aún no hay torneos públicos disponibles<br/><span style={{fontSize:10}}>Cuando algún campo cree uno, aparecerá aquí</span></div>:
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {tournaments.map(tr=>{const isOpen=tr.status==="registration_open";const isInProgress=tr.status==="in_progress";
+      return<div key={tr.id} onClick={()=>openDetail(tr.id)} style={{padding:14,background:C.cd,border:"1px solid "+(isOpen?C.acc+"40":C.bd),borderRadius:14,cursor:"pointer"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:6}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{tr.name}</div>
+            <div style={{fontSize:11,color:C.tm,marginTop:2}}>{tr.course_name}</div>
+          </div>
+          <div style={{flexShrink:0,textAlign:"right"}}>
+            <div style={{fontSize:9,fontWeight:800,color:statusColor(tr.status),letterSpacing:.4}}>{statusLabel(tr.status).toUpperCase()}</div>
+            {Number(tr.entry_fee_mxn)>0?<div style={{fontSize:14,fontWeight:900,color:C.acc,..._s.mono,marginTop:2}}>${fm(tr.entry_fee_mxn)}</div>:<div style={{fontSize:10,color:C.grn,fontWeight:700,marginTop:2}}>GRATIS</div>}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:14,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd,fontSize:10,color:C.ts}}>
+          <span>📅 {tr.play_date||"Por definir"}</span>
+          <span>👥 {tr.registered_count}/{tr.max_players}</span>
+          {Number(tr.prize_pool_mxn)>0&&<span>🏆 ${fm(tr.prize_pool_mxn)}</span>}
+        </div>
+      </div>})}
+    </div>}
+  </div>
+}
+
+// v20.4: AdminTournaments — embebido en AdminProfile, similar a AdminMembershipTiers.
+// CRUD de torneos públicos del campo + dashboard mini.
+function AdminTournaments({course}){const[tournaments,setTournaments]=useState([]);const[ld,setLd]=useState(true);const[summary,setSummary]=useState(null);
+  const[edit,setEdit]=useState(null);const[saving,setSaving]=useState(false);
+  useEffect(()=>{loadAll()},[course?.id]);
+  async function loadAll(){setLd(true);
+    const{data,error}=await sb.rpc("get_admin_tournaments",{p_course_id:course.id});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
+    setTournaments(data?.tournaments||[]);setSummary(data?.summary||null);setLd(false);
+  }
+  function openCreate(){
+    const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
+    const next2weeks=new Date(Date.now()+14*86400000).toISOString().slice(0,10);
+    setEdit({
+      name:"Open "+(course.course_name?.split(" ")[0]||"Campo")+" "+(new Date()).toLocaleString('es-MX',{month:'long'}),
+      description:"",
+      play_date:next2weeks,play_time:"08:00",
+      max_players:"16",entry_fee_mxn:"500",
+      game_format:"stroke_play",holes_count:18,
+      registration_opens_immediately:true,
+      registration_closes_at:tomorrow,
+      platform_fee_pct:"10",
+      gender_category:"open",
+      prize_dist_1:"60",prize_dist_2:"30",prize_dist_3:"10"
+    })
+  }
+  async function saveTournament(){if(saving||!edit)return;
+    if(!edit.name||!edit.play_date||!edit.max_players){window.__toast?.("Completa nombre, fecha y max players","warn");return}
+    const distSum=parseInt(edit.prize_dist_1||0)+parseInt(edit.prize_dist_2||0)+parseInt(edit.prize_dist_3||0);
+    if(distSum!==100){window.__toast?.("La distribución de premios debe sumar 100% (actualmente "+distSum+"%)","warn");return}
+    setSaving(true);
+    const opensAt=edit.registration_opens_immediately?new Date(Date.now()-3600000).toISOString():null;
+    const closesAt=edit.registration_closes_at?new Date(edit.registration_closes_at+"T23:59:59").toISOString():null;
+    const dist={};
+    if(parseInt(edit.prize_dist_1)>0)dist["1"]=parseInt(edit.prize_dist_1);
+    if(parseInt(edit.prize_dist_2)>0)dist["2"]=parseInt(edit.prize_dist_2);
+    if(parseInt(edit.prize_dist_3)>0)dist["3"]=parseInt(edit.prize_dist_3);
+    const{data,error}=await sb.rpc("create_public_tournament",{
+      p_course_id:course.id,
+      p_name:edit.name,
+      p_description:edit.description||null,
+      p_play_date:edit.play_date,
+      p_play_time:edit.play_time||null,
+      p_max_players:parseInt(edit.max_players),
+      p_entry_fee_mxn:parseFloat(edit.entry_fee_mxn||0),
+      p_game_format:edit.game_format,
+      p_holes_count:parseInt(edit.holes_count)||18,
+      p_registration_opens_at:opensAt,
+      p_registration_closes_at:closesAt,
+      p_prize_distribution:dist,
+      p_platform_fee_pct:parseFloat(edit.platform_fee_pct||10),
+      p_min_handicap:null,p_max_handicap:null,
+      p_gender_category:edit.gender_category||"open"
+    });
+    setSaving(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.("Torneo creado","success");setEdit(null);loadAll();
+  }
+  async function setStatus(t,newStatus){
+    const ok=window.__confirm?await new Promise(r=>window.__confirm("¿Cambiar status a '"+newStatus+"'?",()=>r(true),()=>r(false))):confirm("Cambiar status?");
+    if(!ok)return;
+    const upd={status:newStatus};if(newStatus==="finished")upd.finished_at=new Date().toISOString();
+    const{error}=await sb.from("tournaments").update(upd).eq("id",t.id);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.("Status actualizado","success");loadAll();
+  }
+
+  if(edit){
+    return<div style={{padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginTop:10}}>
+      <div style={{..._s.flexB,marginBottom:12}}>
+        <h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>Nuevo torneo</h4>
+        <button onClick={()=>!saving&&setEdit(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+      </div>
+      <div style={{marginBottom:8}}><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>NOMBRE*</label><input value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})} placeholder="Open Cabo Mayo 2026" style={{...inp0,marginTop:4}}/></div>
+      <div style={{marginBottom:8}}><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>DESCRIPCIÓN</label><textarea value={edit.description} onChange={e=>setEdit({...edit,description:e.target.value})} placeholder="Stroke play 18 hoyos. Premios al podio." style={{...inp0,marginTop:4,minHeight:60,fontFamily:"inherit"}}/></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>FECHA*</label><input type="date" value={edit.play_date} onChange={e=>setEdit({...edit,play_date:e.target.value})} style={{...inp0,marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>HORA</label><input type="time" value={edit.play_time} onChange={e=>setEdit({...edit,play_time:e.target.value})} style={{...inp0,marginTop:4}}/></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>MAX PLAYERS*</label><input type="number" value={edit.max_players} onChange={e=>setEdit({...edit,max_players:e.target.value})} style={{...inp0,marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>ENTRY FEE</label><input type="number" value={edit.entry_fee_mxn} onChange={e=>setEdit({...edit,entry_fee_mxn:e.target.value})} placeholder="0=gratis" style={{...inp0,marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>HOYOS</label><select value={edit.holes_count} onChange={e=>setEdit({...edit,holes_count:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="9">9</option><option value="18">18</option></select></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>FORMATO</label><select value={edit.game_format} onChange={e=>setEdit({...edit,game_format:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="stroke_play">Stroke play</option><option value="match_play">Match play</option><option value="stableford">Stableford</option></select></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>CATEGORÍA</label><select value={edit.gender_category} onChange={e=>setEdit({...edit,gender_category:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="open">Abierta</option><option value="men">Masculino</option><option value="women">Femenino</option></select></div>
+      </div>
+      <div style={{padding:10,background:C.bd+"30",border:"1px solid "+C.bd,borderRadius:10,marginBottom:8}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4,marginBottom:6}}>VENTANA DE INSCRIPCIÓN</div>
+        <button onClick={()=>setEdit({...edit,registration_opens_immediately:!edit.registration_opens_immediately})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid "+(edit.registration_opens_immediately?C.grn:C.bd),background:edit.registration_opens_immediately?C.grn+"15":C.cd,color:edit.registration_opens_immediately?C.grn:C.tm,fontSize:11,fontWeight:600,cursor:"pointer",marginBottom:6,textAlign:"left"}}>{edit.registration_opens_immediately?"✓ ":""}Abrir inscripciones inmediatamente</button>
+        <label style={{fontSize:10,color:C.tm}}>CIERRA EL</label><input type="date" value={edit.registration_closes_at} onChange={e=>setEdit({...edit,registration_closes_at:e.target.value})} style={{...inp0,marginTop:2}}/>
+      </div>
+      <div style={{padding:10,background:C.gld+"08",border:"1px solid "+C.gld+"30",borderRadius:10,marginBottom:8}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4,marginBottom:6}}>REPARTICIÓN DE BOLSA (debe sumar 100%)</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+          <div><label style={{fontSize:9,color:C.gld}}>1° lugar %</label><input type="number" value={edit.prize_dist_1} onChange={e=>setEdit({...edit,prize_dist_1:e.target.value})} style={{...inp0,marginTop:2}}/></div>
+          <div><label style={{fontSize:9,color:C.tm}}>2° lugar %</label><input type="number" value={edit.prize_dist_2} onChange={e=>setEdit({...edit,prize_dist_2:e.target.value})} style={{...inp0,marginTop:2}}/></div>
+          <div><label style={{fontSize:9,color:C.tm}}>3° lugar %</label><input type="number" value={edit.prize_dist_3} onChange={e=>setEdit({...edit,prize_dist_3:e.target.value})} style={{...inp0,marginTop:2}}/></div>
+        </div>
+        <div style={{marginTop:6}}><label style={{fontSize:9,color:C.tm}}>COMISIÓN PARTEE %</label><input type="number" value={edit.platform_fee_pct} onChange={e=>setEdit({...edit,platform_fee_pct:e.target.value})} style={{...inp0,marginTop:2}}/></div>
+      </div>
+      <button onClick={saveTournament} disabled={saving} style={{width:"100%",padding:12,background:saving?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:12,color:saving?C.tm:"#fff",fontSize:13,fontWeight:800,cursor:saving?"default":"pointer"}}>{saving?"Creando…":"Crear torneo"}</button>
+    </div>
+  }
+
+  return<div>
+    <div style={{..._s.flexB,marginBottom:10}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Torneos públicos</div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>{tournaments.length} total · {summary?.open_now||0} activos</div>
+      </div>
+      <button onClick={openCreate} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ Nuevo</button>
+    </div>
+    {summary&&<div style={{padding:10,background:C.acc+"08",border:"1px solid "+C.acc+"25",borderRadius:10,marginBottom:10,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+      <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt,..._s.mono}}>{summary.open_now||0}</div><div style={{fontSize:9,color:C.tm}}>Activos</div></div>
+      <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.acc,..._s.mono}}>${fm(summary.lifetime_revenue||0)}</div><div style={{fontSize:9,color:C.tm}}>Revenue total</div></div>
+      <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.gld,..._s.mono}}>{summary.finished_total||0}</div><div style={{fontSize:9,color:C.tm}}>Finalizados</div></div>
+    </div>}
+    {ld?<Skeleton w="100%" h={70}/>:tournaments.length===0?<div style={{textAlign:"center",padding:30,color:C.tm,fontSize:12}}>Sin torneos creados.<br/><span style={{fontSize:10}}>Crea tu primer torneo público para vender inscripciones.</span></div>:
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {tournaments.map(t=>{const sColor={'registration_open':C.grn,'registration_closed':C.gld,'in_progress':C.acc,'finished':C.tm,'draft':C.tm,'cancelled':C.tm}[t.status]||C.tm;
+      const sLabel={'draft':'Borrador','registration_open':'Abierto','registration_closed':'Cerrado','in_progress':'En curso','finished':'Finalizado','cancelled':'Cancelado'}[t.status]||t.status;
+      return<div key={t.id} style={{padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+              <span style={{fontSize:9,fontWeight:800,color:sColor,background:sColor+"15",padding:"2px 6px",borderRadius:4,letterSpacing:.4}}>{sLabel.toUpperCase()}</span>
+              <span style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.name}</span>
+            </div>
+            <div style={{fontSize:11,color:C.ts,..._s.mono}}>{t.play_date||"Sin fecha"} · {t.paid_count}/{t.max_players} pagos · ${fm(t.revenue_collected||0)}</div>
+          </div>
+        </div>
+        {/* Lifecycle buttons */}
+        <div style={{display:"flex",gap:4,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd}}>
+          {t.status==="draft"&&<button onClick={()=>setStatus(t,"registration_open")} style={{flex:1,padding:6,background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:6,color:C.grn,fontSize:10,fontWeight:700,cursor:"pointer"}}>Abrir inscripciones</button>}
+          {t.status==="registration_open"&&<button onClick={()=>setStatus(t,"registration_closed")} style={{flex:1,padding:6,background:C.gld+"15",border:"1px solid "+C.gld+"40",borderRadius:6,color:C.gld,fontSize:10,fontWeight:700,cursor:"pointer"}}>Cerrar inscripciones</button>}
+          {(t.status==="registration_closed"||t.status==="registration_open")&&<button onClick={()=>setStatus(t,"in_progress")} style={{flex:1,padding:6,background:C.acc+"15",border:"1px solid "+C.acc+"40",borderRadius:6,color:C.acc,fontSize:10,fontWeight:700,cursor:"pointer"}}>Iniciar</button>}
+          {t.status==="in_progress"&&<button onClick={()=>setStatus(t,"finished")} style={{flex:1,padding:6,background:C.tm+"15",border:"1px solid "+C.bd,borderRadius:6,color:C.txt,fontSize:10,fontWeight:700,cursor:"pointer"}}>Finalizar</button>}
         </div>
       </div>})}
     </div>}
