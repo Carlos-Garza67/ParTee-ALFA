@@ -8,6 +8,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.4.1 (Aislar player de public_tournaments — fix 6 puntos de contaminación visual)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.4.1 — Fix 6 puntos donde features admin (public_tournaments + subscription_plan) se filtraban a player view.
+//   Causa raíz: queries históricas a tournaments/tournament_players no filtraban tournament_type
+//   tras v20.4 introducir 'public_tournament'. Resultado: torneos públicos pagados (admin) se mezclaban
+//   con matches Versus privados (player) en lista, ranking, stats y feed.
+//   Fixes:
+//   1. TourneoTab.loadTorneos — filtro tournament_type='versus_match' al traer torneos del user
+//   2. Profile.tCount (badge "Partidas: N") — idem
+//   3. RankingScreen format ranking — idem
+//   4. PerformanceScreen.versus / format stats — idem
+//   5. Home.friendActivity feed (48h) — idem en query a tournament_players de amigos
+//   6. Profile badge subscription_plan — gate por user_role==='player' redundante (era admin-only field)
+//   FriendsTab.openProfile no se incluyó porque su impacto es marginal y filter agresivo rompería count público.
 console.log("%c[Partee] Build v20.4 (Tournaments admin lifecycle — torneos públicos pagados)","color:#00b894;font-weight:bold;font-size:13px");
 // v20.4 — Tournaments admin lifecycle. Extiende tournaments + tournament_players para soportar
 //         torneos públicos pagados, manteniendo retro-compat con Sistema Versus existente.
@@ -1236,7 +1249,7 @@ function Home({onPick}){const{s,p}=useA();const[cs,setCs]=useState([]);const[ld,
       if(!fr||fr.length===0)return;const fids=fr.map(f=>f.friend_id);
       const[{data:bks},{data:matches},{data:profiles}]=await Promise.all([
         sb.from("bookings").select("user_id,course_id,course_name,booking_date,user_profiles!inner(full_name,nickname)").in("user_id",fids).eq("status","confirmed").order("booking_date",{ascending:false}).limit(20),
-        sb.from("tournament_players").select("user_id,player_name,tournaments!inner(id,name,course_name,course_id,completed_at,status),total_score,position").in("user_id",fids).order("joined_at",{ascending:false}).limit(20),
+        sb.from("tournament_players").select("user_id,player_name,tournaments!inner(id,name,course_name,course_id,completed_at,status,tournament_type),total_score,position").in("user_id",fids).eq("tournaments.tournament_type","versus_match").order("joined_at",{ascending:false}).limit(20),
         sb.from("user_profiles").select("id,full_name,nickname,avatar_url").in("id",fids)
       ]);
       const pMap={};(profiles||[]).forEach(p=>pMap[p.id]=p);
@@ -3625,7 +3638,7 @@ function TourneoTab(){
   useRealtime(view==="create"?"match_requests":null,null,(payload)=>{const bkId=payload.new?.booking_id||payload.old?.booking_id;if(bkId&&myBkIdsRef.current.includes(bkId))refreshBkGameStatus()},[view]);
   // tournaments: alguien creó/canceló/completó una partida sobre uno de mis bookings → refresca badges del wizard
   useRealtime(view==="create"?"tournaments":null,null,(payload)=>{const bkId=payload.new?.booking_id||payload.old?.booking_id;if(bkId&&myBkIdsRef.current.includes(bkId))refreshBkGameStatus()},[view]);
-  async function loadTorneos(){setLd(true);const{data:tpR}=await sb.from("tournament_players").select("tournament_id").eq("user_id",s.user.id);const tids=[...new Set((tpR||[]).map(t=>t.tournament_id))];if(tids.length>0){const{data}=await sb.from("tournaments").select("*").in("id",tids).order("created_at",{ascending:false});setTorneos((data||[]).filter(x=>!_delTorneoIds.has(x.id)))}else setTorneos([]);setLd(false)}
+  async function loadTorneos(){setLd(true);const{data:tpR}=await sb.from("tournament_players").select("tournament_id").eq("user_id",s.user.id);const tids=[...new Set((tpR||[]).map(t=>t.tournament_id))];if(tids.length>0){const{data}=await sb.from("tournaments").select("*").in("id",tids).eq("tournament_type","versus_match").order("created_at",{ascending:false});setTorneos((data||[]).filter(x=>!_delTorneoIds.has(x.id)))}else setTorneos([]);setLd(false)}
   async function quickDelete(tn){await _deleteT(tn,null)}
   const[bkRef,setBkRef]=useState(null);
   useEffect(()=>{
@@ -4289,7 +4302,9 @@ function RankingScreen({onBack}){
     const cities=[...new Set(nat.map(u=>u.city?.trim()).filter(Boolean))].sort();setAllCities(cities);
     if(p?.city)filterCity(nat,p.city.trim());
     // Format rankings from tournaments
-    const{data:myTp}=await sb.from("tournament_players").select("*,tournaments(id,game_format,status)").eq("user_id",s.user.id);
+    // v20.4.1: filtrar tournament_type='versus_match' — el ranking competitivo del jugador se basa en sus
+    //          matches Versus privados, no en torneos públicos pagados (esos tienen su propia pantalla).
+    const{data:myTp}=await sb.from("tournament_players").select("*,tournaments!inner(id,game_format,status,tournament_type)").eq("user_id",s.user.id).eq("tournaments.tournament_type","versus_match");
     const tids=[...new Set((myTp||[]).filter(t=>t.tournaments).map(t=>t.tournaments.id))];
     if(tids.length>0){
       const{data:allTp}=await sb.from("tournament_players").select("*").in("tournament_id",tids);
@@ -4515,7 +4530,11 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
   const curLvlIdx=levelThresholds.findIndex(l=>l.n===(pr?.player_level||"Novato"));
   const nextLvl=levelThresholds[Math.max(0,curLvlIdx>=0?curLvlIdx:0)];
   const nextLevelXp=nextLvl?.xp||200;const nextLevelName=nextLvl?.n||"Amateur";const[openSec,setOpenSec]=useState(null);const[termsView,setTermsView]=useState(null);
-  useEffect(()=>{if(s){sb.from("tournament_players").select("id",{count:"exact"}).eq("user_id",s.user.id).then(({count})=>setTCount(count||0));sb.from("player_badges").select("*").eq("user_id",s.user.id).order("earned_at",{ascending:false}).then(({data})=>setMyBadges(data||[]))}},[]);
+  useEffect(()=>{if(s){
+    // v20.4.1: tCount cuenta SOLO matches Versus (tournament_type='versus_match'), no public_tournaments.
+    // Public tournaments tienen su propia pantalla (TournamentsScreen via CTA en BkTab).
+    sb.from("tournament_players").select("id,tournaments!inner(tournament_type)",{count:"exact"}).eq("user_id",s.user.id).eq("tournaments.tournament_type","versus_match").then(({count})=>setTCount(count||0));
+    sb.from("player_badges").select("*").eq("user_id",s.user.id).order("earned_at",{ascending:false}).then(({data})=>setMyBadges(data||[]))}},[]);
   const calcAge=(d)=>{if(!d)return null;const b=new Date(d+"T00:00:00");const now=new Date();let a=now.getFullYear()-b.getFullYear();if(now.getMonth()<b.getMonth()||(now.getMonth()===b.getMonth()&&now.getDate()<b.getDate()))a--;return a};
   const age=calcAge(bd);
   const save=async()=>{
@@ -4540,7 +4559,11 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
         <div style={{fontSize:18,fontWeight:800,color:C.txt,marginTop:10,letterSpacing:"-0.02em"}}>{pr?.nickname||pr?.full_name}</div>
         <div style={{fontSize:11,color:C.ts,marginTop:3}}>@{(pr?.nickname||pr?.full_name||"user").toLowerCase().replace(/\s/g,"")}{pr?.city?" · "+pr.city:""}</div>
         {pr?.player_id&&<div onClick={()=>{navigator.clipboard?.writeText(pr.player_id);window.__toast?.("ID copiado","success")}} style={{marginTop:6,padding:"4px 12px",borderRadius:8,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}><span style={{fontSize:11,fontWeight:700,color:C.gld,..._s.mono}}>{pr.player_id}</span><span dangerouslySetInnerHTML={{__html:ic("edit",10,C.tm)}}/></div>}{pr?.player_level&&pr.player_level!=="Novato"&&<div style={{marginTop:4}}><span style={{fontSize:10,color:C.grn,background:C.grn+"15",padding:"3px 10px",borderRadius:6,fontWeight:700}}>{pr.player_level} · {pr?.xp||0} XP</span></div>}
-        {pr?.subscription_plan&&pr.subscription_plan!=="free"&&<div style={{marginTop:8,padding:"5px 14px",borderRadius:20,background:C.gld+"10",border:"1px solid "+C.gld+"18",fontSize:10,fontWeight:700,color:C.gld,display:"flex",alignItems:"center",gap:4}}>★ {pr.subscription_plan}</div>}
+        {/* v20.4.1: badge subscription_plan removido de player Profile.
+             Razón: subscription_plan es un campo admin-only (poblado solo cuando course_admin compra
+             Partee Premium para inteligencia de mercado, ver PremiumInsights / PricingModal).
+             En player view no tiene significado y solo confunde si por edge case el campo está poblado.
+             El badge sigue visible en AdminApp header (línea ~6570) donde sí aplica. */}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginTop:16}}>
         {[{v:pr?.handicap!=null?Number(pr.handicap).toFixed(1):"--",l:"Handicap",icon:"golf",go:onPerformance},
@@ -5604,7 +5627,9 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
       if((c.total_strokes||999)<byCourse[c.course_id].bestScore)byCourse[c.course_id].bestScore=c.total_strokes});
     setCourseStats(Object.entries(byCourse).map(([id,d])=>({id,...d,avg:Math.round(d.totalStr/d.rounds),avgVsPar:(d.totalVsPar/d.rounds).toFixed(1)})).sort((a,b)=>b.rounds-a.rounds));
     // Versus from tournaments
-    const{data:myTp}=await sb.from("tournament_players").select("*,tournaments(id,name,game_format,status)").eq("user_id",s.user.id);
+    // v20.4.1: filtrar tournament_type='versus_match' — head-to-head y format stats deben venir
+    //          únicamente de matches Versus, no de torneos públicos pagados.
+    const{data:myTp}=await sb.from("tournament_players").select("*,tournaments!inner(id,name,game_format,status,tournament_type)").eq("user_id",s.user.id).eq("tournaments.tournament_type","versus_match");
     const tids=[...new Set((myTp||[]).filter(t=>t.tournaments).map(t=>t.tournaments.id))];
     if(tids.length>0){
       const{data:allTp}=await sb.from("tournament_players").select("*").in("tournament_id",tids);
@@ -5636,7 +5661,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
       sb.from("bookings").select("*").eq("user_id",s.user.id).eq("status","confirmed").lte("booking_date",td).not("course_id","is",null).order("booking_date",{ascending:false}).limit(40),
       sb.from("golf_courses").select("id,facility_type").in("facility_type",["campo","simulador"]),
       sb.from("golf_courses").select("id,course_name,city,hole_count,total_par,holes_per_round").eq("status","active").eq("listing_status","active").eq("facility_type","campo").order("course_name"),
-      sb.from("tournament_players").select("*,tournaments(id,name,course_name,course_id,game_format,status,created_at)").eq("user_id",s.user.id)
+      sb.from("tournament_players").select("*,tournaments!inner(id,name,course_name,course_id,game_format,status,created_at,tournament_type)").eq("user_id",s.user.id).eq("tournaments.tournament_type","versus_match")
     ]);
     const validIds=new Set((validC||[]).map(c=>c.id));
     setPastBks((bks||[]).filter(b=>validIds.has(b.course_id)));
