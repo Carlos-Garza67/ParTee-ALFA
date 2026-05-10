@@ -8,6 +8,134 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.11 (Weekly cron Lunes 8am — orquestación completa: pulse + churn + insight)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.11 — Cron Lunes 8am cierra el loop de automation. 100% backend, sin cambios frontend.
+//   2 RPCs SECURITY DEFINER:
+//     - refresh_churn_alerts(course_id): inline (no llama get_admin_churn_risk para soportar
+//       service role que tiene auth.uid()=NULL). UPSERT alerts con risk_score>=50 — INSERT si no
+//       existe, UPDATE si status='open', skip si ya dismissed/contacted/recovered.
+//     - get_active_admin_courses(): DISTINCT ON course_id por si hay múltiples admins por campo.
+//       Filtra por status='active'.
+//   Edge function weekly-cron v1: orquesta para cada course → dispatch_admin_pulse +
+//     refresh_churn_alerts + invoca generate-weekly-insight via internal call. Auth: SOLO
+//     X-Partee-Cron-Secret. Soporta dry_run + course_ids para testing/scoping.
+//   2 helper RPCs (solo platform_admin via SQL Editor):
+//     - setup_partee_weekly_cron(secret): activa pg_cron schedule '0 14 * * 1' (Lunes 8am CST).
+//     - disable_partee_weekly_cron(): unschedules.
+//   Activación pendiente: Carlos invoca SELECT setup_partee_weekly_cron('<secret>') desde SQL
+//     Editor con role postgres. Hasta entonces el cron está deployado pero no programado.
+console.log("%c[Partee] Build v20.10 (Email/WhatsApp campaigns nativos — envío real via Resend + targeting por segmento)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.10 — Email/WhatsApp campaigns para course-admins. Capa Growth — playbook lo destaca.
+//   Email: envío real via Resend (RESEND_API_KEY env). WhatsApp: click-to-chat por ahora (wa.me/{phone}?text=...).
+//     Future v20.10.1: integración Twilio/Meta Business API para envío programático de WhatsApp.
+//   2 tablas: admin_campaigns (id, type, name, subject, body, target_segment, status, sent_count,
+//     failed_count, opened_count, clicked_count, sent_at) + admin_campaign_recipients (UNIQUE per
+//     campaign+user, status pending/sent/opened/clicked/failed/bounced/skipped, sent_at, error_msg).
+//   3 RPCs SECURITY DEFINER:
+//     - create_admin_campaign(course_id, type, name, subject, body, target_segment): crea draft +
+//       populates recipients según segment (reutiliza lógica v20.6: all/vip/at_risk_vip/high_freq/
+//       lapsed/new/morning_player/weekend_only). Skip recipients sin canal disponible.
+//     - get_admin_campaigns(course_id, limit=30): lista con stats + open_rate_pct + click_rate_pct.
+//     - get_admin_campaign_detail(campaign_id): campaign + top 50 recipients (failed first).
+//   Edge function send-admin-campaign v1: auth dual JWT/cron, batch envío via Resend, idempotente
+//     por status pending, marca sent/partial/failed según resultados.
+//   Frontend: AdminCampaignsCard en AdminDash 2.0. Modal de creación con type selector, segment
+//     dropdown, subject (email-only), body editor con variable {nombre}, preview live con primer
+//     recipient. Modal de detail con stats + recipients list color-coded por status.
+console.log("%c[Partee] Build v20.9 (Daily Pulse — anomalías diarias accionables + push trigger)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.9 — Daily Pulse para course-admins. Detector de eventos accionables del día con push trigger.
+//   2 RPCs SECURITY DEFINER:
+//     - get_admin_daily_pulse(course_id): hero metrics (bookings hoy/mañana, revenue ayer/sem pasada) +
+//       anomalies array con 5 detectores: revenue_drop, hot_deal_filled, critical_vips,
+//       high_cancellations, low_capacity_today (peak 10-15h).
+//     - dispatch_admin_pulse(course_id): inserta notification en notifications table (type='alert',
+//       action_route='tab:admindash') + log en admin_pulse_log para idempotencia diaria.
+//   Tabla admin_pulse_log con UNIQUE(course_id, pulse_date) — un pulse por día.
+//   Frontend: DailyPulseCard en AdminDash 2.0 (top of fold). Solo se renderiza si has_alerts=true
+//     o por explícito request. Cards de anomaly clickeables (futuro deep-link al tab relevante).
+//     Botón "📲 Enviar push" para test manual de dispatch (en v20.11 se conectará a cron diario 8am).
+console.log("%c[Partee] Build v20.8 (Churn risk score + win-back triggers — detección automática + mensajes personalizados)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.8 — Churn risk detection + automated win-back. Complementa v20.6 Intelligence Layer.
+//   Modelo: score 0-100 por jugador basado en urgency_ratio (días reales / días esperados según
+//     patrón histórico) × volatility_factor (gaps irregulares castigan menos) × VIP weight (1.3x).
+//   Tabla admin_churn_alerts con UNIQUE(course_id, user_id) para idempotencia + tracking de
+//     status (open/dismissed/contacted/recovered) y notes auditables del manager.
+//   3 RPCs SECURITY DEFINER:
+//     - get_admin_churn_risk(course_id, min_score=40, limit=20): top players at-risk con drivers explicables
+//     - dismiss_churn_alert(course_id, user_id, action, notes): UPSERT marcar como atendido
+//     - generate_winback_message(course_id, user_id): template-based WhatsApp + Email con personalización
+//       (nombre, días inactivo, descuento sugerido 20%/15% según VIP)
+//   Frontend: ChurnRiskPanel en AdminDash 2.0 con resumen (critical/warning/at-risk/revenue at risk),
+//     lista top players con severity badges, modal de win-back message con copy a clipboard,
+//     dismiss inline con notas.
+console.log("%c[Partee] Build v20.7 (AI weekly insights — narrativa LLM/template del rendimiento del campo)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.7 — Insights semanales generados con LLM (Claude Haiku 4.5) o template fallback.
+//   Tabla admin_weekly_insights idempotente por (course_id, week_start) con kpi_snapshot jsonb.
+//   2 RPCs SECURITY DEFINER: get_weekly_insight_kpis (agrega data semanal con comparativos) +
+//     get_latest_weekly_insight (read del último insight para mostrar en UI).
+//   Edge function generate-weekly-insight: si ANTHROPIC_API_KEY presente → Claude Haiku 4.5 (~$0.005/insight).
+//     Sin key → template determinístico estructurado (mismo valor analítico, sin narrativa "humanizada").
+//     Auth: Bearer JWT (course_admin/platform_admin) o X-Partee-Cron-Secret para invocaciones automatizadas.
+//     Idempotente por (course, week). force=true regenera. Returns insight markdown.
+//   Frontend: WeeklyInsightCard en AdminDash 2.0 (top of fold) con markdown light renderer +
+//     botón Regenerar (force=true) + indicador de fuente (Claude vs Template) y timestamp.
+//   Cron Lunes 8am pendiente para v20.7.1: invocar para todos los course_admins activos.
+console.log("%c[Partee] Build v20.6 (Intelligence layer — Cohort retention + LTV + Player segments)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.6 — Capa Intelligence en AdminDash 2.0. Sección "Insights & Cohorts" después del Yield Heatmap.
+//   3 componentes nuevos:
+//     - CohortRetentionTable: matriz cohorts × M0..M5 con celdas color-graded por % retention
+//     - LtvSummary: 4 hero cards (LTV avg, AOV, total revenue 12mo, bookings/user) + tabla por cohort
+//     - PlayerSegmentsDist: 5 cards principales (VIP, At-Risk-VIP, High-Freq, Lapsed, New) + 2 secundarios (Morning, Weekend)
+//   3 RPCs SECURITY DEFINER:
+//     - get_admin_cohort_retention(course_id, months_back=6): cohorts con retention %{0,1,2,...} + summary M1/M2/M3 promedios
+//     - get_admin_ltv_summary(course_id, months_back=12): LTV promedio + AOV global + por cohort (size, bookings, revenue, AOV, LTV)
+//     - get_admin_player_segments(course_id): counts + sample top 3 players por segmento (VIP=top 10% rev 12mo, At-Risk-VIP=VIP+30d inactive, etc)
+//   Sin migrations de schema. Solo agregaciones sobre bookings + user_profiles existentes.
+console.log("%c[Partee] Build v20.4.2 (Tournaments scoring — score capture, live leaderboard, finalize + prize distribution)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.4.2 — Cierra el ciclo Tournaments. Sin esto los public_tournaments quedaban inertes tras inscripción.
+//   3 RPCs SECURITY DEFINER:
+//     - submit_tournament_score(tournament_id, total_score, holes_completed): player captura. Idempotente.
+//       Auto-promueve tournament a in_progress si era registration_closed. Calcula vs_par usando layout.par.
+//     - get_tournament_leaderboard(tournament_id): public read. Returns players ordenados por position
+//       (post-finalize) o por total_score asc + holes_completed desc (live, in_progress).
+//     - finalize_tournament(tournament_id): admin (creator/course_admin/platform_admin). Asigna positions,
+//       distribuye prize_pool segun prize_distribution {1:50, 2:30, 3:20}. Marca status='finished'. Idempotente.
+//   Frontend:
+//     - LeaderboardList component (reusable). Player + admin lo ven igual.
+//     - ScoreCaptureModal: bottomsheet con inputs total_score + holes_completed para player.
+//     - Player TournamentsScreen detail: si in_progress + paid + registered → muestra leaderboard live + CTA "Capturar score".
+//     - Admin AdminTournaments: si in_progress → muestra leaderboard + CTA "Finalizar torneo".
+//   Schema: NO requiere tabla nueva. Reutiliza tournament_players.{total_score, total_vs_par, holes_completed, position, prize_won}.
+//   Smoke E2E: 3 players, scores 75/78/81 → positions 1/2/3 con prizes $500/$300/$200 (50%/30%/20% de pool $1000).
+console.log("%c[Partee] Build v20.3.2 (Memberships Path 2 — beneficios aplicables a bookings multi-jugador)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.3.2 — Membership benefits ahora aplican también para n>1 (Path 2 del v20.3.1).
+//   Modelo conceptual claro:
+//     - 'discount': aplica al total del booking. Todos los jugadores se benefician proporcionalmente.
+//     - 'free_booking': cubre SOLO el spot del creator (1 spot). Los demás N-1 jugadores
+//       pagan precio normal. price_per_spot = total / party_size.
+//   Backend: get_membership_benefit_preview reescrita con cálculo correcto multi-player + descripciones
+//     auto-generadas según N. apply_membership_benefit_to_booking sin cambios (ya era agnóstica).
+//   Frontend: quitados los guards n===1 del Confirm. Banner "no disponible para n>1" reemplazado.
+//     UI ahora muestra contexto explícito (ej. "Tu spot gratis · los otros 3 jugadores pagan normal").
+console.log("%c[Partee] Build v20.5.1 (Yield Heatmap polish — baseline overlay, auto-refresh, export PNG)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.5.1 — 3 mejoras al Yield Heatmap (v20.5):
+//   1. Baseline overlay: en modo forecast cada celda muestra delta vs mismo DOW×HOUR de las
+//      últimas 4 semanas. Badge ↑/↓ con color verde/rojo según mejora o empeoramiento.
+//      Summary card global "vs hace 4 semanas: +X pp".
+//   2. Auto-refresh cada 5 min mientras la dashboard esté visible (Page Visibility API pausa
+//      cuando el tab no está activo, evita queries innecesarias).
+//   3. Export PNG: botón 📷 captura el grid + summary a PNG via Canvas API nativo (sin libs externas).
+//      Render manual del heatmap a canvas; nombre incluye course + mode + fecha.
+//   Toggle 9h/18h descartado: solo "Rancho contento" tiene holes_per_round=9 (1 de 16 campos).
+//   RPC get_admin_yield_heatmap actualizada con dataset baseline en cells y summary.
+console.log("%c[Partee] Build v20.5 (Yield Management Heatmap — grid 7×N días×horas con drill-down y Hot Deal shortcut)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.5 — Yield Management Heatmap embebido en AdminDash 2.0. Vista 7 días × horas activas (6-20)
+//         con celdas color-coded por occupancy% (verde fuerte=>80%, amarillo=25-50%, rojo<25%, gris=sin slots).
+//         2 modos: historical (últimas 4 semanas), forecast (próximas 4 semanas).
+//         Click en celda → drill-down modal con slots individuales de ese DOW × HOUR.
+//         Para slots forecast en T-3h..T-72h con occupancy <30%: shortcut "Hot Deal" inline (invoca apply_hot_deal_to_slots v20.0).
+//         2 RPCs SECURITY DEFINER: get_admin_yield_heatmap, get_admin_heatmap_drill.
+//         Sin migrations de schema — solo agregaciones sobre time_slots existente.
 console.log("%c[Partee] Build v20.4.1 (Aislar player de public_tournaments — fix 6 puntos de contaminación visual)","color:#00b894;font-weight:bold;font-size:13px");
 // v20.4.1 — Fix 6 puntos donde features admin (public_tournaments + subscription_plan) se filtraban a player view.
 //   Causa raíz: queries históricas a tournaments/tournament_players no filtraban tournament_type
@@ -1504,19 +1632,21 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
   const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;
   // v20.3.1: cargar preview de membresía cuando course/gT/n cambian. Solo Path 1 (n=1).
   useEffect(()=>{
-    if(!s?.user?.id||!c?.id||gT<=0||n>1){setMemPreview(null);setMemMode("none");return}
+    // v20.3.2: ahora carga el preview también para n>1. La compatibilidad con paymentMode se maneja en UI/apply.
+    if(!s?.user?.id||!c?.id||gT<=0){setMemPreview(null);setMemMode("none");return}
     let cancelled=false;
     sb.rpc("get_membership_benefit_preview",{p_course_id:c.id,p_base_price:gT,p_party_size:n}).then(({data,error})=>{
-      if(cancelled||error){if(error)console.warn("[v20.3.1] membership preview err:",error);setMemPreview(null);return}
+      if(cancelled||error){if(error)console.warn("[v20.3.2] membership preview err:",error);setMemPreview(null);return}
       if(data?.has_membership){setMemPreview(data)}else{setMemPreview(null);setMemMode("none")}
-    }).catch(e=>{console.warn("[v20.3.1] membership preview catch:",e);if(!cancelled){setMemPreview(null);setMemMode("none")}});
+    }).catch(e=>{console.warn("[v20.3.2] membership preview catch:",e);if(!cancelled){setMemPreview(null);setMemMode("none")}});
     return()=>{cancelled=true}
   },[c?.id,gT,n,s?.user?.id]);
-  // v20.3.1: si elije promo o cambia n>1, resetear membership benefit (no acumular)
-  useEffect(()=>{if(appliedPromo||n>1)setMemMode("none")},[appliedPromo?.id,n]);
-  // v20.3.1: calcular monto del descuento de membresía según mode elegido
+  // v20.3.2: reset memMode si cambia a promo o a split (en split no aplica para evitar inconsistencias).
+  useEffect(()=>{if(appliedPromo||(n>1&&paymentMode==="split"))setMemMode("none")},[appliedPromo?.id,n,paymentMode]);
+  // v20.3.2: usar discount_amount calculado por backend (party_size aware) en vez de hardcoded gT.
+  // Esto fixea el bug donde free_booking en n>1 descontaba el total entero en vez de solo 1 spot.
   const memDiscount=(memPreview&&memMode!=="none")
-    ? (memMode==="free_booking" ? gT : Number(memPreview.options?.discount?.discount_amount||0))
+    ? Number(memPreview.options?.[memMode]?.discount_amount||0)
     : 0;
   const grand=Math.max(0,gT-discount-memDiscount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
@@ -1528,8 +1658,18 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       if(appliedPromo){window.__toast?.(t("Los códigos promocionales aún no aplican a reservas con varios jugadores"),"warn");return}
       // v19.23 — Validar que split tenga al menos 1 amigo invitado
       if(paymentMode==="split"&&selectedFriends.length===0){window.__toast?.(t("Para Split necesitas invitar al menos a 1 amigo"),"warn");return}
+      // v20.3.2: en compartir mode, grand ya incluye memDiscount → chargeAmount queda con descuento aplicado.
+      // En split mode, memDiscount es 0 (forzado por useEffect), así que gT/n no recibe descuento.
       const chargeAmount=paymentMode==="split"?Math.round((gT/n)*100)/100:grand;
-      setPayData({amount:chargeAmount,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n,isPathTwo:true,totalCost:gT,extras:Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0)});
+      // v20.3.2: si hay membership benefit elegido en compartir mode, free booking puede dejar grand=0 (no Stripe).
+      if(grand<=0&&paymentMode==="compartir"&&memPreview?.has_membership&&memMode!=="none"&&memDiscount>=gT){
+        // Caso edge: free_booking + party_size 1 efectivo (raro pero posible si gT==price_per_spot).
+        // Cae al flujo gratuito de Path 1 abajo.
+      }
+      setPayData({amount:chargeAmount,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n,isPathTwo:true,totalCost:gT,extras:Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0),
+        // v20.3.2: pasar membership info al post-pay para aplicarla (solo en compartir mode)
+        membershipApply:(paymentMode==="compartir"&&memPreview?.has_membership&&memMode!=="none"&&memDiscount>0)?{membership_id:memPreview.membership_id,mode:memMode,discount_amount:memDiscount}:null
+      });
       return;
     }
     // ==== Path 1 (n=1): flujo existente ====
@@ -1541,12 +1681,13 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       if(ei.length>0)await sb.from("booking_extras").insert(ei);
       await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
       if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
-      // v20.3.1: si el booking quedó gratis por free_booking de membresía, aplicar el benefit
-      if(memPreview?.has_membership&&memMode!=="none"&&n===1&&memDiscount>0){
+      // v20.3.1 + v20.3.2: si el booking quedó gratis por free_booking de membresía, aplicar el benefit
+      // (n===1 guard removido — multi-player con compartir mode también puede llegar aquí si grand=0)
+      if(memPreview?.has_membership&&memMode!=="none"&&memDiscount>0){
         try{
           const{error:mErr}=await sb.rpc("apply_membership_benefit_to_booking",{p_booking_id:bk.id,p_membership_id:memPreview.membership_id,p_mode:memMode,p_discount_amount:memDiscount});
-          if(mErr)console.warn("[v20.3.1] apply_membership_benefit_to_booking err:",mErr);
-        }catch(e){console.warn("[v20.3.1] apply_membership catch:",e)}
+          if(mErr)console.warn("[v20.3.2] apply_membership_benefit_to_booking err:",mErr);
+        }catch(e){console.warn("[v20.3.2] apply_membership catch:",e)}
       }
       createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada. Código: "+(bk.booking_code||""),{course_name:c.course_name,booking_id:bk.id,action_route:"tab:1",action_label:"Ver reserva"});
       sendBookingEmails(bk,c,s.user.email,pr?.full_name||s.user.email,n,0);
@@ -1560,14 +1701,16 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     if(payData?.extras?.length>0){const ei=payData.extras.map(e=>({...e,booking_id:bk.id}));await sb.from("booking_extras").insert(ei)}
     await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
     if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
-    // v20.3.1: si user eligió aplicar membership benefit, marcarlo en la booking + decrementar counter
-    if(memPreview?.has_membership&&memMode!=="none"&&n===1&&memDiscount>0){
+    // v20.3.1 + v20.3.2: si user eligió aplicar membership benefit, marcarlo en la booking + decrementar counter.
+    // n===1 guard removido. Path 2 (n>1, compartir mode) usa payData.membershipApply para evitar referencias stale.
+    const memApplyData=payData?.membershipApply||((memPreview?.has_membership&&memMode!=="none"&&n===1&&memDiscount>0)?{membership_id:memPreview.membership_id,mode:memMode,discount_amount:memDiscount}:null);
+    if(memApplyData){
       try{
-        const{error:mErr}=await sb.rpc("apply_membership_benefit_to_booking",{p_booking_id:bk.id,p_membership_id:memPreview.membership_id,p_mode:memMode,p_discount_amount:memDiscount});
-        if(mErr)console.warn("[v20.3.1] apply_membership_benefit_to_booking err:",mErr);
+        const{error:mErr}=await sb.rpc("apply_membership_benefit_to_booking",{p_booking_id:bk.id,p_membership_id:memApplyData.membership_id,p_mode:memApplyData.mode,p_discount_amount:memApplyData.discount_amount});
+        if(mErr)console.warn("[v20.3.2] apply_membership_benefit_to_booking err:",mErr);
         // Si falla por race condition, la booking ya está creada/pagada con el monto descontado.
         // El user gana el descuento aunque el counter no decrementó. Edge case auditable.
-      }catch(e){console.warn("[v20.3.1] apply_membership catch:",e)}
+      }catch(e){console.warn("[v20.3.2] apply_membership catch:",e)}
     }
     createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada. Código: "+(bk.booking_code||""),{course_name:c.course_name,booking_id:bk.id,action_route:"tab:1",action_label:"Ver reserva"});
     sendBookingEmails(bk,c,s.user.email,pr?.full_name||s.user.email,n,grand);
@@ -1642,8 +1785,8 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:10}}>{cats.map(ct=><button key={ct.k} className={"etab "+(cat===ct.k?"on":"off")} onClick={()=>setCat(ct.k)} dangerouslySetInnerHTML={{__html:ct.l}}/>)}</div>
     {extras.filter(e=>e.category===cat).map(ex=>{const qty=cart[ex.id]||0;return<div key={ex.id} className={"ecard"+(qty>0?" sel":"")}><span style={{fontSize:22}} dangerouslySetInnerHTML={{__html:ex.icon}}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{ex.name}</div><div style={{fontSize:13,fontWeight:800,color:qty>0?C.grn:C.acc,marginTop:2}}>${fm(ex.price)}</div></div><div style={{display:"flex",alignItems:"center",gap:5}}>{qty>0&&<><button onClick={()=>setQty(ex.id,-1)} style={{width:24,height:24,borderRadius:14,border:"1px solid "+C.bd,background:C.bg,color:C.txt,cursor:"pointer",fontSize:13}}>-</button><span style={{fontSize:13,fontWeight:700,color:C.txt,minWidth:14,textAlign:"center"}}>{qty}</span></>}<button onClick={()=>setQty(ex.id,1)} style={{width:24,height:24,borderRadius:14,border:"1px solid "+(qty?C.bd:C.grn),background:qty?C.bg:C.grn+"25",color:qty?C.txt:C.grn,cursor:"pointer",fontSize:13}}>+</button></div></div>})}
     </div>}
-    {/* v20.3.1: Selector de beneficio de membresía. Solo aparece si caller tiene membresía active del campo Y n=1. */}
-    {memPreview?.has_membership&&n===1&&!appliedPromo&&<div style={{background:`linear-gradient(135deg,${memPreview.badge_color||C.gld}10,${C.grn}06)`,borderRadius:14,padding:14,border:"1px solid "+(memPreview.badge_color||C.gld)+"40",marginTop:14}}>
+    {/* v20.3.1 + v20.3.2: Selector de beneficio de membresía. Muestra para n=1 siempre, y para n>1 si compartir mode. */}
+    {memPreview?.has_membership&&!appliedPromo&&!(n>1&&paymentMode==="split")&&<div style={{background:`linear-gradient(135deg,${memPreview.badge_color||C.gld}10,${C.grn}06)`,borderRadius:14,padding:14,border:"1px solid "+(memPreview.badge_color||C.gld)+"40",marginTop:14}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
         <span style={{fontSize:9,fontWeight:800,color:"#fff",background:memPreview.badge_color||C.gld,padding:"3px 7px",borderRadius:4,letterSpacing:.5}}>{memPreview.badge_label||"M"}</span>
         <div style={{flex:1,minWidth:0}}>
@@ -1660,7 +1803,7 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
             <div style={{fontSize:10,color:C.tm,marginTop:1}}>Pagar precio normal — guardar beneficios para otra reserva</div>
           </div>
         </button>
-        {/* Opción: Free booking */}
+        {/* Opción: Free booking — v20.3.2: descripción dinámica desde backend según party_size */}
         {memPreview.options?.free_booking?.available&&<button onClick={()=>setMemMode("free_booking")} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:memMode==="free_booking"?"2px solid "+C.grn:"1px solid "+C.bd,background:memMode==="free_booking"?C.grn+"15":C.cd,cursor:"pointer",textAlign:"left"}}>
           <div style={{width:18,height:18,borderRadius:9,border:"2px solid "+(memMode==="free_booking"?C.grn:C.bd),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{memMode==="free_booking"&&<div style={{width:10,height:10,borderRadius:5,background:C.grn}}/>}</div>
           <div style={{flex:1,minWidth:0}}>
@@ -1668,26 +1811,26 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
               <span style={{fontSize:14}}>⛳</span>
               <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Usar 1 booking gratis</span>
             </div>
-            <div style={{fontSize:10,color:C.ts}}>Te quedan {memPreview.options.free_booking.remaining} · Total: <span style={{color:C.grn,fontWeight:700,..._s.mono}}>$0 MXN</span></div>
+            <div style={{fontSize:10,color:C.ts}}>Te quedan {memPreview.options.free_booking.remaining} · {memPreview.options.free_booking.description||""} · Total: <span style={{color:C.grn,fontWeight:700,..._s.mono}}>${fm(memPreview.options.free_booking.price_after)} MXN</span></div>
           </div>
         </button>}
-        {/* Opción: % Discount */}
+        {/* Opción: % Discount — v20.3.2: descripción dinámica desde backend */}
         {memPreview.options?.discount?.available&&<button onClick={()=>setMemMode("discount")} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:memMode==="discount"?"2px solid "+C.grn:"1px solid "+C.bd,background:memMode==="discount"?C.grn+"15":C.cd,cursor:"pointer",textAlign:"left"}}>
           <div style={{width:18,height:18,borderRadius:9,border:"2px solid "+(memMode==="discount"?C.grn:C.bd),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{memMode==="discount"&&<div style={{width:10,height:10,borderRadius:5,background:C.grn}}/>}</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:1}}>
               <span style={{fontSize:14}}>🏷️</span>
-              <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Aplicar {memPreview.options.discount.discount_pct}% off</span>
+              <span style={{fontSize:12,fontWeight:700,color:C.txt}}>{memPreview.options.discount.description||("Aplicar "+memPreview.options.discount.discount_pct+"% off")}</span>
             </div>
             <div style={{fontSize:10,color:C.ts}}>Ahorras <span style={{color:C.grn,fontWeight:700,..._s.mono}}>${fm(memPreview.options.discount.discount_amount)}</span> · Total: <span style={{color:C.grn,fontWeight:700,..._s.mono}}>${fm(memPreview.options.discount.price_after)} MXN</span></div>
           </div>
         </button>}
       </div>
     </div>}
-    {/* v20.3.1: Si tiene membresía pero n>1, hint de que aplica solo en individuales por ahora */}
-    {memPreview?.has_membership&&n>1&&<div style={{padding:"8px 12px",background:C.gld+"10",borderRadius:10,border:"1px solid "+C.gld+"30",marginTop:14,fontSize:11,color:C.ts,display:"flex",alignItems:"center",gap:8}}>
+    {/* v20.3.2: si tiene membresía + n>1 + split mode → mensaje específico (no aplica en split) */}
+    {memPreview?.has_membership&&n>1&&paymentMode==="split"&&<div style={{padding:"10px 12px",background:C.gld+"08",borderRadius:10,border:"1px solid "+C.gld+"30",marginTop:14,fontSize:11,color:C.ts,display:"flex",alignItems:"center",gap:8}}>
       <span style={{fontSize:14}}>💎</span>
-      <span>Tienes membresía <strong style={{color:C.txt}}>{memPreview.tier_name}</strong>. Los beneficios aplican en reservas individuales (1 jugador).</span>
+      <span>Tienes membresía <strong style={{color:C.txt}}>{memPreview.tier_name}</strong>. Cambia a <strong style={{color:C.grn}}>"Tú pagas por todos"</strong> para aplicar tu beneficio de membresía a esta reserva.</span>
     </div>}
     <div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginTop:14}}>
       <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{t("Código Promocional")}</div>
@@ -5203,6 +5346,39 @@ function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);cons
       <button onClick={()=>{setCsvRange(true);if(!csvFrom){const d30=new Date();d30.setDate(d30.getDate()-30);setCsvFrom(d30.toISOString().slice(0,10))}}} style={{flex:1,padding:12,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("calendar",14,C.txt)+" Por rango"}}/>
     </div>}
 
+    {/* v20.9: DAILY PULSE — anomalías diarias accionables. Top of fold para visibilidad máxima. */}
+    <div style={{marginTop:18}}>
+      <DailyPulseCard course={course}/>
+    </div>
+
+    {/* v20.10: ADMIN CAMPAIGNS — Email/WhatsApp con targeting por segmento. */}
+    <div style={{marginTop:18}}>
+      <AdminCampaignsCard course={course}/>
+    </div>
+
+    {/* v20.5: YIELD HEATMAP — grid 7×N días×horas con drill-down y Hot Deal shortcut. */}
+    <div style={{marginTop:18}}>
+      <YieldHeatmap course={course}/>
+    </div>
+
+    {/* v20.7: WEEKLY INSIGHT — narrativa AI/template del rendimiento de la semana pasada.
+         Posicionado entre Yield Heatmap y Intelligence Panel para visibilidad alta. */}
+    <div style={{marginTop:18}}>
+      <WeeklyInsightCard course={course}/>
+    </div>
+
+    {/* v20.8: CHURN RISK PANEL — detecta jugadores at-risk + win-back messages.
+         Acción inmediata para retention. */}
+    <div style={{marginTop:18}}>
+      <ChurnRiskPanel course={course}/>
+    </div>
+
+    {/* v20.6: INTELLIGENCE PANEL — Cohort retention + LTV + Player segments.
+         Capa de inteligencia post-Yield. Le dice al admin quién se queda, quién vale más y quién se está yendo. */}
+    <div style={{marginTop:18}}>
+      <IntelligencePanel course={course}/>
+    </div>
+
     {/* v19.72: TOP SPENDERS (last 90 days, click → Customer 360) */}
     {dashV2?.top_spenders?.length>0&&<div style={{marginTop:18}}>
       <h4 style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:10,letterSpacing:"-0.02em"}} dangerouslySetInnerHTML={{__html:ic("trophy",14,C.gld)+" "+t("Top jugadores (90d)")}}/>
@@ -6803,6 +6979,1134 @@ function MembershipsScreen({onBack}){const{s,p}=useA();
   </div>
 }
 
+// v20.5: YieldHeatmap — grid 7 días × horas activas con occupancy color-coded.
+// v20.5.1: baseline overlay (delta vs últimas 4 semanas) + auto-refresh + export PNG.
+// Embebido en AdminDash 2.0 entre Lifetime CSV y Top Spenders.
+function YieldHeatmap({course}){
+  const[mode,setMode]=useState("forecast");  // forecast es más accionable que historical
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+  const[drill,setDrill]=useState(null);
+  const[drillLd,setDrillLd]=useState(false);
+  const[hotDealBusy,setHotDealBusy]=useState(false);
+  const[showBaseline,setShowBaseline]=useState(true);  // v20.5.1: toggle baseline overlay (forecast only)
+  const[lastRefresh,setLastRefresh]=useState(null);
+  const[exporting,setExporting]=useState(false);
+  const gridRef=useRef(null);
+
+  // Cargar heatmap (incluye baseline en modo forecast)
+  const loadHeatmap=React.useCallback(async()=>{setLd(true);setData(null);
+    const{data:r,error}=await sb.rpc("get_admin_yield_heatmap",{p_course_id:course.id,p_mode:mode});
+    if(error){console.warn("[v20.5.1] heatmap err:",error);setLd(false);return}
+    setData(r);setLd(false);setLastRefresh(new Date());
+  },[course?.id,mode]);
+  useEffect(()=>{loadHeatmap()},[loadHeatmap]);
+
+  // v20.5.1: auto-refresh cada 5min, solo cuando tab visible (Page Visibility API).
+  useEffect(()=>{
+    let timer=null;
+    const start=()=>{if(timer)clearInterval(timer);timer=setInterval(()=>{
+      if(typeof document!=="undefined"&&!document.hidden)loadHeatmap();
+    },5*60*1000)};
+    const handleVis=()=>{if(typeof document!=="undefined"&&document.hidden){if(timer){clearInterval(timer);timer=null}}else{start()}};
+    start();
+    if(typeof document!=="undefined")document.addEventListener("visibilitychange",handleVis);
+    return()=>{if(timer)clearInterval(timer);if(typeof document!=="undefined")document.removeEventListener("visibilitychange",handleVis)};
+  },[loadHeatmap]);
+
+  async function openDrill(dow,hour){
+    const dayLbl=["Dom","Lun","Mar","Mie","Jue","Vie","Sab"][dow];
+    setDrill({dow,hour,label:dayLbl+" "+hour+":00",slots:[],summary:null});
+    setDrillLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_heatmap_drill",{p_course_id:course.id,p_dow:dow,p_hour:hour,p_mode:mode});
+    setDrillLd(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    setDrill({dow,hour,label:dayLbl+" "+hour+":00",slots:r.slots||[],summary:r.summary,can_hot_deal:r.can_create_hot_deal});
+  }
+  async function applyHotDealToCell(){
+    if(hotDealBusy||!drill)return;
+    const eligibleSlots=drill.slots.filter(s=>!s.is_offer&&s.status==="available"&&s.hours_until>=3&&s.hours_until<=72);
+    if(eligibleSlots.length===0){window.__toast?.("No hay slots elegibles para Hot Deal en esta celda","warn");return}
+    const ok=window.__confirm?await new Promise(r=>window.__confirm("Aplicar Hot Deal -20% a "+eligibleSlots.length+" slot(s) en "+drill.label+"?",()=>r(true),()=>r(false))):confirm("Aplicar Hot Deal?");
+    if(!ok)return;
+    setHotDealBusy(true);
+    const slotIds=eligibleSlots.map(s=>s.id);
+    const{data:r,error}=await sb.rpc("apply_hot_deal_to_slots",{p_course_id:course.id,p_slot_ids:slotIds,p_discount_pct:20,p_source:"manual"});
+    setHotDealBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.(`Hot Deal aplicado a ${r?.applied_count||eligibleSlots.length} slot(s)`,"success");
+    setDrill(null);loadHeatmap();
+  }
+
+  // v20.5.1: Export PNG del heatmap usando Canvas API nativo (sin libs).
+  // Renderiza manualmente: título + summary + grid + legend con cellMap data.
+  async function exportPNG(){
+    if(exporting||!data)return;
+    setExporting(true);
+    try{
+      const W=900,H=560;
+      const cv=document.createElement("canvas");cv.width=W;cv.height=H;
+      const ctx=cv.getContext("2d");
+      // Fondo
+      ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+      // Título
+      ctx.fillStyle=C.txt;ctx.font="bold 22px -apple-system,system-ui,sans-serif";
+      ctx.fillText(course.course_name+" — Yield Heatmap",24,38);
+      ctx.fillStyle=C.tm;ctx.font="13px -apple-system,system-ui,sans-serif";
+      ctx.fillText((mode==="historical"?"Últimas 4 semanas (real)":"Próximas 4 semanas (forecast)")+" · Generado "+new Date().toLocaleString("es-MX"),24,60);
+      // Grid layout
+      const gridX=70,gridY=110,cellW=98,cellH=26,gap=2;
+      const HOURS=Array.from({length:15},(_,i)=>i+6);
+      const DAYS=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+      // Headers días
+      ctx.fillStyle=C.tm;ctx.font="bold 11px -apple-system,system-ui,sans-serif";ctx.textAlign="center";
+      DAYS.forEach((d,i)=>ctx.fillText(d,gridX+i*(cellW+gap)+cellW/2,gridY-8));
+      // Filas
+      const cellMapL={};(data.cells||[]).forEach(c=>{cellMapL[c.day_of_week+"_"+c.hour]=c});
+      HOURS.forEach((h,hi)=>{
+        // hour label
+        ctx.fillStyle=C.tm;ctx.font="11px monospace";ctx.textAlign="right";
+        ctx.fillText(h+":00",gridX-8,gridY+hi*(cellH+gap)+cellH/2+4);
+        // cells
+        [0,1,2,3,4,5,6].forEach(dow=>{
+          const cell=cellMapL[dow+"_"+h];
+          const x=gridX+dow*(cellW+gap),y=gridY+hi*(cellH+gap);
+          let bg="#1f2630";
+          if(cell){
+            const pct=cell.occupancy_pct;
+            if(pct>=80)bg="#00b894aa";
+            else if(pct>=50)bg="#00b89455";
+            else if(pct>=25)bg="#fdcb6e55";
+            else bg="#e9456055";
+          }
+          ctx.fillStyle=bg;ctx.fillRect(x,y,cellW,cellH);
+          if(cell){
+            ctx.fillStyle=cell.occupancy_pct>=80?"#fff":C.txt;
+            ctx.font="bold 11px -apple-system";ctx.textAlign="center";
+            ctx.fillText(cell.occupancy_pct+"%",x+cellW/2,y+cellH/2+4);
+          }
+        });
+      });
+      // Summary footer
+      const s=data.summary;
+      if(s&&s.total_capacity>0){
+        const fy=H-50;
+        ctx.fillStyle=C.tm;ctx.font="11px -apple-system";ctx.textAlign="left";
+        ctx.fillText("Ocupación promedio: ",24,fy);
+        ctx.fillStyle=C.txt;ctx.font="bold 13px -apple-system";
+        ctx.fillText(s.avg_occupancy+"%",170,fy);
+        if(s.peak_dow!=null){
+          ctx.fillStyle=C.tm;ctx.font="11px -apple-system";
+          ctx.fillText("Peak: "+DAYS[s.peak_dow]+" "+s.peak_hour+"h ("+s.peak_pct+"%)",260,fy);
+        }
+        if(s.dead_dow!=null){
+          ctx.fillText("Dead: "+DAYS[s.dead_dow]+" "+s.dead_hour+"h ("+s.dead_pct+"%)",490,fy);
+        }
+        if(s.baseline_has_data&&s.avg_delta_pp!=null){
+          const delta=s.avg_delta_pp;ctx.fillStyle=delta>=0?"#00b894":"#e94560";ctx.font="bold 12px -apple-system";
+          ctx.fillText("vs hace 4 sem: "+(delta>=0?"+":"")+delta+" pp",720,fy);
+        }
+      }
+      // Watermark
+      ctx.fillStyle=C.tm+"60";ctx.font="10px -apple-system";ctx.textAlign="right";
+      ctx.fillText("Partee",W-12,H-12);
+      // Download
+      const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");a.href=url;
+      a.download=(course.course_name||"campo").replace(/\s/g,"_")+"_yield_"+mode+"_"+new Date().toISOString().slice(0,10)+".png";
+      a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
+      window.__toast?.("Export listo","success");
+    }catch(e){console.warn("[v20.5.1] export err:",e);window.__toast?.("Error en export: "+e.message,"warn")}
+    setExporting(false);
+  }
+
+  // Color por occupancy %. Gris=sin data, rojo=<25, naranja=25-50, amarillo=50-80, verde=>80
+  function cellColor(pct,hasSlots){
+    if(!hasSlots)return{bg:C.bd+"20",border:C.bd+"30",fg:C.tm};
+    if(pct>=80)return{bg:C.grn+"50",border:C.grn,fg:"#fff"};
+    if(pct>=50)return{bg:C.grn+"25",border:C.grn+"60",fg:C.txt};
+    if(pct>=25)return{bg:C.gld+"30",border:C.gld+"60",fg:C.txt};
+    return{bg:C.acc+"25",border:C.acc+"50",fg:C.acc};
+  }
+
+  // Construir grid 7 cols × N hours
+  const HOURS_RANGE=Array.from({length:15},(_,i)=>i+6);
+  const DAYS=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+  const cellMap={};(data?.cells||[]).forEach(c=>{cellMap[c.day_of_week+"_"+c.hour]=c});
+
+  const summary=data?.summary;
+  const peakLbl=summary?.peak_dow!=null?DAYS[summary.peak_dow]+" "+summary.peak_hour+":00":"--";
+  const deadLbl=summary?.dead_dow!=null?DAYS[summary.dead_dow]+" "+summary.dead_hour+":00":"--";
+  // v20.5.1: solo aplicar baseline overlay si modo=forecast Y existe data baseline Y user lo activó
+  const overlayActive=mode==="forecast"&&summary?.baseline_has_data&&showBaseline;
+
+  return<div style={{marginBottom:16}}>
+    {/* Header con toggle modo + acciones */}
+    <div style={{..._s.flexB,marginBottom:10,flexWrap:"wrap",gap:8}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:14}}>📊</span>Yield heatmap
+        </div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>
+          {mode==="historical"?"Últimas 4 semanas (real)":"Próximas 4 semanas (futuro)"}
+          {lastRefresh&&<span style={{marginLeft:6,opacity:.6}}>· actualizado {lastRefresh.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</span>}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        {/* v20.5.1: toggle baseline overlay (solo modo forecast con data) */}
+        {mode==="forecast"&&summary?.baseline_has_data&&<button onClick={()=>setShowBaseline(s=>!s)} title="Mostrar/ocultar comparación con últimas 4 semanas" style={{padding:"5px 9px",borderRadius:6,border:"1px solid "+(showBaseline?C.acc+"60":C.bd),background:showBaseline?C.acc+"15":"transparent",color:showBaseline?C.acc:C.tm,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:.3}}>vs 4sem</button>}
+        {/* v20.5.1: export PNG */}
+        <button onClick={exportPNG} disabled={exporting||!data?.cells?.length} title="Exportar como imagen PNG" style={{padding:"5px 9px",borderRadius:6,border:"1px solid "+C.bd,background:"transparent",color:exporting?C.tm:C.txt,fontSize:10,fontWeight:700,cursor:exporting||!data?.cells?.length?"default":"pointer",opacity:!data?.cells?.length?.5:1}}>{exporting?"...":"📷 PNG"}</button>
+        {/* Toggle modo */}
+        <div style={{display:"flex",gap:4,padding:3,background:C.cd,border:"1px solid "+C.bd,borderRadius:8}}>
+          {[{k:"forecast",l:"Próximas"},{k:"historical",l:"Pasadas"}].map(m=><button key={m.k} onClick={()=>setMode(m.k)} style={{padding:"5px 11px",borderRadius:6,border:"none",background:mode===m.k?C.acc:"transparent",color:mode===m.k?"#fff":C.tm,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:.3}}>{m.l}</button>)}
+        </div>
+      </div>
+    </div>
+
+    {/* Summary cards (4 cards si hay baseline; 3 si no) */}
+    {!ld&&summary&&summary.total_capacity>0&&<div style={{display:"grid",gridTemplateColumns:overlayActive?"1fr 1fr 1fr 1fr":"1fr 1fr 1fr",gap:6,marginBottom:10}}>
+      <div style={{padding:8,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}>
+        <div style={{fontSize:16,fontWeight:900,color:summary.avg_occupancy>=50?C.grn:summary.avg_occupancy>=25?C.gld:C.acc,..._s.mono}}>{summary.avg_occupancy}%</div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Ocupación prom</div>
+      </div>
+      {/* v20.5.1: tarjeta de delta global vs baseline */}
+      {overlayActive&&summary.avg_delta_pp!=null&&<div style={{padding:8,background:summary.avg_delta_pp>=0?C.grn+"10":C.acc+"10",border:"1px solid "+(summary.avg_delta_pp>=0?C.grn+"30":C.acc+"30"),borderRadius:8,textAlign:"center"}}>
+        <div style={{fontSize:14,fontWeight:900,color:summary.avg_delta_pp>=0?C.grn:C.acc,..._s.mono}}>{summary.avg_delta_pp>=0?"↑":"↓"}{Math.abs(summary.avg_delta_pp)}<span style={{fontSize:10,opacity:.7}}>pp</span></div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>vs hace 4 sem</div>
+      </div>}
+      <div style={{padding:8,background:C.grn+"08",border:"1px solid "+C.grn+"25",borderRadius:8,textAlign:"center"}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.grn,marginTop:2}}>🔥 {peakLbl}</div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Peak {summary.peak_pct||0}%</div>
+      </div>
+      <div style={{padding:8,background:C.acc+"08",border:"1px solid "+C.acc+"25",borderRadius:8,textAlign:"center"}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.acc,marginTop:2}}>💤 {deadLbl}</div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Dead {summary.dead_pct||0}%</div>
+      </div>
+    </div>}
+
+    {/* Grid */}
+    {ld?<Skeleton w="100%" h={280}/>:!summary?.total_capacity?<div style={{padding:30,textAlign:"center",color:C.tm,fontSize:12,background:C.cd,border:"1px dashed "+C.bd,borderRadius:10}}>Sin slots {mode==="historical"?"en últimas 4 semanas":"en próximas 4 semanas"}.<br/><span style={{fontSize:10}}>Genera slots desde el tab Slots para ver el heatmap.</span></div>:<>
+      <div ref={gridRef} style={{display:"grid",gridTemplateColumns:"36px repeat(7, 1fr)",gap:2,fontSize:9}}>
+        {/* Header row: hora + 7 días */}
+        <div></div>
+        {DAYS.map((d,i)=><div key={i} style={{textAlign:"center",fontSize:9,fontWeight:700,color:C.tm,padding:"2px 0"}}>{d}</div>)}
+        {/* Filas: una por hora */}
+        {HOURS_RANGE.map(h=><React.Fragment key={h}>
+          <div style={{textAlign:"right",paddingRight:4,fontSize:9,color:C.tm,..._s.mono,display:"flex",alignItems:"center",justifyContent:"flex-end"}}>{h}</div>
+          {[0,1,2,3,4,5,6].map(dow=>{const cell=cellMap[dow+"_"+h];const has=!!cell;const pct=has?cell.occupancy_pct:0;const col=cellColor(pct,has);
+          // v20.5.1: delta indicator si overlay activo
+          const delta=overlayActive&&has?cell.delta_pp:null;
+          const tooltip=has?`${DAYS[dow]} ${h}:00 — ${pct}% (${cell.total_booked}/${cell.total_capacity})`+(delta!=null?` · vs 4sem: ${delta>=0?"+":""}${delta}pp`:""):"";
+          return<div key={dow+"_"+h} onClick={()=>has&&openDrill(dow,h)} title={tooltip} style={{aspectRatio:overlayActive?"1.2":"1.4",background:col.bg,border:"1px solid "+col.border,borderRadius:4,cursor:has?"pointer":"default",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:col.fg,position:"relative",transition:"transform .15s",lineHeight:1.1}} onMouseEnter={e=>{if(has)e.currentTarget.style.transform="scale(1.08)"}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)"}}>
+            {has&&pct>0?pct+"%":""}
+            {/* v20.5.1: delta inline si overlay activo y hay baseline */}
+            {delta!=null&&Math.abs(delta)>=2&&<span style={{fontSize:7,fontWeight:800,color:delta>=0?(pct>=80?"#fff":C.grn):C.acc,marginTop:1,letterSpacing:0}}>{delta>=0?"↑":"↓"}{Math.abs(delta)}</span>}
+            {has&&cell.hot_deal_count>0&&<span style={{position:"absolute",top:1,right:2,fontSize:7}}>🔥</span>}
+          </div>})}
+        </React.Fragment>)}
+      </div>
+      {/* Legend */}
+      <div style={{display:"flex",justifyContent:"center",gap:8,marginTop:8,fontSize:9,color:C.tm,flexWrap:"wrap"}}>
+        <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{display:"inline-block",width:9,height:9,background:C.acc+"25",border:"1px solid "+C.acc+"50",borderRadius:2}}/>&lt;25%</span>
+        <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{display:"inline-block",width:9,height:9,background:C.gld+"30",border:"1px solid "+C.gld+"60",borderRadius:2}}/>25-50%</span>
+        <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{display:"inline-block",width:9,height:9,background:C.grn+"25",border:"1px solid "+C.grn+"60",borderRadius:2}}/>50-80%</span>
+        <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{display:"inline-block",width:9,height:9,background:C.grn+"50",border:"1px solid "+C.grn,borderRadius:2}}/>≥80%</span>
+        {overlayActive&&<span style={{display:"flex",alignItems:"center",gap:3,marginLeft:6,fontWeight:700}}><span style={{color:C.grn}}>↑</span>/<span style={{color:C.acc}}>↓</span> delta vs hace 4 sem</span>}
+      </div>
+    </>}
+
+    {/* Drill-down modal — sin cambios v20.5 */}
+    {drill&&ReactDOM.createPortal(<div onClick={()=>setDrill(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",zIndex:10000,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:0}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"20px 20px 0 0",padding:18,maxWidth:520,width:"100%",maxHeight:"82vh",overflowY:"auto",border:"1px solid "+C.bd}}>
+        <div style={{..._s.flexB,marginBottom:12,paddingBottom:10,borderBottom:"1px solid "+C.bd}}>
+          <div>
+            <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{drill.label}</div>
+            <div style={{fontSize:10,color:C.tm,marginTop:1}}>{mode==="historical"?"Últimas 4 semanas":"Próximas 4 semanas"} · {drill.summary?.slot_count||0} slot(s)</div>
+          </div>
+          <button onClick={()=>setDrill(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        </div>
+
+        {drill.can_hot_deal&&drill.summary?.hot_deal_eligible_count>0&&<button onClick={applyHotDealToCell} disabled={hotDealBusy} style={{width:"100%",padding:11,marginBottom:12,background:hotDealBusy?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:10,color:hotDealBusy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:hotDealBusy?"default":"pointer",letterSpacing:.3,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{hotDealBusy?"Aplicando…":<>🔥 Aplicar Hot Deal -20% a {drill.summary.hot_deal_eligible_count} slot(s)</>}</button>}
+
+        {drillLd?<Skeleton w="100%" h={120}/>:drill.slots.length===0?<div style={{textAlign:"center",padding:24,color:C.tm,fontSize:12}}>Sin slots en esta celda</div>:
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          {drill.slots.map(sl=>{const fillC=sl.occupancy_pct>=80?C.grn:sl.occupancy_pct>=50?C.grn:sl.occupancy_pct>=25?C.gld:C.acc;
+          return<div key={sl.id} style={{padding:"9px 11px",background:C.cd,border:"1px solid "+C.bd,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.txt,..._s.mono}}>{sl.slot_date} · {String(sl.slot_time).slice(0,5)}</div>
+              <div style={{fontSize:10,color:C.tm,marginTop:1}}>{sl.booked_count}/{sl.capacity} · ${fm(sl.price)}{sl.is_offer&&<span style={{color:C.acc,fontWeight:700,marginLeft:4}}>🔥 -{sl.discount_pct}%</span>}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:13,fontWeight:800,color:fillC,..._s.mono}}>{sl.occupancy_pct}%</div>
+            </div>
+          </div>})}
+        </div>}
+      </div>
+    </div>,document.body)}
+  </div>;
+}
+
+// v20.10: AdminCampaignsCard — email/WhatsApp campaigns nativos.
+// Lista campaigns con stats, modal de creación con preview, modal de detail con recipients.
+const SEGMENT_OPTIONS = [
+  {v:"all", lbl:"Todos los jugadores", desc:"Cualquiera con booking en últ. 12 meses"},
+  {v:"vip", lbl:"VIP (top 10%)", desc:"Top 10% por revenue"},
+  {v:"at_risk_vip", lbl:"VIP en riesgo", desc:"VIP sin venir hace +30d"},
+  {v:"high_freq", lbl:"Alta frecuencia", desc:"4+ bookings/mes"},
+  {v:"lapsed", lbl:"Inactivos", desc:"Sin venir hace +60d"},
+  {v:"new", lbl:"Nuevos", desc:"Primera booking en últ. 30d"},
+  {v:"morning_player", lbl:"Jugadores AM", desc:"≥80% bookings antes 10am"},
+  {v:"weekend_only", lbl:"Solo fin de semana", desc:"≥80% bookings sáb/dom"},
+];
+const STATUS_COLORS = {
+  draft:{bg:"#94a3b8",lbl:"BORRADOR"}, sending:{bg:"#3b82f6",lbl:"ENVIANDO"},
+  sent:{bg:"#10b981",lbl:"ENVIADO"}, partial:{bg:"#f59e0b",lbl:"PARCIAL"},
+  failed:{bg:"#ef4444",lbl:"FALLÓ"}, cancelled:{bg:"#6b7280",lbl:"CANCELADO"}
+};
+const RECIPIENT_STATUS_COLORS = {
+  pending:{bg:"#94a3b8",lbl:"Pendiente"}, sent:{bg:"#10b981",lbl:"Enviado"},
+  opened:{bg:"#3b82f6",lbl:"Abierto"}, clicked:{bg:"#8b5cf6",lbl:"Click"},
+  failed:{bg:"#ef4444",lbl:"Falló"}, bounced:{bg:"#f59e0b",lbl:"Bounced"},
+  skipped:{bg:"#6b7280",lbl:"Sin canal"}
+};
+
+function AdminCampaignsCard({course}){
+  const[ld,setLd]=useState(true);
+  const[campaigns,setCampaigns]=useState([]);
+  const[creating,setCreating]=useState(false);
+  const[detailId,setDetailId]=useState(null);
+
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);
+    const{data,error}=await sb.rpc("get_admin_campaigns",{p_course_id:course.id,p_limit:20});
+    if(error){console.warn("[v20.10] campaigns err:",error);setLd(false);return}
+    setCampaigns(data?.campaigns||[]);setLd(false);
+  }
+
+  return<div style={{marginBottom:14,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12}}>
+    <div style={{..._s.flexB,marginBottom:10}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:14}}>📨</span>Campañas
+        </div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Email + WhatsApp con targeting por segmento</div>
+      </div>
+      <button onClick={()=>setCreating(true)} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.acc},#ff6b81)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:.3}}>+ Nueva</button>
+    </div>
+
+    {ld?<Skeleton w="100%" h={120}/>:campaigns.length===0?<div style={{textAlign:"center",padding:24,color:C.tm,fontSize:11}}>
+      <div style={{fontSize:22,marginBottom:4}}>📭</div>
+      <div>Aún no has creado campañas</div>
+      <div style={{fontSize:10,marginTop:2,opacity:.8}}>Crea tu primera para reactivar jugadores o promocionar Hot Deals</div>
+    </div>:<div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {campaigns.map(c=>{const st=STATUS_COLORS[c.status]||{bg:"#999",lbl:c.status?.toUpperCase()};
+      const segLbl=SEGMENT_OPTIONS.find(s=>s.v===c.target_segment)?.lbl||c.target_segment;
+      return<div key={c.id} onClick={()=>setDetailId(c.id)} style={{padding:"9px 11px",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,cursor:"pointer",transition:"transform .15s"}} onMouseEnter={e=>e.currentTarget.style.transform="translateX(2px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateX(0)"}>
+        <div style={{..._s.flexB,marginBottom:3}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
+            <span style={{fontSize:14,flexShrink:0}}>{c.type==="email"?"✉️":"💬"}</span>
+            <span style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+          </div>
+          <span style={{fontSize:8,fontWeight:800,color:"#fff",background:st.bg,padding:"2px 6px",borderRadius:3,letterSpacing:.3,flexShrink:0}}>{st.lbl}</span>
+        </div>
+        <div style={{fontSize:10,color:C.tm,..._s.mono,display:"flex",justifyContent:"space-between",gap:8}}>
+          <span>{segLbl} · {c.recipient_count} dest.</span>
+          {c.status==="sent"||c.status==="partial"?<span>{c.sent_count} enviados{c.failed_count>0?` · ${c.failed_count} fallaron`:""}</span>:<span>{new Date(c.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>}
+        </div>
+      </div>})}
+    </div>}
+
+    {creating&&<CampaignCreateModal course={course} onClose={()=>setCreating(false)} onCreated={()=>{setCreating(false);load()}}/>}
+    {detailId&&<CampaignDetailModal campaignId={detailId} onClose={()=>setDetailId(null)} onSent={()=>{setDetailId(null);load()}}/>}
+  </div>;
+}
+
+function CampaignCreateModal({course,onClose,onCreated}){
+  const[type,setType]=useState("email");
+  const[name,setName]=useState("");
+  const[segment,setSegment]=useState("lapsed");
+  const[subject,setSubject]=useState("");
+  const[body,setBody]=useState("Hola {nombre}, te extrañamos en " + (course?.course_name||"") + ". Tienes 15% off esta semana 🏌️");
+  const[busy,setBusy]=useState(false);
+  const[result,setResult]=useState(null);
+  const previewName = "Roberto";
+
+  async function create(){
+    if(busy)return;
+    if(!name.trim()){window.__toast?.("Falta el nombre","warn");return}
+    if(type==="email"&&!subject.trim()){window.__toast?.("Falta el subject del email","warn");return}
+    if(!body.trim()){window.__toast?.("Falta el cuerpo del mensaje","warn");return}
+    setBusy(true);
+    const{data,error}=await sb.rpc("create_admin_campaign",{
+      p_course_id:course.id, p_type:type, p_name:name,
+      p_subject:type==="email"?subject:null, p_body:body, p_target_segment:segment
+    });
+    setBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    setResult(data);
+    window.__toast?.(`Campaña creada · ${data.recipient_count} destinatarios (${data.pending_count} pendientes, ${data.skipped_count} sin canal)`,"success");
+  }
+
+  return ReactDOM.createPortal(<div onClick={()=>{if(!busy&&!result)onClose()}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",zIndex:10001,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"20px 20px 0 0",padding:18,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",border:"1px solid "+C.bd}}>
+      <div style={{..._s.flexB,marginBottom:14,paddingBottom:10,borderBottom:"1px solid "+C.bd}}>
+        <div style={{fontSize:14,fontWeight:800,color:C.txt}}>📨 Nueva campaña</div>
+        <button onClick={()=>{if(!busy&&!result)onClose()}} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+      </div>
+
+      {result?<div style={{textAlign:"center",padding:"20px 0"}}>
+        <div style={{fontSize:42,marginBottom:8}}>✅</div>
+        <div style={{fontSize:14,fontWeight:800,color:C.txt,marginBottom:6}}>Campaña creada como borrador</div>
+        <div style={{fontSize:11,color:C.tm,..._s.mono,marginBottom:14}}>{result.recipient_count} destinatarios · {result.pending_count} listos · {result.skipped_count} sin canal</div>
+        <button onClick={()=>{onCreated()}} style={{padding:"11px 22px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",letterSpacing:.3}}>Ver y enviar</button>
+      </div>:<>
+        {/* Type selector */}
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:5}}>CANAL</div>
+          <div style={{display:"flex",gap:6}}>
+            {[{v:"email",lbl:"✉️ Email",desc:"Envío via Resend"},{v:"whatsapp",lbl:"💬 WhatsApp",desc:"Click-to-chat manual"}].map(o=><button key={o.v} onClick={()=>setType(o.v)} style={{flex:1,padding:"10px 8px",background:type===o.v?C.acc+"15":C.cd,border:"1px solid "+(type===o.v?C.acc:C.bd),borderRadius:8,color:type===o.v?C.acc:C.ts,fontSize:11,fontWeight:type===o.v?800:600,cursor:"pointer"}}>
+              <div>{o.lbl}</div>
+              <div style={{fontSize:9,marginTop:1,opacity:.7,fontWeight:500}}>{o.desc}</div>
+            </button>)}
+          </div>
+          {type==="whatsapp"&&<div style={{fontSize:10,color:C.gld,marginTop:6,padding:"6px 8px",background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:6,lineHeight:1.4}}>WhatsApp se envía manualmente (click-to-chat). Próximamente: integración Twilio para envío automático.</div>}
+        </div>
+
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:5}}>NOMBRE INTERNO</div>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Win-back inactivos mayo" style={{width:"100%",padding:9,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:12,outline:"none"}}/>
+        </div>
+
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:5}}>SEGMENTO OBJETIVO</div>
+          <select value={segment} onChange={e=>setSegment(e.target.value)} style={{width:"100%",padding:9,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:12,outline:"none"}}>
+            {SEGMENT_OPTIONS.map(s=><option key={s.v} value={s.v}>{s.lbl} — {s.desc}</option>)}
+          </select>
+        </div>
+
+        {type==="email"&&<div style={{marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:5}}>SUBJECT</div>
+          <input value={subject} onChange={e=>setSubject(e.target.value)} placeholder="Te extrañamos — 15% off esta semana" style={{width:"100%",padding:9,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:12,outline:"none"}}/>
+        </div>}
+
+        <div style={{marginBottom:12}}>
+          <div style={{..._s.flexB,marginBottom:5}}>
+            <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:.5}}>MENSAJE</div>
+            <div style={{fontSize:9,color:C.tm,opacity:.8}}>Variables: <code style={{color:C.acc,..._s.mono}}>{"{nombre}"}</code></div>
+          </div>
+          <textarea value={body} onChange={e=>setBody(e.target.value)} rows={5} placeholder="Hola {nombre}, …" style={{width:"100%",padding:9,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:12,outline:"none",resize:"vertical",fontFamily:"inherit",lineHeight:1.5}}/>
+        </div>
+
+        <div style={{marginBottom:14,padding:10,background:C.bg,border:"1px dashed "+C.bd,borderRadius:8}}>
+          <div style={{fontSize:9,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:5}}>📱 PREVIEW (con "{previewName}")</div>
+          {type==="email"&&subject&&<div style={{fontSize:11,fontWeight:700,color:C.txt,marginBottom:5,paddingBottom:5,borderBottom:"1px solid "+C.bd}}>Asunto: {subject.replaceAll("{nombre}",previewName)}</div>}
+          <div style={{fontSize:11,color:C.ts,whiteSpace:"pre-wrap",lineHeight:1.5}}>{body.replaceAll("{nombre}",previewName)||<em style={{color:C.tm}}>(empty)</em>}</div>
+        </div>
+
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={onClose} disabled={busy} style={{flex:1,padding:11,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.tm,fontSize:12,fontWeight:700,cursor:busy?"default":"pointer"}}>Cancelar</button>
+          <button onClick={create} disabled={busy} style={{flex:2,padding:11,background:busy?C.bd:`linear-gradient(135deg,${C.acc},#ff6b81)`,border:"none",borderRadius:10,color:busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"Creando…":"Crear como borrador"}</button>
+        </div>
+      </>}
+    </div>
+  </div>,document.body);
+}
+
+function CampaignDetailModal({campaignId,onClose,onSent}){
+  const[ld,setLd]=useState(true);
+  const[data,setData]=useState(null);
+  const[sending,setSending]=useState(false);
+
+  useEffect(()=>{load()},[campaignId]);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_campaign_detail",{p_campaign_id:campaignId});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
+    setData(r);setLd(false);
+  }
+
+  async function sendNow(){
+    if(sending)return;
+    if(!confirm(`¿Confirmas enviar a ${data.campaign.recipient_count} destinatarios? No se puede deshacer.`))return;
+    setSending(true);
+    try{
+      const{data:{session}}=await sb.auth.getSession();
+      const res=await fetch(`${SB_FN_URL}/send-admin-campaign`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`},
+        body:JSON.stringify({campaign_id:campaignId})
+      });
+      const r=await res.json();
+      if(!res.ok)throw new Error(r.error||"send failed");
+      window.__toast?.(`Enviado · ${r.sent} OK${r.failed>0?`, ${r.failed} fallaron`:""}`,"success");
+      onSent();
+    }catch(e){
+      window.__toast?.("Error: "+e.message,"warn");
+    }finally{setSending(false)}
+  }
+
+  function copyWhatsAppLink(rec){
+    if(!data?.campaign?.body){return}
+    const firstName=(rec.name||"").split(" ")[0]||"amigo";
+    const msg=data.campaign.body.replaceAll("{nombre}",firstName);
+    const phone=(rec.phone||"").replace(/[^\d]/g,"");
+    const url=`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    window.open(url,"_blank");
+  }
+
+  return ReactDOM.createPortal(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",zIndex:10001,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"20px 20px 0 0",padding:18,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",border:"1px solid "+C.bd}}>
+      {ld?<Skeleton w="100%" h={300}/>:!data?<div style={{padding:20,textAlign:"center",color:C.tm}}>Sin datos</div>:<>
+        <div style={{..._s.flexB,marginBottom:12,paddingBottom:10,borderBottom:"1px solid "+C.bd}}>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+              <span style={{fontSize:14}}>{data.campaign.type==="email"?"✉️":"💬"}</span>
+              <span style={{fontSize:13,fontWeight:800,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.campaign.name}</span>
+            </div>
+            <div style={{fontSize:10,color:C.tm}}>{SEGMENT_OPTIONS.find(s=>s.v===data.campaign.target_segment)?.lbl||data.campaign.target_segment}</div>
+          </div>
+          <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        </div>
+
+        {/* Stats */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5,marginBottom:12}}>
+          <div style={{padding:7,background:C.cd,border:"1px solid "+C.bd,borderRadius:7,textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:900,color:C.txt,..._s.mono}}>{data.campaign.recipient_count}</div>
+            <div style={{fontSize:8,color:C.tm}}>Destinatarios</div>
+          </div>
+          <div style={{padding:7,background:C.grn+"10",border:"1px solid "+C.grn+"30",borderRadius:7,textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:900,color:C.grn,..._s.mono}}>{data.campaign.sent_count}</div>
+            <div style={{fontSize:8,color:C.tm}}>Enviados</div>
+          </div>
+          <div style={{padding:7,background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:7,textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:900,color:C.acc,..._s.mono}}>{data.campaign.failed_count}</div>
+            <div style={{fontSize:8,color:C.tm}}>Fallaron</div>
+          </div>
+          <div style={{padding:7,background:"#3b82f615",border:"1px solid #3b82f640",borderRadius:7,textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:900,color:"#3b82f6",..._s.mono}}>{data.campaign.opened_count||0}</div>
+            <div style={{fontSize:8,color:C.tm}}>Abiertos</div>
+          </div>
+        </div>
+
+        {/* Subject + body preview */}
+        <div style={{marginBottom:12,padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:8}}>
+          {data.campaign.subject&&<div style={{fontSize:10,fontWeight:700,color:C.txt,marginBottom:5,paddingBottom:5,borderBottom:"1px solid "+C.bd}}>Asunto: {data.campaign.subject}</div>}
+          <div style={{fontSize:11,color:C.ts,whiteSpace:"pre-wrap",lineHeight:1.5}}>{data.campaign.body}</div>
+        </div>
+
+        {/* Send button (solo si draft) */}
+        {data.campaign.status==="draft"&&<button onClick={sendNow} disabled={sending} style={{width:"100%",padding:12,background:sending?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:sending?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:sending?"default":"pointer",marginBottom:14,letterSpacing:.3}}>{sending?"Enviando…":`📨 Enviar ahora a ${data.campaign.recipient_count} destinatarios`}</button>}
+
+        {/* Recipients list */}
+        <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:6}}>DESTINATARIOS ({data.recipients.length})</div>
+        <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:280,overflowY:"auto"}}>
+          {data.recipients.map((r,i)=>{const sc=RECIPIENT_STATUS_COLORS[r.status]||{bg:"#999",lbl:r.status};
+          const canWA=data.campaign.type==="whatsapp"&&r.phone&&r.status!=="failed";
+          return<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",background:C.cd,border:"1px solid "+C.bd,borderRadius:6,cursor:canWA?"pointer":"default"}} onClick={canWA?()=>copyWhatsAppLink(r):null}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name||r.email||"Sin nombre"}</div>
+              <div style={{fontSize:9,color:C.tm,..._s.mono}}>{data.campaign.type==="email"?(r.email||"sin email"):(r.phone||"sin tel")}</div>
+            </div>
+            {r.error_msg&&<span title={r.error_msg} style={{fontSize:9,color:C.acc,opacity:.8}}>!</span>}
+            <span style={{fontSize:8,fontWeight:800,color:"#fff",background:sc.bg,padding:"2px 6px",borderRadius:3,letterSpacing:.3,flexShrink:0}}>{sc.lbl}</span>
+            {canWA&&<span style={{fontSize:11,opacity:.7}}>↗</span>}
+          </div>})}
+        </div>
+        {data.campaign.type==="whatsapp"&&data.campaign.status==="sent"&&<div style={{fontSize:10,color:C.tm,marginTop:10,padding:8,background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:6,lineHeight:1.4}}>💡 Click cada destinatario para abrir WhatsApp con el mensaje pre-rellenado.</div>}
+      </>}
+    </div>
+  </div>,document.body);
+}
+
+// v20.9: DailyPulseCard — agregador diario de eventos accionables. Top of fold en AdminDash.
+// Solo renderiza si has_alerts=true (evita ruido en días sin novedad).
+function DailyPulseCard({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+  const[busy,setBusy]=useState(false);
+
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_daily_pulse",{p_course_id:course.id});
+    if(error){console.warn("[v20.9] pulse err:",error);setLd(false);return}
+    setData(r);setLd(false);
+  }
+  async function dispatchPush(){
+    if(busy)return;
+    setBusy(true);
+    const{data:r,error}=await sb.rpc("dispatch_admin_pulse",{p_course_id:course.id});
+    setBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(r?.already_dispatched_today)window.__toast?.("Ya se envió el pulse de hoy","info");
+    else window.__toast?.("Notificación enviada · "+(r?.anomaly_count||0)+" alertas","success");
+  }
+
+  if(ld)return<Skeleton w="100%" h={80}/>;
+  if(!data)return null;
+
+  const m=data.metrics||{};
+  const an=data.anomalies||[];
+  const hasAlerts=data.has_alerts;
+
+  // Si no hay alertas, render compacto con solo hero metrics
+  if(!hasAlerts){
+    return<div style={{marginBottom:14,padding:12,background:`linear-gradient(135deg,${C.grn}08,${C.cd})`,border:"1px solid "+C.grn+"30",borderRadius:12,display:"flex",alignItems:"center",gap:12}}>
+      <div style={{width:36,height:36,borderRadius:18,background:C.grn+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🌟</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Buenos días — todo en orden</div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1,..._s.mono}}>{m.bookings_today} hoy · ${fm(m.revenue_today)} · {m.bookings_tomorrow} mañana</div>
+      </div>
+    </div>;
+  }
+
+  function severityColors(s){
+    if(s==="critical")return{bg:C.acc+"15",border:C.acc+"50",fg:C.acc};
+    if(s==="warning")return{bg:C.gld+"15",border:C.gld+"50",fg:C.gld};
+    if(s==="success")return{bg:C.grn+"15",border:C.grn+"50",fg:C.grn};
+    return{bg:C.tm+"15",border:C.tm+"40",fg:C.tm};
+  }
+
+  return<div style={{marginBottom:14,padding:12,background:`linear-gradient(135deg,${C.cd},${C.acc}05)`,border:"1px solid "+C.acc+"40",borderRadius:12}}>
+    <div style={{..._s.flexB,marginBottom:10}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:14}}>📡</span>Pulse de hoy · {an.length} alerta{an.length===1?"":"s"}
+        </div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1,..._s.mono}}>{m.bookings_today} hoy · ${fm(m.revenue_today)} · ayer ${fm(m.revenue_yesterday)}</div>
+      </div>
+      <button onClick={dispatchPush} disabled={busy} title="Marcar como notificado (en v20.11 será automático cada mañana)" style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+C.bd,background:"transparent",color:busy?C.tm:C.ts,fontSize:10,fontWeight:700,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"…":"📲 Notificar"}</button>
+    </div>
+
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {an.map((a,i)=>{const sv=severityColors(a.severity);
+      return<div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 11px",background:sv.bg,border:"1px solid "+sv.border,borderRadius:8}}>
+        <span style={{fontSize:18,lineHeight:1,marginTop:1}}>{a.icon}</span>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,fontWeight:800,color:sv.fg,marginBottom:2}}>{a.title}</div>
+          <div style={{fontSize:10,color:C.ts,lineHeight:1.4}}>{a.detail}</div>
+        </div>
+      </div>})}
+    </div>
+  </div>;
+}
+
+// v20.8: ChurnRiskPanel — detecta jugadores at-risk y permite acción inmediata.
+// Lista top players con severity badge, click → modal con winback message + dismiss/contacted.
+function ChurnRiskPanel({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+  const[selected,setSelected]=useState(null);  // user_id seleccionado para winback
+  const[winback,setWinback]=useState(null);    // {whatsapp, email, ...}
+  const[winbackLd,setWinbackLd]=useState(false);
+  const[notesInput,setNotesInput]=useState("");
+  const[busy,setBusy]=useState(false);
+
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_churn_risk",{p_course_id:course.id,p_min_score:40,p_limit:15});
+    if(error){console.warn("[v20.8] churn err:",error);setLd(false);return}
+    setData(r);setLd(false);
+  }
+  async function openWinback(player){
+    setSelected(player);setWinback(null);setWinbackLd(true);setNotesInput("");
+    const{data:r,error}=await sb.rpc("generate_winback_message",{p_course_id:course.id,p_user_id:player.user_id});
+    setWinbackLd(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    setWinback(r);
+  }
+  async function dismissAlert(action){
+    if(busy||!selected)return;
+    setBusy(true);
+    const{error}=await sb.rpc("dismiss_churn_alert",{p_course_id:course.id,p_user_id:selected.user_id,p_action:action,p_notes:notesInput||null});
+    setBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.(action==="contacted"?"Marcado como contactado ✓":action==="recovered"?"Recuperado ✓":"Descartado","success");
+    setSelected(null);setWinback(null);load();
+  }
+  function copyToClipboard(text,what){
+    navigator.clipboard?.writeText(text).then(()=>window.__toast?.(what+" copiado al portapapeles","success")).catch(()=>window.__toast?.("No se pudo copiar","warn"));
+  }
+
+  const sm=data?.summary;
+  const players=data?.players||[];
+
+  function severityColors(s){
+    if(s==="critical")return{bg:C.acc+"15",border:C.acc+"50",fg:C.acc,label:"CRITICAL"};
+    if(s==="warning")return{bg:C.gld+"15",border:C.gld+"50",fg:C.gld,label:"WARNING"};
+    return{bg:C.tm+"15",border:C.tm+"40",fg:C.tm,label:"MONITOR"};
+  }
+
+  return<div style={{marginBottom:14,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12}}>
+    <div style={{..._s.flexB,marginBottom:10}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:14}}>🎯</span>Riesgo de churn
+        </div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Jugadores en riesgo de no regresar — score basado en patrón histórico</div>
+      </div>
+      {sm?.total_at_risk>0&&<div style={{fontSize:9,color:C.tm,fontWeight:700,..._s.mono}}>{sm.total_at_risk} en riesgo</div>}
+    </div>
+
+    {ld?<Skeleton w="100%" h={140}/>:!sm||sm.total_at_risk===0?<div style={{textAlign:"center",padding:20,color:C.tm,fontSize:12}}>
+      <div style={{fontSize:24,marginBottom:4}}>✅</div>
+      <div>Sin jugadores en riesgo detectados</div>
+      <div style={{fontSize:10,marginTop:2,opacity:.8}}>Todos los jugadores están dentro de su patrón habitual</div>
+    </div>:<>
+      {/* Summary cards */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5,marginBottom:10}}>
+        <div style={{padding:7,background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:7,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:900,color:C.acc,..._s.mono}}>{sm.critical||0}</div>
+          <div style={{fontSize:8,color:C.tm}}>Crítico</div>
+        </div>
+        <div style={{padding:7,background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:7,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:900,color:C.gld,..._s.mono}}>{sm.warning||0}</div>
+          <div style={{fontSize:8,color:C.tm}}>Warning</div>
+        </div>
+        <div style={{padding:7,background:C.tm+"10",border:"1px solid "+C.tm+"30",borderRadius:7,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:900,color:C.tm,..._s.mono}}>{sm.critical_vips||0}</div>
+          <div style={{fontSize:8,color:C.tm}}>VIPs crít.</div>
+        </div>
+        <div style={{padding:7,background:`linear-gradient(135deg,${C.acc}15,${C.gld}10)`,border:"1px solid "+C.acc+"30",borderRadius:7,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:900,color:C.acc,..._s.mono}}>${fm(Math.round(sm.revenue_at_risk||0))}</div>
+          <div style={{fontSize:8,color:C.tm}}>Rev. en riesgo</div>
+        </div>
+      </div>
+
+      {/* Players list */}
+      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+        {players.slice(0,8).map(pl=>{const sev=severityColors(pl.severity);
+        return<div key={pl.user_id} onClick={()=>openWinback(pl)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.bg,border:"1px solid "+sev.border,borderRadius:8,cursor:"pointer",transition:"transform .15s"}} onMouseEnter={e=>e.currentTarget.style.transform="translateX(2px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateX(0)"}>
+          <div style={{width:34,height:34,borderRadius:17,background:sev.bg,border:"1px solid "+sev.border,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:13,fontWeight:900,color:sev.fg,..._s.mono}}>{pl.risk_score}</span>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:1}}>
+              <span style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</span>
+              {pl.is_vip&&<span style={{fontSize:8,fontWeight:800,color:C.gld,background:C.gld+"15",padding:"1px 5px",borderRadius:3}}>VIP</span>}
+            </div>
+            <div style={{fontSize:10,color:C.tm,..._s.mono}}>
+              {pl.days_since_last}d sin venir · juega cada {pl.avg_gap_days}d normalmente · {pl.urgency_ratio}× su gap
+            </div>
+          </div>
+          <div style={{textAlign:"right",fontSize:9,color:sev.fg,fontWeight:800,letterSpacing:.3,flexShrink:0}}>{sev.label}</div>
+        </div>})}
+      </div>
+      {players.length>8&&<div style={{textAlign:"center",fontSize:10,color:C.tm,marginTop:6}}>+{players.length-8} más jugadores en riesgo</div>}
+    </>}
+
+    {/* Modal winback */}
+    {selected&&ReactDOM.createPortal(<div onClick={()=>{if(!busy){setSelected(null);setWinback(null)}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",zIndex:10001,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"20px 20px 0 0",padding:18,maxWidth:560,width:"100%",maxHeight:"88vh",overflowY:"auto",border:"1px solid "+C.bd}}>
+        <div style={{..._s.flexB,marginBottom:12,paddingBottom:10,borderBottom:"1px solid "+C.bd}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:14,fontWeight:800,color:C.txt}}>{selected.name}</span>
+              {selected.is_vip&&<span style={{fontSize:9,fontWeight:800,color:C.gld,background:C.gld+"15",padding:"2px 6px",borderRadius:4,letterSpacing:.3}}>VIP</span>}
+            </div>
+            <div style={{fontSize:10,color:C.tm,marginTop:1}}>Score {selected.risk_score} · {selected.days_since_last}d sin venir · LTV ${fm(selected.revenue_12mo)}</div>
+          </div>
+          <button onClick={()=>{if(!busy){setSelected(null);setWinback(null)}}} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        </div>
+
+        {/* Recommended action */}
+        <div style={{padding:10,background:C.acc+"08",border:"1px solid "+C.acc+"25",borderRadius:8,marginBottom:12,fontSize:11,color:C.ts,display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:13}}>💡</span>
+          <span><strong style={{color:C.acc}}>Sugerencia:</strong> {selected.recommended_action}</span>
+        </div>
+
+        {winbackLd?<Skeleton w="100%" h={200}/>:winback?<>
+          {/* WhatsApp message */}
+          <div style={{marginBottom:12}}>
+            <div style={{..._s.flexB,marginBottom:5}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.5}}>📱 MENSAJE WHATSAPP</div>
+              <button onClick={()=>copyToClipboard(winback.whatsapp,"WhatsApp")} style={{padding:"4px 10px",background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:6,color:C.grn,fontSize:10,fontWeight:700,cursor:"pointer"}}>📋 Copiar</button>
+            </div>
+            <div style={{padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,fontSize:11,color:C.ts,whiteSpace:"pre-wrap",lineHeight:1.5}}>{winback.whatsapp}</div>
+          </div>
+
+          {/* Email message */}
+          <div style={{marginBottom:12}}>
+            <div style={{..._s.flexB,marginBottom:5}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.5}}>✉️ EMAIL</div>
+              <button onClick={()=>copyToClipboard("Subject: "+winback.email.subject+"\n\n"+winback.email.body,"Email")} style={{padding:"4px 10px",background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:6,color:C.grn,fontSize:10,fontWeight:700,cursor:"pointer"}}>📋 Copiar</button>
+            </div>
+            <div style={{padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:8}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.txt,marginBottom:4,paddingBottom:4,borderBottom:"1px solid "+C.bd}}>Asunto: {winback.email.subject}</div>
+              <div style={{fontSize:11,color:C.ts,whiteSpace:"pre-wrap",lineHeight:1.5}}>{winback.email.body}</div>
+            </div>
+          </div>
+
+          {/* Notes input */}
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:5}}>📝 NOTAS (opcional)</div>
+            <textarea value={notesInput} onChange={e=>setNotesInput(e.target.value)} placeholder="Ej: Lo llamé al teléfono, va a venir el sábado…" rows={2} style={{width:"100%",padding:8,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:11,outline:"none",resize:"vertical",fontFamily:"inherit"}}/>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>dismissAlert("contacted")} disabled={busy} style={{flex:2,padding:11,background:busy?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"…":"✓ Marcar como contactado"}</button>
+            <button onClick={()=>dismissAlert("recovered")} disabled={busy} title="Marcar como recuperado (regresó al campo)" style={{flex:1,padding:11,background:"transparent",border:"1px solid "+C.gld+"40",borderRadius:10,color:C.gld,fontSize:11,fontWeight:700,cursor:busy?"default":"pointer"}}>🏆 Recuperado</button>
+            <button onClick={()=>dismissAlert("dismissed")} disabled={busy} title="Descartar esta alerta" style={{padding:11,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.tm,fontSize:11,fontWeight:700,cursor:busy?"default":"pointer"}}>Descartar</button>
+          </div>
+        </>:null}
+      </div>
+    </div>,document.body)}
+  </div>;
+}
+
+// v20.7: WeeklyInsightCard — narrativa generada por LLM (Claude Haiku) o template.
+// Carga el último insight via RPC; permite regenerar via edge function generate-weekly-insight.
+// Render markdown ligero inline (## ### ** _ - ).
+function WeeklyInsightCard({course}){
+  const[data,setData]=useState(null);  // { id, week_start, week_end, insight_md, source, generated_at, kpi_snapshot }
+  const[ld,setLd]=useState(true);
+  const[busy,setBusy]=useState(false);  // generando
+
+  useEffect(()=>{loadLatest()},[course?.id]);
+  async function loadLatest(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_latest_weekly_insight",{p_course_id:course.id});
+    if(error){console.warn("[v20.7] latest err:",error);setLd(false);return}
+    setData(r);setLd(false);
+  }
+
+  async function regenerate(force){
+    if(busy)return;
+    setBusy(true);
+    try{
+      const tk=await sb.auth.getSession().then(({data})=>data?.session?.access_token);
+      if(!tk){window.__toast?.("Sesión no válida","warn");setBusy(false);return}
+      const res=await fetch(SB_FN_URL+"/generate-weekly-insight",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},
+        body:JSON.stringify({course_id:course.id,force:!!force})
+      });
+      const j=await res.json();
+      if(!res.ok)throw new Error(j?.error||"error");
+      setData(j.insight);
+      window.__toast?.(force?"Insight regenerado":(j.cached?"Insight cargado (caché)":"Nuevo insight generado"),"success");
+    }catch(e){console.warn("[v20.7] regenerate err:",e);window.__toast?.("Error: "+String(e),"warn")}
+    setBusy(false);
+  }
+
+  // Markdown ligero → JSX. Soporta ## ### ** _ - y párrafos.
+  function renderMd(md){
+    if(!md)return null;
+    const lines=md.split("\n");
+    const blocks=[];let listBuf=[];
+    function flushList(){
+      if(listBuf.length){
+        blocks.push(<ul key={"l"+blocks.length} style={{margin:"4px 0 8px 0",paddingLeft:18,listStyle:"disc"}}>
+          {listBuf.map((it,i)=><li key={i} style={{fontSize:12,color:C.ts,marginBottom:3,lineHeight:1.5}}>{renderInline(it)}</li>)}
+        </ul>);
+        listBuf=[];
+      }
+    }
+    function renderInline(text){
+      // Procesar **bold** y _italic_ en orden — usando split + flatMap
+      const parts=[];let cursor=0;const re=/(\*\*[^*]+\*\*|_[^_]+_)/g;let m;
+      while((m=re.exec(text))!==null){
+        if(m.index>cursor)parts.push(text.slice(cursor,m.index));
+        if(m[0].startsWith("**"))parts.push(<strong key={m.index} style={{color:C.txt,fontWeight:800}}>{m[0].slice(2,-2)}</strong>);
+        else parts.push(<em key={m.index} style={{color:C.tm,fontStyle:"italic"}}>{m[0].slice(1,-1)}</em>);
+        cursor=m.index+m[0].length;
+      }
+      if(cursor<text.length)parts.push(text.slice(cursor));
+      return parts.length?parts:text;
+    }
+    lines.forEach((line,idx)=>{
+      const trimmed=line.trim();
+      if(!trimmed){flushList();return}
+      if(trimmed.startsWith("## ")){flushList();blocks.push(<h3 key={"h"+idx} style={{fontSize:14,fontWeight:800,color:C.txt,margin:"6px 0 6px 0",letterSpacing:"-0.01em"}}>{renderInline(trimmed.slice(3))}</h3>);return}
+      if(trimmed.startsWith("### ")){flushList();blocks.push(<h4 key={"h"+idx} style={{fontSize:12,fontWeight:800,color:C.gld,margin:"8px 0 4px 0",letterSpacing:.3,textTransform:"uppercase"}}>{renderInline(trimmed.slice(4))}</h4>);return}
+      if(trimmed.startsWith("- ")){listBuf.push(trimmed.slice(2));return}
+      flushList();
+      blocks.push(<p key={"p"+idx} style={{fontSize:12,color:C.ts,margin:"4px 0",lineHeight:1.55}}>{renderInline(trimmed)}</p>);
+    });
+    flushList();
+    return blocks;
+  }
+
+  const sourceBadge=data?.source==="claude"?{label:"AI · Claude",color:"#7c3aed",icon:"🤖"}:data?.source==="template"?{label:"Template",color:C.tm,icon:"📋"}:{label:"Manual",color:C.gld,icon:"✍️"};
+  const ago=data?.generated_at?(()=>{const ms=Date.now()-new Date(data.generated_at).getTime();const h=Math.floor(ms/3600000);const d=Math.floor(h/24);return d>0?`hace ${d}d`:h>0?`hace ${h}h`:"hace minutos"})():"";
+
+  return<div style={{marginBottom:14,padding:14,background:`linear-gradient(135deg,${C.cd},${C.c2||C.cd})`,border:"1px solid "+C.bd,borderRadius:14}}>
+    <div style={{..._s.flexB,marginBottom:10,flexWrap:"wrap",gap:8}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:14}}>📰</span>Insight semanal
+        </div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>{data?`Semana ${data.week_start} → ${data.week_end}`:"Resumen ejecutivo automático"}</div>
+      </div>
+      {data&&<div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <span title={data.generated_at} style={{padding:"3px 8px",borderRadius:6,background:sourceBadge.color+"15",color:sourceBadge.color,fontSize:9,fontWeight:800,letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:3}}>{sourceBadge.icon} {sourceBadge.label}</span>
+        <span style={{fontSize:9,color:C.tm,..._s.mono}}>{ago}</span>
+      </div>}
+    </div>
+
+    {ld?<Skeleton w="100%" h={140}/>:!data?<div style={{textAlign:"center",padding:24,background:C.bg,border:"1px dashed "+C.bd,borderRadius:10}}>
+      <div style={{fontSize:11,color:C.tm,marginBottom:10}}>Aún no se ha generado un insight para este campo.</div>
+      <button onClick={()=>regenerate(false)} disabled={busy} style={{padding:"10px 16px",background:busy?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:10,color:busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"Generando…":"📰 Generar mi primer insight"}</button>
+    </div>:<>
+      <div style={{padding:"4px 2px"}}>{renderMd(data.insight_md)}</div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:10,paddingTop:8,borderTop:"1px solid "+C.bd}}>
+        <button onClick={()=>regenerate(true)} disabled={busy} style={{padding:"6px 12px",background:"transparent",border:"1px solid "+C.bd,borderRadius:8,color:busy?C.tm:C.ts,fontSize:10,fontWeight:700,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"Regenerando…":"🔄 Regenerar"}</button>
+      </div>
+    </>}
+  </div>;
+}
+
+// v20.6: IntelligencePanel — wrapper para 3 componentes Intelligence (Cohort + LTV + Segments).
+// Renderizado en AdminDash 2.0 después del YieldHeatmap. Lazy: cada sub-componente carga su propia data.
+function IntelligencePanel({course}){
+  return<div style={{marginBottom:16}}>
+    <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+      <span style={{fontSize:14}}>🧠</span>Insights & cohortes
+    </div>
+    <CohortRetentionTable course={course}/>
+    <LtvSummary course={course}/>
+    <PlayerSegmentsDist course={course}/>
+  </div>;
+}
+
+// v20.6: CohortRetentionTable — matriz cohorts × periods con celdas color-graded.
+// Cada cohort = mes de la primera booking del user. Periods = meses subsecuentes.
+function CohortRetentionTable({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+  const[months,setMonths]=useState(6);
+
+  useEffect(()=>{load()},[course?.id,months]);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_cohort_retention",{p_course_id:course.id,p_months_back:months});
+    if(error){console.warn("[v20.6] cohort err:",error);setLd(false);return}
+    setData(r);setLd(false);
+  }
+
+  // Color por % retention. Verde fuerte ≥80%, verde claro 50-80%, amarillo 25-50%, rojo <25%.
+  function pctColor(pct){
+    if(pct>=80)return{bg:C.grn+"40",fg:"#fff"};
+    if(pct>=50)return{bg:C.grn+"22",fg:C.txt};
+    if(pct>=25)return{bg:C.gld+"30",fg:C.txt};
+    if(pct>0)return{bg:C.acc+"22",fg:C.acc};
+    return{bg:C.bd+"15",fg:C.tm};
+  }
+
+  const sm=data?.summary;
+  const cohorts=data?.cohorts||[];
+  // Determinar el max period_index visible para el header
+  const maxPeriod=Math.max(...cohorts.map(c=>{const keys=Object.keys(c.retention||{}).map(k=>parseInt(k,10));return keys.length>0?Math.max(...keys):0}),3);
+
+  return<div style={{marginBottom:14,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12}}>
+    <div style={{..._s.flexB,marginBottom:8,flexWrap:"wrap",gap:6}}>
+      <div>
+        <div style={{fontSize:12,fontWeight:800,color:C.txt}}>📊 Retención por cohorte</div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>% de jugadores que regresaron en cada mes posterior a su 1ra reserva</div>
+      </div>
+      <div style={{display:"flex",gap:3,padding:2,background:C.bg,borderRadius:6}}>
+        {[3,6,12].map(m=><button key={m} onClick={()=>setMonths(m)} style={{padding:"3px 8px",borderRadius:4,border:"none",background:months===m?C.acc:"transparent",color:months===m?"#fff":C.tm,fontSize:9,fontWeight:700,cursor:"pointer"}}>{m}m</button>)}
+      </div>
+    </div>
+
+    {ld?<Skeleton w="100%" h={120}/>:!cohorts.length?<div style={{textAlign:"center",padding:20,color:C.tm,fontSize:11}}>Sin cohortes aún. Necesitas usuarios con bookings históricas.</div>:<>
+      {/* Summary KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5,marginBottom:8}}>
+        <div style={{padding:6,background:C.bg,border:"1px solid "+C.bd,borderRadius:6,textAlign:"center"}}>
+          <div style={{fontSize:13,fontWeight:900,color:C.txt,..._s.mono}}>{sm?.total_users||0}</div>
+          <div style={{fontSize:8,color:C.tm}}>Users</div>
+        </div>
+        <div style={{padding:6,background:C.bg,border:"1px solid "+C.bd,borderRadius:6,textAlign:"center"}}>
+          <div style={{fontSize:13,fontWeight:900,color:(sm?.avg_retention_m1||0)>=50?C.grn:C.gld,..._s.mono}}>{sm?.avg_retention_m1||0}%</div>
+          <div style={{fontSize:8,color:C.tm}}>Retención M+1</div>
+        </div>
+        <div style={{padding:6,background:C.bg,border:"1px solid "+C.bd,borderRadius:6,textAlign:"center"}}>
+          <div style={{fontSize:13,fontWeight:900,color:(sm?.avg_retention_m2||0)>=40?C.grn:C.gld,..._s.mono}}>{sm?.avg_retention_m2||0}%</div>
+          <div style={{fontSize:8,color:C.tm}}>Retención M+2</div>
+        </div>
+        <div style={{padding:6,background:C.bg,border:"1px solid "+C.bd,borderRadius:6,textAlign:"center"}}>
+          <div style={{fontSize:13,fontWeight:900,color:(sm?.avg_retention_m3||0)>=30?C.grn:C.gld,..._s.mono}}>{sm?.avg_retention_m3||0}%</div>
+          <div style={{fontSize:8,color:C.tm}}>Retención M+3</div>
+        </div>
+      </div>
+
+      {/* Matrix table */}
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"separate",borderSpacing:2,fontSize:9,..._s.mono}}>
+          <thead>
+            <tr>
+              <th style={{textAlign:"left",padding:"4px 6px",fontSize:9,color:C.tm,fontWeight:700}}>Cohorte</th>
+              <th style={{textAlign:"center",padding:"4px 6px",fontSize:9,color:C.tm,fontWeight:700}}>Size</th>
+              {Array.from({length:Math.min(maxPeriod+1,6)},(_,i)=>i).map(p=>
+                <th key={p} style={{textAlign:"center",padding:"4px 6px",fontSize:9,color:C.tm,fontWeight:700,minWidth:40}}>M+{p}</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {cohorts.map(c=><tr key={c.cohort_month}>
+              <td style={{padding:"5px 6px",fontSize:9,fontWeight:700,color:C.ts,whiteSpace:"nowrap"}}>{c.cohort_label}</td>
+              <td style={{textAlign:"center",padding:"5px 6px",fontSize:9,fontWeight:700,color:C.txt}}>{c.cohort_size}</td>
+              {Array.from({length:Math.min(maxPeriod+1,6)},(_,i)=>i).map(p=>{
+                const cell=c.retention?.[String(p)];
+                const pct=cell?.pct||0;
+                const col=pctColor(pct);
+                return<td key={p} style={{textAlign:"center",padding:"5px 4px",fontSize:9,fontWeight:800,background:col.bg,color:col.fg,borderRadius:3}}>{cell?Math.round(pct)+"%":"—"}</td>
+              })}
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </>}
+  </div>;
+}
+
+// v20.6: LtvSummary — cards de KPI globales + tabla compacta por cohort.
+function LtvSummary({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+  const[months,setMonths]=useState(12);
+
+  useEffect(()=>{load()},[course?.id,months]);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_ltv_summary",{p_course_id:course.id,p_months_back:months});
+    if(error){console.warn("[v20.6] ltv err:",error);setLd(false);return}
+    setData(r);setLd(false);
+  }
+
+  const sm=data?.summary;
+  const cohorts=data?.cohorts||[];
+
+  return<div style={{marginBottom:14,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12}}>
+    <div style={{..._s.flexB,marginBottom:8,flexWrap:"wrap",gap:6}}>
+      <div>
+        <div style={{fontSize:12,fontWeight:800,color:C.txt}}>💰 LTV & valor por jugador</div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Lifetime Value y AOV agregados, últimos {months} meses</div>
+      </div>
+      <div style={{display:"flex",gap:3,padding:2,background:C.bg,borderRadius:6}}>
+        {[6,12,24].map(m=><button key={m} onClick={()=>setMonths(m)} style={{padding:"3px 8px",borderRadius:4,border:"none",background:months===m?C.acc:"transparent",color:months===m?"#fff":C.tm,fontSize:9,fontWeight:700,cursor:"pointer"}}>{m}m</button>)}
+      </div>
+    </div>
+
+    {ld?<Skeleton w="100%" h={100}/>:!sm||!sm.total_users?<div style={{textAlign:"center",padding:20,color:C.tm,fontSize:11}}>Sin data suficiente para LTV</div>:<>
+      {/* 4 hero cards */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:10}}>
+        <div style={{padding:8,background:`linear-gradient(135deg,${C.grn}15,${C.grn}06)`,border:"1px solid "+C.grn+"30",borderRadius:8,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:900,color:C.grn,..._s.mono}}>${fm(Math.round(sm.overall_ltv||0))}</div>
+          <div style={{fontSize:9,color:C.tm,marginTop:1}}>LTV avg</div>
+        </div>
+        <div style={{padding:8,background:C.bg,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:900,color:C.gld,..._s.mono}}>${fm(Math.round(sm.overall_aov||0))}</div>
+          <div style={{fontSize:9,color:C.tm,marginTop:1}}>AOV global</div>
+        </div>
+        <div style={{padding:8,background:C.bg,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:900,color:C.txt,..._s.mono}}>${fm(Math.round(sm.total_revenue||0))}</div>
+          <div style={{fontSize:9,color:C.tm,marginTop:1}}>Revenue {months}m</div>
+        </div>
+        <div style={{padding:8,background:C.bg,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:900,color:C.txt,..._s.mono}}>{sm.avg_bookings_per_user||0}</div>
+          <div style={{fontSize:9,color:C.tm,marginTop:1}}>Bookings/user</div>
+        </div>
+      </div>
+
+      {cohorts.length>0&&<div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:9,..._s.mono}}>
+          <thead>
+            <tr style={{borderBottom:"1px solid "+C.bd}}>
+              <th style={{textAlign:"left",padding:"5px 6px",fontSize:9,color:C.tm,fontWeight:700}}>Cohorte</th>
+              <th style={{textAlign:"right",padding:"5px 6px",fontSize:9,color:C.tm,fontWeight:700}}>Size</th>
+              <th style={{textAlign:"right",padding:"5px 6px",fontSize:9,color:C.tm,fontWeight:700}}>Bookings</th>
+              <th style={{textAlign:"right",padding:"5px 6px",fontSize:9,color:C.tm,fontWeight:700}}>Revenue</th>
+              <th style={{textAlign:"right",padding:"5px 6px",fontSize:9,color:C.tm,fontWeight:700}}>AOV</th>
+              <th style={{textAlign:"right",padding:"5px 6px",fontSize:9,color:C.tm,fontWeight:700}}>LTV</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cohorts.slice(0,8).map(c=><tr key={c.cohort_month} style={{borderBottom:"1px solid "+C.bd+"60"}}>
+              <td style={{padding:"6px",color:C.ts,fontWeight:700}}>{c.cohort_label}</td>
+              <td style={{textAlign:"right",padding:"6px",color:C.txt}}>{c.cohort_size}</td>
+              <td style={{textAlign:"right",padding:"6px",color:C.txt}}>{c.total_bookings}</td>
+              <td style={{textAlign:"right",padding:"6px",color:C.grn,fontWeight:700}}>${fm(c.total_revenue)}</td>
+              <td style={{textAlign:"right",padding:"6px",color:C.gld}}>${fm(c.aov)}</td>
+              <td style={{textAlign:"right",padding:"6px",color:C.grn,fontWeight:800}}>${fm(c.avg_ltv)}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>}
+    </>}
+  </div>;
+}
+
+// v20.6: PlayerSegmentsDist — cards por segmento con counts + sample top players.
+// Helps al admin identificar quién es VIP, quién está at-risk, quién es nuevo, etc.
+function PlayerSegmentsDist({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_player_segments",{p_course_id:course.id});
+    if(error){console.warn("[v20.6] segments err:",error);setLd(false);return}
+    setData(r);setLd(false);
+  }
+
+  const seg=data?.segments;
+  const total=data?.summary?.total_users_12mo||0;
+
+  // Definición de segmentos a renderizar (orden por importancia)
+  const segDef=[
+    {k:"vip",label:"VIP",emoji:"👑",color:C.gld,desc:"Top 10% spend 12mo"},
+    {k:"at_risk_vip",label:"At-risk VIP",emoji:"⚠️",color:C.acc,desc:"VIP sin venir 30+ días"},
+    {k:"high_freq",label:"High-Freq",emoji:"🔥",color:C.grn,desc:"≥4 bookings/mes (3mo)"},
+    {k:"lapsed",label:"Lapsed",emoji:"💤",color:C.tm,desc:"60+ días sin booking"},
+    {k:"new",label:"Nuevos",emoji:"🌱",color:"#4dabf7",desc:"<30 días desde 1ra"}
+  ];
+  const segDefSecondary=[
+    {k:"morning_player",label:"Madrugadores",emoji:"🌅",desc:"≥80% antes de 10am"},
+    {k:"weekend_only",label:"Solo weekend",emoji:"📅",desc:"≥80% sáb/dom"}
+  ];
+
+  return<div style={{marginBottom:8,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12}}>
+    <div style={{..._s.flexB,marginBottom:8}}>
+      <div>
+        <div style={{fontSize:12,fontWeight:800,color:C.txt}}>👥 Segmentos de jugadores</div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Clasificación automática · {total} jugadores activos (12 meses)</div>
+      </div>
+    </div>
+
+    {ld?<Skeleton w="100%" h={140}/>:!seg||total===0?<div style={{textAlign:"center",padding:20,color:C.tm,fontSize:11}}>Sin jugadores suficientes para segmentación</div>:<>
+      {/* Primary segments con sample */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:6,marginBottom:8}}>
+        {segDef.map(s=>{const data=seg[s.k]||{count:0,sample:[]};const pct=total>0?Math.round(data.count/total*100):0;
+        return<div key={s.k} style={{padding:8,background:C.bg,border:"1px solid "+(data.count>0?s.color+"40":C.bd),borderRadius:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+            <span style={{fontSize:14}}>{s.emoji}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,fontWeight:800,color:C.txt}}>{s.label}</div>
+              <div style={{fontSize:8,color:C.tm}}>{s.desc}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"baseline",gap:5,marginBottom:4}}>
+            <span style={{fontSize:18,fontWeight:900,color:data.count>0?s.color:C.tm,..._s.mono,lineHeight:1}}>{data.count}</span>
+            <span style={{fontSize:9,color:C.tm}}>{pct}%</span>
+          </div>
+          {data.sample?.length>0&&<div style={{fontSize:9,color:C.ts,..._s.mono,opacity:.85}}>
+            {data.sample.slice(0,3).map((p,i)=><div key={i} style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {p.name||"Anónimo"}{p.revenue?` ($${fm(p.revenue)})`:p.days_inactive?` (${p.days_inactive}d)`:p.days_since_first?` (${p.days_since_first}d)`:p.bookings_3mo_per_month?` (${p.bookings_3mo_per_month}/mo)`:""}</div>)}
+          </div>}
+        </div>})}
+      </div>
+
+      {/* Secondary segments (sin sample, solo count) */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        {segDefSecondary.map(s=>{const data=seg[s.k]||{count:0,total_revenue:0};
+        return<div key={s.k} style={{padding:7,background:C.bg,border:"1px solid "+C.bd,borderRadius:7,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:14}}>{s.emoji}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:10,fontWeight:700,color:C.txt}}>{s.label}</div>
+            <div style={{fontSize:8,color:C.tm}}>{s.desc}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.txt,..._s.mono,lineHeight:1}}>{data.count}</div>
+            {data.total_revenue>0&&<div style={{fontSize:8,color:C.grn,..._s.mono,marginTop:2}}>${fm(Math.round(data.total_revenue))}</div>}
+          </div>
+        </div>})}
+      </div>
+    </>}
+  </div>;
+}
+
 // v20.3: AdminMembershipTiers — CRUD de tiers + dashboard de miembros activos.
 // Vive embebido en AdminProfile como sección colapsable.
 function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const[ld,setLd]=useState(true);const[dash,setDash]=useState(null);const[dashLd,setDashLd]=useState(false);
@@ -6917,6 +8221,140 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
   </div>
 }
 
+// v20.4.2: TournamentLeaderboard — componente reusable. Muestra players ordenados por
+// position (post-finalize) o live_rank (in_progress). Player + admin lo usan igual.
+// Auto-refresh opcional cuando tournament_status='in_progress'.
+function TournamentLeaderboard({tournamentId,autoRefresh,onLoaded}){
+  const[data,setData]=useState(null);
+  const[ld,setLd]=useState(true);
+  const[lastRefresh,setLastRefresh]=useState(null);
+
+  const load=React.useCallback(async()=>{
+    const{data:r,error}=await sb.rpc("get_tournament_leaderboard",{p_tournament_id:tournamentId});
+    if(error){console.warn("[v20.4.2] leaderboard err:",error);setLd(false);return}
+    setData(r);setLd(false);setLastRefresh(new Date());
+    if(onLoaded)onLoaded(r);
+  },[tournamentId,onLoaded]);
+  useEffect(()=>{load()},[load]);
+
+  // Auto-refresh cada 30s si el tournament está en progreso y autoRefresh=true.
+  useEffect(()=>{
+    if(!autoRefresh||!data?.summary||data.summary.status!=="in_progress")return;
+    let timer=null;
+    const start=()=>{if(timer)clearInterval(timer);timer=setInterval(()=>{
+      if(typeof document!=="undefined"&&!document.hidden)load();
+    },30*1000)};
+    const handleVis=()=>{if(typeof document!=="undefined"&&document.hidden){if(timer){clearInterval(timer);timer=null}}else{start()}};
+    start();
+    if(typeof document!=="undefined")document.addEventListener("visibilitychange",handleVis);
+    return()=>{if(timer)clearInterval(timer);if(typeof document!=="undefined")document.removeEventListener("visibilitychange",handleVis)};
+  },[autoRefresh,data?.summary?.status,load]);
+
+  if(ld)return<Skeleton w="100%" h={180}/>;
+  if(!data)return<div style={{textAlign:"center",padding:18,color:C.tm,fontSize:11}}>No se pudo cargar leaderboard</div>;
+
+  const sm=data.summary;
+  const players=data.players||[];
+  const isFinished=sm?.status==="finished";
+  const isLive=sm?.status==="in_progress";
+
+  return<div>
+    <div style={{..._s.flexB,marginBottom:8}}>
+      <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5}}>
+        {isFinished?"RESULTADOS FINALES":isLive?"LEADERBOARD LIVE":"INSCRITOS"} · {players.length}
+      </div>
+      {lastRefresh&&isLive&&<div style={{fontSize:9,color:C.tm,opacity:.6}}>actualizado {lastRefresh.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>}
+    </div>
+    {sm?.course_par&&isLive&&<div style={{fontSize:10,color:C.tm,marginBottom:6,..._s.mono}}>Par del campo: {sm.course_par}{sm.holes_count?" · "+sm.holes_count+" hoyos":""}</div>}
+    {players.length===0?<div style={{textAlign:"center",padding:24,color:C.tm,fontSize:12}}>Aún no hay jugadores</div>:
+    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+      {players.map(pl=>{
+        const pos=isFinished?pl.position:pl.live_rank;
+        const posC=pos===1?C.gld:pos===2?"#a8b3c5":pos===3?"#cd7f32":C.tm;
+        const scoreC=pl.has_score?(pl.vs_par<=0?C.grn:C.acc):C.tm;
+        const finishedAll=pl.holes_completed>=(sm?.holes_count||18);
+        return<div key={pl.player_id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.cd,border:"1px solid "+(pos<=3&&pl.has_score?posC+"50":C.bd),borderRadius:10}}>
+          {/* Position badge */}
+          <div style={{width:28,height:28,borderRadius:14,background:pos<=3&&pl.has_score?posC+"20":C.bg,border:"1px solid "+(pos<=3&&pl.has_score?posC+"60":C.bd),display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:pos<=3&&pl.has_score?posC:C.tm,flexShrink:0,..._s.mono}}>{pl.has_score?pos+"°":"—"}</div>
+          {/* Player info */}
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.player_name}</div>
+            <div style={{fontSize:9,color:C.tm,..._s.mono,marginTop:1}}>
+              {pl.has_score?<>
+                {pl.holes_completed}/{sm?.holes_count||18} hoyos
+                {!finishedAll&&isLive?" · jugando":""}
+                {finishedAll?" · ✓ terminado":""}
+              </>:"sin score aún"}
+              {pl.prize_won&&Number(pl.prize_won)>0?<span style={{color:C.gld,fontWeight:800,marginLeft:6}}>🏆 ${fm(pl.prize_won)}</span>:""}
+            </div>
+          </div>
+          {/* Score */}
+          <div style={{textAlign:"right",flexShrink:0}}>
+            {pl.has_score?<>
+              <div style={{fontSize:14,fontWeight:800,color:C.txt,..._s.mono,lineHeight:1}}>{pl.total_score}</div>
+              <div style={{fontSize:10,fontWeight:700,color:scoreC,..._s.mono,marginTop:2}}>{pl.vs_par>0?"+":""}{pl.vs_par}</div>
+            </>:<div style={{fontSize:9,color:C.tm}}>—</div>}
+          </div>
+        </div>
+      })}
+    </div>}
+  </div>;
+}
+
+// v20.4.2: ScoreCaptureModal — bottomsheet para que el player capture su total_score + holes_completed.
+// Validación frontend liviana; backend valida sane bounds.
+function ScoreCaptureModal({tournamentId,holesCount,coursePar,priorScore,priorHoles,onClose,onSaved}){
+  const[totalScore,setTotalScore]=useState(priorScore||"");
+  const[holesCompleted,setHolesCompleted]=useState(priorHoles!=null?priorHoles:holesCount);
+  const[busy,setBusy]=useState(false);
+
+  async function save(){
+    const ts=parseInt(totalScore,10);
+    const hc=parseInt(holesCompleted,10);
+    if(isNaN(ts)||ts<1||ts>holesCount*12){window.__toast?.("Score inválido (1.."+(holesCount*12)+")","warn");return}
+    if(isNaN(hc)||hc<0||hc>holesCount){window.__toast?.("Hoyos inválido (0.."+holesCount+")","warn");return}
+    setBusy(true);
+    const{data,error}=await sb.rpc("submit_tournament_score",{p_tournament_id:tournamentId,p_total_score:ts,p_holes_completed:hc});
+    setBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.(data?.finished?"Score final guardado ✓":"Score actualizado","success");
+    if(onSaved)onSaved(data);
+    onClose();
+  }
+
+  const vsParPreview=totalScore&&!isNaN(parseInt(totalScore,10))?parseInt(totalScore,10)-coursePar:null;
+
+  return ReactDOM.createPortal(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",zIndex:10001,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"20px 20px 0 0",padding:20,maxWidth:520,width:"100%",maxHeight:"82vh",overflowY:"auto",border:"1px solid "+C.bd}}>
+      <div style={{..._s.flexB,marginBottom:14,paddingBottom:10,borderBottom:"1px solid "+C.bd}}>
+        <div>
+          <div style={{fontSize:14,fontWeight:800,color:C.txt}}>Capturar mi score</div>
+          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Par del campo: {coursePar} · {holesCount} hoyos</div>
+        </div>
+        <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+      </div>
+
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6,letterSpacing:.3}}>STROKES TOTALES</div>
+        <input type="number" inputMode="numeric" value={totalScore} onChange={e=>setTotalScore(e.target.value)} placeholder={"ej. "+(coursePar+5)} min={1} max={holesCount*12} style={{width:"100%",padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:18,fontWeight:700,..._s.mono,outline:"none",textAlign:"center"}}/>
+        {vsParPreview!=null&&<div style={{fontSize:11,color:vsParPreview<=0?C.grn:C.acc,fontWeight:700,..._s.mono,marginTop:6,textAlign:"center"}}>{vsParPreview>0?"+":""}{vsParPreview} vs par</div>}
+      </div>
+
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,color:C.tm,fontWeight:600,marginBottom:6,letterSpacing:.3}}>HOYOS COMPLETADOS</div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <button onClick={()=>setHolesCompleted(Math.max(0,parseInt(holesCompleted||0,10)-1))} style={{width:38,height:38,borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer"}}>-</button>
+          <input type="number" inputMode="numeric" value={holesCompleted} onChange={e=>setHolesCompleted(e.target.value)} min={0} max={holesCount} style={{flex:1,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:C.txt,fontSize:16,fontWeight:700,..._s.mono,outline:"none",textAlign:"center"}}/>
+          <button onClick={()=>setHolesCompleted(Math.min(holesCount,parseInt(holesCompleted||0,10)+1))} style={{width:38,height:38,borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer"}}>+</button>
+          <button onClick={()=>setHolesCompleted(holesCount)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+C.grn+"40",background:C.grn+"15",color:C.grn,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:.3}}>FINAL</button>
+        </div>
+      </div>
+
+      <button onClick={save} disabled={busy} style={{width:"100%",padding:14,background:busy?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:busy?C.tm:"#fff",fontSize:14,fontWeight:800,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"Guardando…":priorScore?"Actualizar score":"Guardar score"}</button>
+    </div>
+  </div>,document.body);
+}
+
 // v20.4: TournamentsScreen — Player UI. Lista torneos públicos abiertos, detail con players, registro pagado o gratis.
 // Modos: 'list' (lista) / 'detail' (info del torneo) / 'checkout' (Stripe Card Element).
 function TournamentsScreen({onBack}){const{s,p}=useA();
@@ -6928,6 +8366,10 @@ function TournamentsScreen({onBack}){const{s,p}=useA();
   const[regBusy,setRegBusy]=useState(false);
   // Checkout state (cuando entry_fee > 0)
   const[checkoutData,setCheckoutData]=useState(null); // {tournament_player_id, tournament_name, course_name, play_date, entry_fee_mxn}
+  // v20.4.2: state para score capture modal
+  const[scoreModalOpen,setScoreModalOpen]=useState(false);
+  const[lbSummary,setLbSummary]=useState(null); // se llena del onLoaded del leaderboard (course_par, holes_count)
+  const[myScore,setMyScore]=useState(null); // {total_score, holes_completed, finished} si caller ya tiene score
   const[checkoutPhase,setCheckoutPhase]=useState("init");
   const[checkoutErr,setCheckoutErr]=useState("");
   const stripeRef=useRef(null);const cardRef=useRef(null);const secretRef=useRef("");const mountRef=useRef(null);
@@ -7107,21 +8549,44 @@ function TournamentsScreen({onBack}){const{s,p}=useA();
         </div>
       </div>:isOpen&&<button onClick={startRegistration} disabled={regBusy} style={{width:"100%",padding:14,marginBottom:14,background:regBusy?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:14,color:regBusy?C.tm:"#fff",fontWeight:800,fontSize:14,cursor:regBusy?"default":"pointer"}}>{regBusy?"Registrando…":Number(tr.entry_fee_mxn)>0?`Inscribirme — $${fm(tr.entry_fee_mxn)} MXN`:"Inscribirme gratis"}</button>}
       {!isOpen&&!detail.is_caller_registered&&<div style={{padding:12,background:C.tm+"15",border:"1px solid "+C.bd,borderRadius:12,marginBottom:14,fontSize:12,color:C.tm,textAlign:"center"}}>{statusLabel(tr.status)}</div>}
-      {/* Players list */}
-      <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:8}}>JUGADORES INSCRITOS ({players.length})</div>
-      {players.length===0?<div style={{textAlign:"center",padding:20,color:C.tm,fontSize:12}}>Aún no hay jugadores inscritos</div>:
-      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        {players.map(pl=><div key={pl.user_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
-            {pl.position&&<span style={{fontSize:10,fontWeight:800,color:pl.position===1?C.gld:pl.position===2?"#94a3b8":pl.position===3?"#cd7f32":C.tm,minWidth:18}}>{pl.position}°</span>}
-            <span style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.player_name}</span>
-            {pl.player_pid&&<span style={{fontSize:9,color:C.tm,..._s.mono}}>{pl.player_pid}</span>}
-          </div>
-          {tr.status==="in_progress"||tr.status==="finished"?<div style={{fontSize:11,color:pl.total_vs_par<=0?C.grn:C.acc,..._s.mono}}>{pl.total_vs_par>0?"+":""}{pl.total_vs_par}</div>:
-           pl.payment_status==="pending"?<span style={{fontSize:9,color:C.gld,fontWeight:700}}>PEND PAGO</span>:
-           <span style={{fontSize:9,color:C.grn,fontWeight:700}}>OK</span>}
-        </div>)}
-      </div>}
+      {/* v20.4.2: Si tournament está in_progress + caller registered + pagado → CTA capturar score */}
+      {tr.status==="in_progress"&&detail.is_caller_registered&&myReg?.payment_status==="paid"&&<button onClick={()=>setScoreModalOpen(true)} style={{width:"100%",padding:13,marginBottom:14,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",letterSpacing:.3,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        ⛳ {myScore?.total_score?"Actualizar mi score ("+myScore.total_score+")":"Capturar mi score"}
+      </button>}
+      {/* v20.4.2: Si in_progress o finished → leaderboard live (replace players list) */}
+      {(tr.status==="in_progress"||tr.status==="finished")?
+        <TournamentLeaderboard tournamentId={tr.id} autoRefresh={tr.status==="in_progress"} onLoaded={r=>{
+          setLbSummary(r.summary);
+          // v20.4.2: rastrear el score del caller para mostrar en CTA
+          const meRow=(r.players||[]).find(pl=>pl.user_id===s?.user?.id);
+          if(meRow&&meRow.has_score)setMyScore({total_score:meRow.total_score,holes_completed:meRow.holes_completed,finished:meRow.finished});
+          else setMyScore(null);
+        }}/>
+      :<>
+        {/* Players list (pre-game): solo nombres, sin scores */}
+        <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:8}}>JUGADORES INSCRITOS ({players.length})</div>
+        {players.length===0?<div style={{textAlign:"center",padding:20,color:C.tm,fontSize:12}}>Aún no hay jugadores inscritos</div>:
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {players.map(pl=><div key={pl.user_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
+              <span style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.player_name}</span>
+              {pl.player_pid&&<span style={{fontSize:9,color:C.tm,..._s.mono}}>{pl.player_pid}</span>}
+            </div>
+            {pl.payment_status==="pending"?<span style={{fontSize:9,color:C.gld,fontWeight:700}}>PEND PAGO</span>:
+             <span style={{fontSize:9,color:C.grn,fontWeight:700}}>OK</span>}
+          </div>)}
+        </div>}
+      </>}
+      {/* v20.4.2: Score capture modal */}
+      {scoreModalOpen&&<ScoreCaptureModal 
+        tournamentId={tr.id}
+        holesCount={lbSummary?.holes_count||tr.holes_count||18}
+        coursePar={lbSummary?.course_par||((lbSummary?.holes_count||tr.holes_count||18)*4)}
+        priorScore={myScore?.total_score}
+        priorHoles={myScore?.holes_completed}
+        onClose={()=>setScoreModalOpen(false)}
+        onSaved={()=>{/* el leaderboard se auto-recarga por su autoRefresh, pero forzar re-mount no daña */}}
+      />}
     </div>
   }
 
@@ -7159,6 +8624,21 @@ function TournamentsScreen({onBack}){const{s,p}=useA();
 // CRUD de torneos públicos del campo + dashboard mini.
 function AdminTournaments({course}){const[tournaments,setTournaments]=useState([]);const[ld,setLd]=useState(true);const[summary,setSummary]=useState(null);
   const[edit,setEdit]=useState(null);const[saving,setSaving]=useState(false);
+  // v20.4.2: expand para mostrar leaderboard inline + finalize busy
+  const[expanded,setExpanded]=useState(new Set());
+  const[finalizeBusy,setFinalizeBusy]=useState(null);
+  function toggleExpand(tid){setExpanded(prev=>{const nx=new Set(prev);if(nx.has(tid))nx.delete(tid);else nx.add(tid);return nx})}
+  async function finalize(t){
+    if(finalizeBusy)return;
+    const ok=window.__confirm?await new Promise(r=>window.__confirm(`Finalizar "${t.name}"? Esta acción es irreversible: asignará posiciones según los scores actuales y distribuirá el prize pool.`,()=>r(true),()=>r(false))):confirm("Finalizar y distribuir prizes?");
+    if(!ok)return;
+    setFinalizeBusy(t.id);
+    const{data,error}=await sb.rpc("finalize_tournament",{p_tournament_id:t.id});
+    setFinalizeBusy(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.(`Finalizado · $${fm(data?.prize_distributed||0)} en prizes asignados`,"success");
+    loadAll();
+  }
   useEffect(()=>{loadAll()},[course?.id]);
   async function loadAll(){setLd(true);
     const{data,error}=await sb.rpc("get_admin_tournaments",{p_course_id:course.id});
@@ -7278,22 +8758,30 @@ function AdminTournaments({course}){const[tournaments,setTournaments]=useState([
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       {tournaments.map(t=>{const sColor={'registration_open':C.grn,'registration_closed':C.gld,'in_progress':C.acc,'finished':C.tm,'draft':C.tm,'cancelled':C.tm}[t.status]||C.tm;
       const sLabel={'draft':'Borrador','registration_open':'Abierto','registration_closed':'Cerrado','in_progress':'En curso','finished':'Finalizado','cancelled':'Cancelado'}[t.status]||t.status;
+      const canExpand=t.status==="in_progress"||t.status==="finished"||t.status==="registration_closed";
+      const isExpanded=expanded.has(t.id);
       return<div key={t.id} style={{padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+        <div onClick={()=>canExpand&&toggleExpand(t.id)} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,cursor:canExpand?"pointer":"default"}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
               <span style={{fontSize:9,fontWeight:800,color:sColor,background:sColor+"15",padding:"2px 6px",borderRadius:4,letterSpacing:.4}}>{sLabel.toUpperCase()}</span>
-              <span style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.name}</span>
+              <span style={{fontSize:13,fontWeight:700,color:C.txt,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.name}</span>
+              {canExpand&&<span style={{fontSize:11,color:C.tm,transition:"transform .2s",transform:isExpanded?"rotate(180deg)":"rotate(0)"}} dangerouslySetInnerHTML={{__html:ic("down",12,C.tm)}}/>}
             </div>
             <div style={{fontSize:11,color:C.ts,..._s.mono}}>{t.play_date||"Sin fecha"} · {t.paid_count}/{t.max_players} pagos · ${fm(t.revenue_collected||0)}</div>
           </div>
         </div>
+        {/* v20.4.2: leaderboard inline cuando expandido */}
+        {isExpanded&&canExpand&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd}}>
+          <TournamentLeaderboard tournamentId={t.id} autoRefresh={t.status==="in_progress"}/>
+        </div>}
         {/* Lifecycle buttons */}
         <div style={{display:"flex",gap:4,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd}}>
           {t.status==="draft"&&<button onClick={()=>setStatus(t,"registration_open")} style={{flex:1,padding:6,background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:6,color:C.grn,fontSize:10,fontWeight:700,cursor:"pointer"}}>Abrir inscripciones</button>}
           {t.status==="registration_open"&&<button onClick={()=>setStatus(t,"registration_closed")} style={{flex:1,padding:6,background:C.gld+"15",border:"1px solid "+C.gld+"40",borderRadius:6,color:C.gld,fontSize:10,fontWeight:700,cursor:"pointer"}}>Cerrar inscripciones</button>}
           {(t.status==="registration_closed"||t.status==="registration_open")&&<button onClick={()=>setStatus(t,"in_progress")} style={{flex:1,padding:6,background:C.acc+"15",border:"1px solid "+C.acc+"40",borderRadius:6,color:C.acc,fontSize:10,fontWeight:700,cursor:"pointer"}}>Iniciar</button>}
-          {t.status==="in_progress"&&<button onClick={()=>setStatus(t,"finished")} style={{flex:1,padding:6,background:C.tm+"15",border:"1px solid "+C.bd,borderRadius:6,color:C.txt,fontSize:10,fontWeight:700,cursor:"pointer"}}>Finalizar</button>}
+          {/* v20.4.2: Finalizar real (no solo cambio de status) — distribuye prizes */}
+          {t.status==="in_progress"&&<button onClick={()=>finalize(t)} disabled={finalizeBusy===t.id} style={{flex:1,padding:6,background:finalizeBusy===t.id?C.bd:`linear-gradient(135deg,${C.gld},#cd7f32)`,border:"none",borderRadius:6,color:finalizeBusy===t.id?C.tm:"#fff",fontSize:10,fontWeight:800,cursor:finalizeBusy===t.id?"default":"pointer",letterSpacing:.3}}>{finalizeBusy===t.id?"Finalizando…":"🏆 Finalizar y distribuir"}</button>}
         </div>
       </div>})}
     </div>}
