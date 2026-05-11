@@ -8,6 +8,67 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.24 (Block Manager — bloqueos masivos con auto-refund + notify)","color:#e74c3c;font-weight:bold;font-size:13px");
+// v20.24 — Block Manager. Operating §4.4 del Admin OS.
+//   Bloqueos masivos por clima, mantenimiento, eventos privados, holidays. Atomic:
+//   1) Marca time_slots como blocked/maintenance, 2) Cancela bookings afectados con
+//   payment_status=refund_pending, 3) Crea notifications a jugadores (push+email),
+//   4) Log auditable en block_affected_bookings (insurance claims).
+//   ADMIN: AdminBlockManager + BlockCreateModal en AdminSlots. Wizard 2 steps:
+//     - Step 1: tipo (clima/maint/event/holiday/otro), reason, date range, time range opcional,
+//       days_of_week opcional, refund policy (full/credit/none), notes
+//     - Step 2: PREVIEW con slots count + bookings count + revenue impact + sample 10 bookings,
+//       toggle notify + warning de acción atómica, botón "Aplicar bloqueo"
+//   Lista histórico con type emoji, fechas, slots/bookings affected, revert si active.
+//   Backend (ya en prod v20.24): course_blocks + block_affected_bookings tables, 4 RPCs SEC DEF
+//   (preview_block_impact, apply_block, revert_block, get_admin_blocks). Smoke 14/14 + 7 SEC PASS.
+//   Quick win: una weather closure pasa de 30min de WhatsApp + 2h refunds → 15 segundos.
+//
+// v20.23 — Walk-ins + Standby waitlist.
+//   ADMIN: AdminWalkInsCard + WalkInModal en AdminBookings (card verde colapsable con
+//   summary 30d + lista compacta). Quick capture: party_size buttons (1-8), payment_method
+//   grid (cash/tarjeta/transfer/cortesía), monto, name/phone/notes opcionales. Cancel soft delete.
+//   PLAYER: MyStandbysCard al inicio de BkTab (solo si hay entries activos). Auto-refresh 30s.
+//   Si status=notified → CTA verde "Reservar →" (5 min ventana), accept_standby_offer + navigate
+//   a tab:2 para completar reserva. Else → "Salir de la lista".
+//   Backend (ya en prod): walk_ins + standby_waitlist tables, 8 RPCs SEC DEF,
+//   trigger tg_notify_standby_on_booking_cancel marca status=notified con 5min window y crea
+//   notification type=alert para el primer standby compatible cuando una booking se cancela.
+//
+// v20.22 — Dynamic Pricing v1 frontend (Pro+ feature ancla).
+//   Componente AdminPricingRules integrado dentro de AdminPromos (rebautizado "Promos & Pricing").
+//   PricingRuleModal con 5 condiciones AND opcionales (occupancy, lookahead, hour, days, months) +
+//   ajuste percent|fixed signed + priority. Botón "Aplicar engine" llama apply_pricing_rules y muestra
+//   resumen: slots ajustados, revertidos, revenue impact estimado.
+//   Backend v20.21 ya en producción: 6 RPCs SEC DEF + helper fn_rule_matches_slot + audit
+//   pricing_rule_applications + ALTER time_slots ADD base_price/dynamic_pricing_rule_id.
+//   Hot Deals manuales (is_offer=true) son skipped por el engine → coexisten sin conflicto.
+//
+// v20.19 — Frontend consolidado de los 3 backends ya en producción (v20.17, v20.18, v20.19).
+//   1) AdminCampaigns — bot filter visibility:
+//      - List card: muestra "✓ X reales · 🤖 Y bots" si bot_filtered_opens>0
+//      - Detail modal: tarjetas Abiertos/Clicks ahora muestran subtotal "+Y bots filtrados"
+//      - Backend ya tenía las columnas + RPC track-campaign v2 con 34 patrones UA.
+//      - Update menor: get_admin_campaigns ahora también expone bot_filtered_opens/clicks
+//        (la detail RPC ya los tenía via row_to_json).
+//   2) AdminCampaigns — plantillas reusables (CampaignTemplatesModal nuevo):
+//      - Botón "📋 Plantillas" en el header del card (junto a "+ Nueva").
+//      - Modal lista todas las plantillas del curso con preview, usage_count y last_used_at.
+//      - "Usar plantilla": carga subject+body en CampaignCreateModal y abre el modal de creación.
+//      - En CampaignCreateModal: botón "💾 Guardar como plantilla" abre prompt para nombre.
+//      - Backend: get_admin_campaign_templates / save_admin_campaign_template /
+//        delete_admin_campaign_template / mark_template_used + extract_template_variables.
+//   3) Customer 360 v2 — secciones enriquecidas:
+//      - Breaking: data.tags ahora es data.auto_tags (RPC v2). Manejado con fallback ||.
+//      - Nueva sección "Handicap" con badge ↑/↓/→ trend, current, delta_30d, best_diff_in_course,
+//        rounds_in_course (insufficient_data si no hay 30d de historial).
+//      - Nueva sección "Scorecards recientes" (top 5) con layout_name/par/rating/slope, vs_par,
+//        score_differential. Calculadas por trigger server-side (WHS 5.2a oficial).
+//      - Nueva sección "Tags admin" (manual, scoped al curso): chips editables, input + botón
+//        para agregar (auto-normaliza a snake_case), X para quitar.
+//      - data.tags se mantiene como fallback para compatibilidad si la RPC vieja siguiera viva.
+//   Bonus DB (MED-2 del QA may26): CHECK (total_strokes BETWEEN 18 AND 200) en scorecards.
+//      Previene inflación absurda del handicap WHS por inputs incorrectos.
 console.log("%c[Partee] Build v20.16 (Cierre del ciclo notif preferences — los 4 toggles ahora SÍ funcionan)","color:#00b894;font-weight:bold;font-size:13px");
 // v20.16 — 100% backend. Cierra el loop de v20.12 conectando las 3 prefs restantes a sus
 // puntos de envío. Frontend SIN cambios (las prefs ya estaban editables).
@@ -3188,6 +3249,77 @@ function Collapsible({title,icon,open,onToggle,children}){
   </div>;
 }
 
+// v20.23 — MyStandbysCard: Lista de espera activa del jugador.
+// Solo se muestra si hay entries con status IN (waiting|notified|accepted).
+// status=notified → CTA "Reservar ahora" (5 min ventana); else → "Salir de la lista".
+function MyStandbysCard(){
+  const[standbys,setStandbys]=useState([]);const[ld,setLd]=useState(true);
+  const[busyId,setBusyId]=useState(null);const[ready,setReady]=useState(false);
+  async function load(){
+    const{data,error}=await sb.rpc("get_player_standbys");
+    if(error){setLd(false);setReady(true);return}
+    setStandbys(data?.standbys||[]);setLd(false);setReady(true)
+  }
+  useEffect(()=>{load();
+    // Refresh cada 30s para captar cambios de status
+    const _t=setInterval(load,30000);return()=>clearInterval(_t)
+  },[]);
+  async function leave(id){if(busyId)return;
+    const ok=await new Promise(res=>{if(window.__confirm)window.__confirm("¿Salir de esta lista de espera?",()=>res(true),()=>res(false));else res(confirm("¿Salir?"))});
+    if(!ok)return;setBusyId(id);
+    const{error}=await sb.rpc("leave_standby",{p_standby_id:id});
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.("Saliste de la lista","success");load()
+  }
+  async function accept(sb_entry){if(busyId)return;setBusyId(sb_entry.id);
+    const{data,error}=await sb.rpc("accept_standby_offer",{p_standby_id:sb_entry.id});
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(data?.error){window.__toast?.(data.error==="slot_no_longer_available"?"El slot ya no está disponible":data.error,"warn");load();return}
+    window.__toast?.("¡Listo! Slot reservado, completa el pago","success");
+    // Redirect al booking flow del slot (TODO: pasar slot_id, party_size pre-fill)
+    window.__navigate?.("tab:2"); // Search tab, el user verá el slot disponible para reservar
+    load()
+  }
+  if(!ready||standbys.length===0)return null;
+  return<div style={{marginBottom:12}}>
+    {standbys.map(sb_=>{
+      const notified=sb_.status==="notified";
+      const accepted=sb_.status==="accepted";
+      const slotDate=sb_.slot_date?new Date(sb_.slot_date+"T12:00:00"):null;
+      const dayLabel=slotDate?DN[slotDate.getDay()]+" "+slotDate.getDate()+" "+slotDate.toLocaleDateString("es-MX",{month:"short"}):sb_.slot_date;
+      const timeLabel=sb_.slot_time?sb_.slot_time.slice(0,5):"";
+      // Minutes left if notified
+      const expiresAt=sb_.notification_expires_at?new Date(sb_.notification_expires_at):null;
+      const minLeft=expiresAt?Math.max(0,Math.round((expiresAt-new Date())/60000)):null;
+      const expired=notified&&minLeft===0;
+      const bgGrad=notified&&!expired?`linear-gradient(135deg,${C.grn}25,#00cec912)`:accepted?`linear-gradient(135deg,${C.gld}20,#fbbf2410)`:`linear-gradient(135deg,${C.gld}15,#fbbf2408)`;
+      const bdCol=notified&&!expired?C.grn+"50":accepted?C.gld+"50":C.gld+"35";
+      return<div key={sb_.id} style={{padding:"10px 14px",background:bgGrad,border:"1px solid "+bdCol,borderRadius:12,marginBottom:8,display:"flex",alignItems:"center",gap:10}}>
+        <div style={{fontSize:22,flexShrink:0}}>{notified&&!expired?"🎯":accepted?"✅":"⏳"}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sb_.course_name}</span>
+            {notified&&!expired&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:C.grn,padding:"2px 6px",borderRadius:4,letterSpacing:.4}}>¡SLOT LIBRE!</span>}
+            {expired&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:C.tm,padding:"2px 6px",borderRadius:4}}>EXPIRÓ</span>}
+            {accepted&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:C.gld,padding:"2px 6px",borderRadius:4}}>ACEPTADO</span>}
+          </div>
+          <div style={{fontSize:10,color:C.tm,marginTop:1,textTransform:"capitalize"}}>
+            {dayLabel} · {timeLabel}h · {sb_.party_size} jug
+            {!notified&&!accepted&&sb_.position&&<span> · #{sb_.position} en lista</span>}
+            {notified&&!expired&&minLeft!=null&&<span style={{color:C.grn,fontWeight:700}}> · {minLeft} min para confirmar</span>}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:4,flexShrink:0}}>
+          {notified&&!expired?<button onClick={()=>accept(sb_)} disabled={busyId===sb_.id} style={{padding:"7px 12px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:800,cursor:busyId===sb_.id?"default":"pointer"}}>Reservar →</button>:
+          <button onClick={()=>leave(sb_.id)} disabled={busyId===sb_.id} title="Salir de la lista" style={{padding:"6px 10px",background:"transparent",border:"1px solid "+C.bd,borderRadius:7,color:C.tm,fontSize:11,cursor:busyId===sb_.id?"default":"pointer"}}>Salir</button>}
+        </div>
+      </div>;
+    })}
+  </div>;
+}
+
 function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab]=useState("up");const[ld,setLd]=useState(true);const[detail,setDetail]=useState(null);const[course,setCourse]=useState(null);const[bkExtras,setBkExtras]=useState([]);const[friends,setFriends]=useState([]);const[invModal,setInvModal]=useState(null);const[invitations,setInvitations]=useState([]);const[acceptingInv,setAcceptingInv]=useState(null);const[convertModal,setConvertModal]=useState(null);const[busyAction,setBusyAction]=useState(false);const[detailsOpen,setDetailsOpen]=useState(false);const[layoutOpen,setLayoutOpen]=useState(false);const[policyOpen,setPolicyOpen]=useState(false);const[payChooser,setPayChooser]=useState(null);
   // v20.3: Memberships overlay
   const[showMemberships,setShowMemberships]=useState(false);
@@ -3613,6 +3745,8 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       </div>
       <span style={{color:C.tm}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
     </div>
+    {/* v20.23: MyStandbysCard — solo aparece si hay lista de espera activa */}
+    <MyStandbysCard/>
     <div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Invitaciones")+(invitations.length>0?" ("+invitations.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
     {tab==="requests"&&<>{invitations.length===0?<EmptyState icon="mail" iconColor={C.tm} title={t("Sin invitaciones pendientes")} sub={t("Cuando alguien te invite a una reserva, aparecerá aquí")}/>:invitations.map(inv=>{
       const bk=inv.booking||{};const sn=inv.inviter?.nickname||inv.inviter?.full_name||"Jugador";
@@ -5098,6 +5232,33 @@ const HOUR_FMT_V19_72=(h)=>{if(h==null)return"--";const ampm=h>=12?"PM":"AM";con
 
 function Customer360({course,userId,onClose}){
   const[data,setData]=useState(null);const[ld,setLd]=useState(true);const[err,setErr]=useState(null);
+  // v20.19: admin tags (manuales scoped al curso)
+  const[newTag,setNewTag]=useState("");const[newNote,setNewNote]=useState("");const[tagBusy,setTagBusy]=useState(false);
+  // v20.19: scorecards section toggle (collapse default si > 3)
+  const[scoreExpanded,setScoreExpanded]=useState(false);
+  async function addTag(){
+    if(tagBusy||!newTag.trim())return;
+    setTagBusy(true);
+    const{data:r,error}=await sb.rpc("add_admin_user_tag",{p_course_id:course.id,p_user_id:userId,p_tag:newTag.trim(),p_note:newNote.trim()||null});
+    setTagBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(r?.error){window.__toast?.(r.error,"warn");return}
+    setNewTag("");setNewNote("");
+    // refresh customer 360
+    sb.rpc("get_admin_customer_360",{p_course_id:course.id,p_user_id:userId}).then(({data:d2})=>{if(d2)setData(d2)});
+    window.__toast?.("Tag agregado","success");
+  }
+  async function removeTag(tagId){
+    if(tagBusy)return;
+    if(!confirm("¿Quitar este tag?"))return;
+    setTagBusy(true);
+    const{data:r,error}=await sb.rpc("remove_admin_user_tag",{p_tag_id:tagId});
+    setTagBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(r?.error){window.__toast?.(r.error,"warn");return}
+    sb.rpc("get_admin_customer_360",{p_course_id:course.id,p_user_id:userId}).then(({data:d2})=>{if(d2)setData(d2)});
+    window.__toast?.("Tag eliminado","success");
+  }
   useEffect(()=>{
     if(!userId)return;setLd(true);setErr(null);
     sb.rpc("get_admin_customer_360",{p_course_id:course.id,p_user_id:userId}).then(({data,error})=>{
@@ -5133,10 +5294,10 @@ function Customer360({course,userId,onClose}){
               </div>
             </div>
           </div>
-          {/* TAGS chips */}
-          {(data.tags||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
-            {data.tags.map(tag=><span key={tag} style={{fontSize:10,fontWeight:700,padding:"4px 10px",borderRadius:8,background:TAG_COLOR_V19_72(tag,C)+"18",color:TAG_COLOR_V19_72(tag,C),border:"1px solid "+TAG_COLOR_V19_72(tag,C)+"30"}}>{TAG_LABELS_V19_72[tag]||tag}</span>)}
-          </div>}
+          {/* AUTO TAGS chips (v20.19: renamed from data.tags → data.auto_tags; fallback for legacy RPC) */}
+          {(()=>{const at=data.auto_tags||data.tags||[];return at.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+            {at.map(tag=><span key={tag} style={{fontSize:10,fontWeight:700,padding:"4px 10px",borderRadius:8,background:TAG_COLOR_V19_72(tag,C)+"18",color:TAG_COLOR_V19_72(tag,C),border:"1px solid "+TAG_COLOR_V19_72(tag,C)+"30"}}>{TAG_LABELS_V19_72[tag]||tag}</span>)}
+          </div>})()}
           {/* STATS grid */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
             <div className="sc"><div className="n" style={{color:C.grn,fontSize:18}}>${fm(data.stats?.total_spend||0)}</div><div className="l">LTV (este campo)</div></div>
@@ -5157,6 +5318,41 @@ function Customer360({course,userId,onClose}){
               {data.stats.churn_risk>=70?"Alto: contactar pronto con oferta personalizada":data.stats.churn_risk>=40?"Moderado: monitor":"Saludable"}
             </div>
           </div>}
+          {/* v20.19 NUEVO: HANDICAP TREND (server-side WHS 5.2a) */}
+          {data.handicap&&(data.handicap.current!=null||data.handicap.rounds_in_course>0)&&(()=>{
+            const h=data.handicap;
+            const trendCfg={improving:{ic:"↓",lbl:"Mejorando",col:C.grn,bg:C.grn+"15",bd:C.grn+"40",hint:"Bajaste +1.0 vs hace 30d"},
+                            declining:{ic:"↑",lbl:"Subiendo",col:C.acc,bg:C.acc+"15",bd:C.acc+"40",hint:"Subiste +1.0 vs hace 30d"},
+                            stable:{ic:"→",lbl:"Estable",col:C.gld,bg:C.gld+"15",bd:C.gld+"40",hint:"Sin cambio significativo en 30d"},
+                            insufficient_data:{ic:"·",lbl:"Sin historial",col:C.tm,bg:C.tm+"15",bd:C.tm+"40",hint:"Faltan rondas o datos de hace 30d"}}[h.trend]||{ic:"·",lbl:"--",col:C.tm,bg:C.tm+"15",bd:C.tm+"40",hint:""};
+            const dlt=h.delta_30d;
+            return<div style={{padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.4}}>HANDICAP (WHS)</div>
+                <span style={{fontSize:9,fontWeight:800,padding:"3px 9px",borderRadius:6,background:trendCfg.bg,color:trendCfg.col,border:"1px solid "+trendCfg.bd,letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:11,lineHeight:1}}>{trendCfg.ic}</span>{trendCfg.lbl}
+                </span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <div style={{textAlign:"center",padding:"6px 0"}}>
+                  <div style={{fontSize:18,fontWeight:900,color:C.txt,..._s.mono}}>{h.current!=null?h.current:"--"}</div>
+                  <div style={{fontSize:9,color:C.tm,marginTop:1}}>Actual</div>
+                </div>
+                <div style={{textAlign:"center",padding:"6px 0",borderLeft:"1px solid "+C.bd,borderRight:"1px solid "+C.bd}}>
+                  <div style={{fontSize:18,fontWeight:900,color:dlt==null?C.tm:dlt<0?C.grn:dlt>0?C.acc:C.gld,..._s.mono}}>{dlt==null?"--":(dlt>0?"+":"")+dlt}</div>
+                  <div style={{fontSize:9,color:C.tm,marginTop:1}}>Δ 30 días</div>
+                </div>
+                <div style={{textAlign:"center",padding:"6px 0"}}>
+                  <div style={{fontSize:18,fontWeight:900,color:C.gld,..._s.mono}}>{h.best_diff_in_course!=null?Number(h.best_diff_in_course).toFixed(1):"--"}</div>
+                  <div style={{fontSize:9,color:C.tm,marginTop:1}}>Mejor diff</div>
+                </div>
+              </div>
+              <div style={{fontSize:10,color:C.ts,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{opacity:.85}}>{trendCfg.hint}</span>
+                <span style={{..._s.mono,fontWeight:700,color:C.tm}}>{h.rounds_in_course||0} ronda{h.rounds_in_course===1?"":"s"} aquí</span>
+              </div>
+            </div>;
+          })()}
           {/* PREFERENCES */}
           {data.preferences&&<div style={{padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,marginBottom:14}}>
             <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.4,marginBottom:8}}>PREFERENCIAS INFERIDAS</div>
@@ -5189,6 +5385,60 @@ function Customer360({course,userId,onClose}){
               {b.booking_code&&<div style={{fontSize:9,..._s.mono,color:C.gld,letterSpacing:.5,marginTop:3}}>{b.booking_code}</div>}
             </div>})}
           </div>}
+          {/* v20.19 NUEVO: SCORECARDS RECIENTES (top 5 en este curso) */}
+          {(()=>{const sc=data.scorecards||[];if(sc.length===0)return null;
+            const visible=scoreExpanded?sc:sc.slice(0,3);
+            return<div style={{marginTop:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.4}}>SCORECARDS RECIENTES ({sc.length})</div>
+                {sc.length>3&&<button onClick={()=>setScoreExpanded(!scoreExpanded)} style={{background:"transparent",border:"none",color:C.acc,fontSize:10,fontWeight:700,cursor:"pointer",padding:0}}>{scoreExpanded?"Ver menos":"Ver todos"}</button>}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {visible.map(s=>{
+                  const vsPar=s.vs_par;
+                  const vsParColor=vsPar==null?C.tm:vsPar<=0?C.grn:vsPar<=5?C.gld:C.acc;
+                  const vsParLbl=vsPar==null?"--":(vsPar>0?"+"+vsPar:vsPar===0?"E":vsPar);
+                  return<div key={s.id} style={{padding:"10px 12px",background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.txt}}>{new Date(s.round_date+"T12:00:00").toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"2-digit"})}</div>
+                      <span style={{fontSize:10,fontWeight:800,color:vsParColor,background:vsParColor+"18",padding:"2px 8px",borderRadius:5,..._s.mono}}>{vsParLbl}</span>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:C.ts}}>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0,marginRight:6}}>
+                        {s.layout_name||"Layout default"}
+                        {s.holes_played===9&&<span style={{fontSize:9,color:C.tm,marginLeft:4}}>(9h)</span>}
+                      </span>
+                      <span style={{..._s.mono,color:C.txt,fontWeight:700,flexShrink:0}}>{s.total_strokes}</span>
+                    </div>
+                    {(s.layout_rating||s.layout_slope||s.score_differential!=null)&&<div style={{fontSize:9,color:C.tm,..._s.mono,marginTop:4,display:"flex",justifyContent:"space-between",gap:8,paddingTop:4,borderTop:"1px dashed "+C.bd}}>
+                      <span>{s.layout_par?`Par ${s.layout_par}`:""}{s.layout_rating?` · R ${Number(s.layout_rating).toFixed(1)}`:""}{s.layout_slope?` · S ${s.layout_slope}`:""}</span>
+                      {s.score_differential!=null&&<span style={{color:C.acc,fontWeight:700}}>diff {Number(s.score_differential).toFixed(1)}</span>}
+                    </div>}
+                  </div>
+                })}
+              </div>
+            </div>;
+          })()}
+          {/* v20.19 NUEVO: ADMIN TAGS (manuales, scoped al curso, CRUD) */}
+          {(()=>{const at=data.admin_tags||[];return<div style={{marginTop:16,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.4,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>TAGS DEL ADMIN ({at.length})</span>
+              <span style={{fontSize:9,color:C.tm,opacity:.7,fontWeight:600,letterSpacing:.2}}>solo este campo</span>
+            </div>
+            {at.length===0?<div style={{fontSize:11,color:C.tm,padding:"6px 0",fontStyle:"italic"}}>Sin tags manuales aún</div>:
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+              {at.map(tg=><span key={tg.id} title={tg.note||""} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:700,padding:"4px 4px 4px 10px",borderRadius:8,background:C.acc+"15",color:C.acc,border:"1px solid "+C.acc+"30"}}>
+                {tg.tag}
+                <button onClick={()=>removeTag(tg.id)} disabled={tagBusy} title="Quitar" style={{width:16,height:16,borderRadius:8,background:"transparent",border:"none",color:C.acc,cursor:tagBusy?"default":"pointer",fontSize:13,lineHeight:1,padding:0,opacity:tagBusy?.4:.8,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+              </span>)}
+            </div>}
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <input value={newTag} onChange={e=>setNewTag(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addTag()}} placeholder="ej: cliente_propietario" maxLength={50} style={{flex:1,padding:"7px 9px",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:11,outline:"none"}}/>
+              <button onClick={addTag} disabled={tagBusy||!newTag.trim()} style={{padding:"7px 12px",background:tagBusy||!newTag.trim()?C.bd:`linear-gradient(135deg,${C.acc},#ff6b81)`,border:"none",borderRadius:8,color:tagBusy||!newTag.trim()?C.tm:"#fff",fontSize:11,fontWeight:800,cursor:tagBusy||!newTag.trim()?"default":"pointer",letterSpacing:.3,flexShrink:0}}>{tagBusy?"…":"+ Add"}</button>
+            </div>
+            <input value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Nota opcional (ej: 'siempre paga en efectivo')" maxLength={200} style={{width:"100%",padding:"6px 9px",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:10,outline:"none",marginTop:5}}/>
+            <div style={{fontSize:9,color:C.tm,marginTop:5,opacity:.7,lineHeight:1.4}}>Los tags se normalizan a snake_case y solo son visibles para admins de este campo.</div>
+          </div>})()}
         </>}
       </div>
     </div>
@@ -5479,6 +5729,139 @@ function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);cons
     {cust360&&<Customer360 course={course} userId={cust360} onClose={()=>setCust360(null)}/>}
   </div>}
 
+// v20.23 — AdminWalkInsCard: registro on-site sin booking previo.
+// Render dentro de AdminBookings al inicio. Quick modal de captura: party_size + amount + payment method.
+function AdminWalkInsCard({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(false);const[open,setOpen]=useState(false);
+  const[showModal,setShowModal]=useState(false);const[busyId,setBusyId]=useState(null);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_walk_ins",{p_course_id:course.id,p_date_from:null,p_date_to:null});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
+    setData(r);setLd(false)
+  }
+  useEffect(()=>{if(open&&!data)load()},[open]);
+  async function cancel(id){if(busyId)return;
+    const ok=await new Promise(res=>{if(window.__confirm)window.__confirm("¿Cancelar este walk-in?",()=>res(true),()=>res(false));else res(confirm("¿Cancelar?"))});
+    if(!ok)return;setBusyId(id);
+    const{error}=await sb.rpc("cancel_walk_in",{p_walk_in_id:id});
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.("Walk-in cancelado","success");load()
+  }
+  const PM={cash:{l:"💵 Cash",c:C.grn},card:{l:"💳 Tarjeta",c:"#6c5ce7"},transfer:{l:"🏦 Transfer",c:C.gld},complimentary:{l:"🎁 Cortesía",c:C.acc},other:{l:"Otro",c:C.tm}};
+  const walkIns=data?.walk_ins||[];const summary=data?.summary||{};
+  const today=new Date().toISOString().slice(0,10);
+  return<div style={{background:`linear-gradient(135deg,${C.grn}10,#00cec908)`,border:"1px solid "+C.grn+"30",borderRadius:14,padding:12,marginBottom:14}}>
+    <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+        <span style={{fontSize:18}}>🚶</span>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Walk-ins {summary.today_count>0&&<span style={{fontSize:10,fontWeight:700,color:C.grn,background:C.grn+"15",padding:"2px 6px",borderRadius:5,marginLeft:4}}>{summary.today_count} hoy · ${Math.round(summary.today_revenue||0).toLocaleString()}</span>}</div>
+          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Registra clientes que llegan sin reserva</div>
+        </div>
+      </div>
+      <button onClick={e=>{e.stopPropagation();setShowModal(true);if(!open)setOpen(true)}} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>+ Registrar</button>
+    </div>
+    {open&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.grn+"20"}}>
+      {ld?<div style={{textAlign:"center",padding:14,color:C.tm,fontSize:11}}>Cargando…</div>:walkIns.length===0?<div style={{fontSize:11,color:C.tm,textAlign:"center",padding:14}}>Sin walk-ins en los últimos 30 días</div>:<>
+        {/* Summary */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6,marginBottom:10}}>
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>{summary.total_count||0}</div><div style={{fontSize:9,color:C.tm}}>TOTAL 30d</div></div>
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.grn}}>${Math.round(summary.total_revenue||0).toLocaleString()}</div><div style={{fontSize:9,color:C.tm}}>REVENUE 30d</div></div>
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>${Math.round(summary.avg_ticket||0).toLocaleString()}</div><div style={{fontSize:9,color:C.tm}}>AVG TICKET</div></div>
+        </div>
+        {/* List recent */}
+        <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto"}}>
+          {walkIns.slice(0,12).map(w=>{const pm=PM[w.payment_method]||PM.other;const isToday=w.walk_in_date===today;const cancelled=w.status==="cancelled";return<div key={w.id} style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"8px 10px",opacity:cancelled?.5:1}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:4}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                <span style={{fontSize:12,fontWeight:800,color:C.txt}}>{w.customer_name||"Walk-in"}</span>
+                <span style={{fontSize:10,color:C.tm,..._s.mono}}>{w.party_size} jug</span>
+                {cancelled&&<span style={{fontSize:9,fontWeight:700,color:C.acc,background:C.acc+"15",padding:"1px 5px",borderRadius:4}}>CANCEL</span>}
+              </div>
+              <span style={{fontSize:11,fontWeight:800,color:C.grn,flexShrink:0}}>${Math.round(w.amount_paid).toLocaleString()}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+              <div style={{display:"flex",gap:6,fontSize:10,color:C.tm}}>
+                <span style={{fontWeight:600,color:pm.c}}>{pm.l}</span>
+                <span>{isToday?"Hoy":w.walk_in_date} {w.walk_in_time?.slice(0,5)}</span>
+              </div>
+              {!cancelled&&<button onClick={()=>cancel(w.id)} disabled={busyId===w.id} title="Cancelar" style={{padding:"2px 7px",background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:5,color:C.acc,fontSize:9,cursor:busyId===w.id?"default":"pointer"}}>×</button>}
+            </div>
+            {w.notes&&<div style={{fontSize:9,color:C.tm,marginTop:3,fontStyle:"italic"}}>{w.notes}</div>}
+          </div>})}
+        </div>
+        {walkIns.length>12&&<div style={{fontSize:9,color:C.tm,textAlign:"center",marginTop:6}}>+ {walkIns.length-12} más en los últimos 30 días</div>}
+      </>}
+    </div>}
+    {showModal&&<WalkInModal course={course} onClose={()=>setShowModal(false)} onSaved={()=>{setShowModal(false);load()}}/>}
+  </div>;
+}
+
+// v20.23 — Quick modal de captura walk-in. Optimizado para tablet pro shop.
+function WalkInModal({course,onClose,onSaved}){
+  const[partySize,setPartySize]=useState(4);
+  const[amount,setAmount]=useState("");
+  const[method,setMethod]=useState("cash");
+  const[name,setName]=useState("");
+  const[phone,setPhone]=useState("");
+  const[notes,setNotes]=useState("");
+  const[saving,setSaving]=useState(false);
+  const PM=[{k:"cash",l:"💵 Cash"},{k:"card",l:"💳 Tarjeta"},{k:"transfer",l:"🏦 Transfer"},{k:"complimentary",l:"🎁 Cortesía"}];
+  async function save(){
+    const ps=parseInt(partySize)||0;if(ps<1||ps>12){window.__toast?.("Party size 1-12","warn");return}
+    const amt=method==="complimentary"?0:parseFloat(amount);
+    if(method!=="complimentary"&&(isNaN(amt)||amt<0)){window.__toast?.("Monto inválido","warn");return}
+    setSaving(true);
+    const{data,error}=await sb.rpc("register_walk_in",{
+      p_course_id:course.id,p_party_size:ps,p_amount_paid:amt,p_payment_method:method,
+      p_customer_name:name.trim()||null,p_customer_phone:phone.trim()||null,
+      p_walk_in_time:null,p_slot_id:null,p_notes:notes.trim()||null
+    });
+    setSaving(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(data?.error){window.__toast?.(data.error,"warn");return}
+    window.__toast?.("Walk-in registrado · "+ps+" jug · $"+amt.toLocaleString(),"success");
+    onSaved()
+  }
+  const inpS={width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box"};
+  return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"16px 16px 0 0",maxWidth:480,width:"100%",maxHeight:"92vh",overflowY:"auto",padding:16,paddingBottom:24,borderTop:"1px solid "+C.bd}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>🚶 Registrar walk-in</h3>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:C.tm,cursor:"pointer",lineHeight:1}}>×</button>
+      </div>
+      {/* Party size buttons */}
+      <div style={{marginBottom:12}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".07em",textTransform:"uppercase",marginBottom:6}}>Jugadores *</div>
+        <div style={{display:"flex",gap:6}}>{[1,2,3,4,5,6,8].map(n=><button key={n} onClick={()=>setPartySize(n)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"1px solid "+(partySize===n?C.grn:C.bd),background:partySize===n?C.grn+"15":C.cd,color:partySize===n?C.grn:C.ts,fontSize:14,fontWeight:800,cursor:"pointer"}}>{n}</button>)}</div>
+      </div>
+      {/* Payment method */}
+      <div style={{marginBottom:12}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".07em",textTransform:"uppercase",marginBottom:6}}>Método pago *</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>{PM.map(o=><button key={o.k} onClick={()=>setMethod(o.k)} style={{padding:"10px 8px",borderRadius:8,border:"1px solid "+(method===o.k?C.grn:C.bd),background:method===o.k?C.grn+"15":C.cd,color:method===o.k?C.grn:C.ts,fontSize:12,fontWeight:700,cursor:"pointer"}}>{o.l}</button>)}</div>
+      </div>
+      {/* Amount (skip si complimentary) */}
+      {method!=="complimentary"&&<div style={{marginBottom:12}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".07em",textTransform:"uppercase",marginBottom:6}}>Monto cobrado MXN *</div>
+        <input type="number" inputMode="numeric" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Ej: 3200" style={{...inpS,fontSize:16,fontWeight:700,textAlign:"center"}}/>
+      </div>}
+      {/* Optional fields */}
+      <div style={{marginBottom:12}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".07em",textTransform:"uppercase",marginBottom:6}}>Datos opcionales</div>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre del cliente" style={{...inpS,marginBottom:6}}/>
+        <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Teléfono" style={{...inpS,marginBottom:6}}/>
+        <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Notas (slot, request, etc)" style={inpS}/>
+      </div>
+      {/* Actions */}
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={onClose} style={{flex:1,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:11,color:C.ts,fontSize:13,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+        <button onClick={save} disabled={saving} style={{flex:2,padding:12,background:saving?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:11,color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"default":"pointer"}}>{saving?"Guardando…":"Registrar"}</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=useState(true);const[selDate,setSelDate]=useState(new Date().toISOString().split("T")[0]);const[det,setDet]=useState(null);const[bkSearch,setBkSearch]=useState("");const[cust360,setCust360]=useState(null); // v19.72: Customer 360 modal
   useEffect(()=>{load()},[selDate]);async function load(){setLd(true);const{data}=await sb.from("bookings").select("*,user_profiles!inner(full_name,email,phone,player_id)").eq("course_id",course.id).eq("booking_date",selDate).order("booking_time");setBks(data||[]);setLd(false)}
   const navDay=(d)=>{const dt=new Date(selDate+"T12:00:00");dt.setDate(dt.getDate()+d);setSelDate(dt.toISOString().split("T")[0])};
@@ -5487,6 +5870,8 @@ function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=
   return<div className="fi">
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><button onClick={()=>navDay(-1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/><div style={{textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>{selDate===today&&<div style={{fontSize:10,color:C.acc,fontWeight:600}}>HOY</div>}<input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} style={{marginTop:4,background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"center"}}/></div><button onClick={()=>navDay(1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>
     <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{bks.length}</div><div className="l">{t("Reservas")}</div></div><div className="sc"><div className="n" style={{color:C.grn,fontSize:15}}>${fm(totalRev)}</div><div className="l">{t("Ingresos")}</div></div><div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{totalPax}</div><div className="l">{t("Jugadores")}</div></div></div>
+    {/* v20.23: Walk-ins card colapsable */}
+    <AdminWalkInsCard course={course}/>
     {ld?<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>:bks.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin reservas para {dayLabel(selDate)}</div>:bks.filter(b=>{if(!bkSearch)return true;const q=bkSearch.toLowerCase();return(b.user_profiles?.full_name||"").toLowerCase().includes(q)||(b.booking_code||"").toLowerCase().includes(q)||(b.user_profiles?.email||"").toLowerCase().includes(q)}).map(b=>{const st=stc[b.status]||stc.pending;const up=b.user_profiles;return<div key={b.id} className="ar" style={{flexDirection:"column",gap:6}}>
       <div style={{..._s.flexB,width:"100%"}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:16,fontWeight:800,color:C.txt}}>{b.booking_time?.slice(0,5)}</div><div style={{width:4,height:4,borderRadius:2,background:C.tm}}/><span style={{fontSize:13,fontWeight:600,color:C.txt}}>{b.party_size} jug</span></div><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"2px 8px",borderRadius:6}}>{st.l}</span></div>
       {b.booking_code&&<div style={{fontSize:11,..._s.mono,color:C.gld,letterSpacing:1,fontWeight:700}}>{b.booking_code}</div>}
@@ -5846,6 +6231,295 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     }} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid #666",borderRadius:14,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
   </div>}
 
+// v20.22 — Dynamic Pricing v1 Frontend.
+//   Tab: integrado dentro de AdminPromos (Promos & Pricing) como card colapsable al inicio.
+//   Backend RPCs (v20.21): save_pricing_rule, delete_pricing_rule, toggle_pricing_rule,
+//                          get_pricing_rules, preview_pricing_for_slot, apply_pricing_rules.
+//   Engine recorre slots futuros y aplica la primera regla de mayor priority que matchea.
+//   Slots con is_offer=true (Hot Deals manuales) son skipped (DP no compite con promos).
+function AdminPricingRules({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(false);const[open,setOpen]=useState(false);
+  const[showModal,setShowModal]=useState(false);const[editRule,setEditRule]=useState(null);
+  const[applying,setApplying]=useState(false);const[busyId,setBusyId]=useState(null);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_pricing_rules",{p_course_id:course.id});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
+    setData(r);setLd(false)
+  }
+  useEffect(()=>{if(open&&!data)load()},[open]);
+  async function applyEngine(){if(applying)return;setApplying(true);
+    const{data:r,error}=await sb.rpc("apply_pricing_rules",{p_course_id:course.id,p_lookahead_days:30});
+    setApplying(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    const af=r?.slots_affected||0;const rv=r?.slots_reverted||0;const imp=Math.round(r?.total_revenue_impact||0);
+    const sign=imp>=0?"+":"";
+    window.__toast?.("Engine: "+af+" slots ajustados"+(rv>0?", "+rv+" revertidos":"")+" · Impacto: "+sign+"$"+imp.toLocaleString(),"success");
+    load()
+  }
+  async function toggle(rule){if(busyId)return;setBusyId(rule.id);
+    const newStatus=rule.status==="active"?"paused":"active";
+    const{data:r,error}=await sb.rpc("toggle_pricing_rule",{p_rule_id:rule.id,p_status:newStatus});
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    const rv=r?.slots_reverted||0;
+    window.__toast?.("Regla "+(newStatus==="active"?"activada":"pausada")+(rv>0?" · "+rv+" slots revertidos":""),"success");
+    load()
+  }
+  async function del(rule){if(busyId)return;
+    const ok=await new Promise(res=>{if(window.__confirm)window.__confirm("¿Borrar \""+rule.name+"\"? Esta acción no se puede deshacer.",()=>res(true),()=>res(false));else res(confirm("¿Borrar \""+rule.name+"\"?"))});
+    if(!ok)return;setBusyId(rule.id);
+    const{data:r,error}=await sb.rpc("delete_pricing_rule",{p_rule_id:rule.id});
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    const rv=r?.slots_reverted||0;
+    window.__toast?.("Regla borrada"+(rv>0?" · "+rv+" slots revertidos":""),"success");
+    load()
+  }
+  // Summarize conditions in human-readable spanish
+  function summarize(rule){
+    const parts=[];
+    if(rule.min_occupancy_pct!=null||rule.max_occupancy_pct!=null){
+      const mn=rule.min_occupancy_pct,mx=rule.max_occupancy_pct;
+      if(mn!=null&&mx!=null)parts.push("ocupación "+mn+"-"+mx+"%");
+      else if(mn!=null)parts.push("ocupación ≥"+mn+"%");
+      else parts.push("ocupación ≤"+mx+"%");
+    }
+    if(rule.lookahead_window_hours_max!=null||rule.lookahead_window_hours_min!=null){
+      const mn=rule.lookahead_window_hours_min,mx=rule.lookahead_window_hours_max;
+      if(mn!=null&&mx!=null)parts.push("quedan "+mn+"-"+mx+"h");
+      else if(mx!=null)parts.push("quedan ≤"+mx+"h");
+      else parts.push("quedan ≥"+mn+"h");
+    }
+    if(rule.hour_start!=null&&rule.hour_end!=null){
+      parts.push(String(rule.hour_start).padStart(2,"0")+"-"+String(rule.hour_end).padStart(2,"0")+"h");
+    }
+    if(rule.days_of_week&&rule.days_of_week.length){
+      const DN=["D","L","M","X","J","V","S"];
+      parts.push(rule.days_of_week.map(d=>DN[d]).join(""));
+    }
+    if(rule.month_start&&rule.month_end){
+      const MN=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+      parts.push(MN[rule.month_start-1]+"-"+MN[rule.month_end-1]);
+    }
+    return parts.length?parts.join(" · "):"siempre aplicable";
+  }
+  function adjustmentLabel(rule){
+    const v=rule.adjustment_value;const sign=v>=0?"+":"";
+    if(rule.adjustment_type==="percent")return sign+v+"%";
+    return sign+"$"+Math.round(Math.abs(v)).toLocaleString()+(v<0?" off":"");
+  }
+  const rules=data?.rules||[];const summary=data?.summary||{};
+  return<div style={{background:`linear-gradient(135deg,#6c5ce715,#a855f708)`,border:"1px solid #6c5ce740",borderRadius:16,padding:14,marginBottom:16}}>
+    <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+        <span style={{fontSize:18}}>⚙️</span>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>Reglas dinámicas <span style={{fontSize:9,fontWeight:700,color:"#6c5ce7",background:"#6c5ce715",padding:"1px 5px",borderRadius:4,marginLeft:4,letterSpacing:".05em"}}>PRO+</span></div>
+          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Ajusta precios automáticamente según ocupación, horario y demanda</div>
+        </div>
+      </div>
+      <span style={{fontSize:14,color:C.tm,transform:open?"rotate(90deg)":"rotate(0)",transition:"transform .2s"}}>›</span>
+    </div>
+    {open&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #6c5ce720"}}>
+      {/* Summary cards */}
+      {summary&&<div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6,marginBottom:12}}>
+        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
+          <div style={{fontSize:16,fontWeight:800,color:C.grn}}>{summary.active_count||0}</div>
+          <div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>ACTIVAS</div>
+        </div>
+        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
+          <div style={{fontSize:16,fontWeight:800,color:C.txt}}>{summary.currently_affected_slots||0}</div>
+          <div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>SLOTS AJUSTADOS</div>
+        </div>
+        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:800,color:(summary.total_revenue_impact||0)>=0?C.grn:C.acc}}>{(summary.total_revenue_impact||0)>=0?"+":""}${Math.round(summary.total_revenue_impact||0).toLocaleString()}</div>
+          <div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>IMPACTO ACUM.</div>
+        </div>
+      </div>}
+      {/* Actions */}
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <button onClick={()=>{setEditRule(null);setShowModal(true)}} style={{flex:1,padding:"8px 12px",background:`linear-gradient(135deg,#6c5ce7,#a855f7)`,border:"none",borderRadius:10,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ Nueva regla</button>
+        <button onClick={applyEngine} disabled={applying||rules.length===0} style={{flex:1,padding:"8px 12px",background:applying?C.bd:(rules.length===0?C.cd:C.grn),border:"none",borderRadius:10,color:applying?C.tm:(rules.length===0?C.tm:"#fff"),fontSize:11,fontWeight:700,cursor:applying||rules.length===0?"default":"pointer"}}>{applying?"Aplicando…":"▶ Aplicar engine"}</button>
+      </div>
+      {/* Rules list */}
+      {ld?<div style={{textAlign:"center",padding:20,color:C.tm,fontSize:11}}>Cargando…</div>:
+       rules.length===0?<div style={{fontSize:11,color:C.tm,textAlign:"center",padding:"18px 0"}}>Sin reglas configuradas. Crea tu primera regla para empezar a optimizar tu yield.</div>:
+       <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {rules.map(r=>{const pos=r.adjustment_value>=0;const isActive=r.status==="active";return<div key={r.id} style={{background:isActive?C.cd:C.cd+"70",border:"1px solid "+(isActive?"#6c5ce740":C.bd),borderRadius:12,padding:10,opacity:isActive?1:.6}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:6}}>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                <span style={{fontSize:13,fontWeight:800,color:C.txt}}>{r.name}</span>
+                <span style={{fontSize:10,fontWeight:700,color:pos?C.acc:C.grn,background:(pos?C.acc:C.grn)+"15",padding:"2px 6px",borderRadius:5}}>{adjustmentLabel(r)}</span>
+                {!isActive&&<span style={{fontSize:9,fontWeight:700,color:C.tm,background:C.bd,padding:"2px 5px",borderRadius:4,letterSpacing:".04em"}}>PAUSADA</span>}
+              </div>
+              <div style={{fontSize:10,color:C.ts}}>{summarize(r)} · prio {r.priority}</div>
+              {r.last_applied_at&&<div style={{fontSize:9,color:C.tm,marginTop:2}}>Último apply: {new Date(r.last_applied_at).toLocaleString("es-MX",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})} · {r.last_affected_count||0} slots</div>}
+            </div>
+            <div style={{display:"flex",gap:4,flexShrink:0}}>
+              <button onClick={()=>toggle(r)} disabled={busyId===r.id} title={isActive?"Pausar":"Activar"} style={{padding:"4px 8px",background:isActive?C.gld+"15":C.grn+"15",border:"1px solid "+(isActive?C.gld+"40":C.grn+"40"),borderRadius:6,color:isActive?C.gld:C.grn,fontSize:10,fontWeight:700,cursor:busyId===r.id?"default":"pointer"}}>{isActive?"⏸":"▶"}</button>
+              <button onClick={()=>{setEditRule(r);setShowModal(true)}} title="Editar" style={{padding:"4px 8px",background:C.cd,border:"1px solid "+C.bd,borderRadius:6,color:C.ts,fontSize:10,cursor:"pointer"}}>✎</button>
+              <button onClick={()=>del(r)} disabled={busyId===r.id} title="Borrar" style={{padding:"4px 8px",background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:6,color:C.acc,fontSize:10,cursor:busyId===r.id?"default":"pointer"}}>×</button>
+            </div>
+          </div>
+        </div>})}
+       </div>}
+      <div style={{fontSize:9,color:C.tm,marginTop:10,padding:"6px 0",borderTop:"1px solid "+C.bd,lineHeight:1.4}}>💡 Las reglas se ordenan por prioridad. Solo la primera que matchea cada slot aplica. Slots con Hot Deal manual son ignorados.</div>
+    </div>}
+    {showModal&&<PricingRuleModal course={course} rule={editRule} onClose={()=>{setShowModal(false);setEditRule(null)}} onSaved={()=>{setShowModal(false);setEditRule(null);load()}}/>}
+  </div>;
+}
+
+// v20.22 — Modal create/edit pricing rule
+function PricingRuleModal({course,rule,onClose,onSaved}){
+  const isEdit=!!rule;
+  const[name,setName]=useState(rule?.name||"");
+  const[descr,setDescr]=useState(rule?.description||"");
+  // Conditions (todas opcionales)
+  const[useOcc,setUseOcc]=useState(rule?.min_occupancy_pct!=null||rule?.max_occupancy_pct!=null);
+  const[occMin,setOccMin]=useState(rule?.min_occupancy_pct??"");
+  const[occMax,setOccMax]=useState(rule?.max_occupancy_pct??"");
+  const[useLook,setUseLook]=useState(rule?.lookahead_window_hours_max!=null||rule?.lookahead_window_hours_min!=null);
+  const[lookMin,setLookMin]=useState(rule?.lookahead_window_hours_min??"");
+  const[lookMax,setLookMax]=useState(rule?.lookahead_window_hours_max??"");
+  const[useHour,setUseHour]=useState(rule?.hour_start!=null);
+  const[hrStart,setHrStart]=useState(rule?.hour_start??"");
+  const[hrEnd,setHrEnd]=useState(rule?.hour_end??"");
+  const[useDays,setUseDays]=useState(rule?.days_of_week?.length>0);
+  const[days,setDays]=useState(rule?.days_of_week||[]);
+  const[useMonth,setUseMonth]=useState(rule?.month_start!=null);
+  const[monStart,setMonStart]=useState(rule?.month_start??"");
+  const[monEnd,setMonEnd]=useState(rule?.month_end??"");
+  // Adjustment
+  const[adjType,setAdjType]=useState(rule?.adjustment_type||"percent");
+  const[adjVal,setAdjVal]=useState(rule?.adjustment_value??"");
+  const[priority,setPriority]=useState(rule?.priority??100);
+  const[saving,setSaving]=useState(false);
+  
+  function toggleDay(d){setDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())}
+  
+  async function save(){
+    if(!name.trim()||name.trim().length<2){window.__toast?.("Nombre requerido (≥2 caracteres)","warn");return}
+    const v=parseFloat(adjVal);
+    if(isNaN(v)||v===0){window.__toast?.("Ajuste no puede ser cero","warn");return}
+    if(adjType==="percent"&&(v<-50||v>50)){window.__toast?.("Porcentaje entre -50 y +50","warn");return}
+    if(adjType==="fixed"&&(v<-5000||v>5000)){window.__toast?.("Fijo entre -5000 y +5000 MXN","warn");return}
+    setSaving(true);
+    const payload={
+      p_course_id:course.id,
+      p_rule_id:rule?.id||null,
+      p_name:name.trim(),
+      p_description:descr.trim()||null,
+      p_min_occupancy_pct:useOcc&&occMin!==""?parseInt(occMin):null,
+      p_max_occupancy_pct:useOcc&&occMax!==""?parseInt(occMax):null,
+      p_lookahead_window_hours_max:useLook&&lookMax!==""?parseInt(lookMax):null,
+      p_lookahead_window_hours_min:useLook&&lookMin!==""?parseInt(lookMin):null,
+      p_hour_start:useHour&&hrStart!==""?parseInt(hrStart):null,
+      p_hour_end:useHour&&hrEnd!==""?parseInt(hrEnd):null,
+      p_days_of_week:useDays&&days.length>0?days:null,
+      p_month_start:useMonth&&monStart!==""?parseInt(monStart):null,
+      p_month_end:useMonth&&monEnd!==""?parseInt(monEnd):null,
+      p_adjustment_type:adjType,
+      p_adjustment_value:v,
+      p_priority:parseInt(priority)||100
+    };
+    const{data,error}=await sb.rpc("save_pricing_rule",payload);
+    setSaving(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(data?.error){window.__toast?.(data.error,"warn");return}
+    window.__toast?.("Regla "+(data?.action==="updated"?"actualizada":"creada"),"success");
+    onSaved()
+  }
+  
+  const DN=["D","L","M","X","J","V","S"];
+  const inpS={width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.txt,outline:"none",boxSizing:"border-box"};
+  const sectionH={fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".07em",textTransform:"uppercase",marginBottom:6};
+  const Toggle=({on,onToggle,label})=><div onClick={onToggle} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none"}}><div style={{width:32,height:18,borderRadius:9,background:on?"#6c5ce7":C.bd,position:"relative",transition:"background .15s"}}><div style={{position:"absolute",top:2,left:on?16:2,width:14,height:14,borderRadius:7,background:"#fff",transition:"left .15s"}}/></div><span style={{fontSize:12,fontWeight:600,color:C.txt}}>{label}</span></div>;
+  
+  return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"16px 16px 0 0",maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:16,paddingBottom:24,borderTop:"1px solid "+C.bd}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>{isEdit?"Editar regla":"Nueva regla dinámica"}</h3>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:C.tm,cursor:"pointer",lineHeight:1}}>×</button>
+      </div>
+      {/* Name + descr */}
+      <div style={{marginBottom:14}}>
+        <div style={sectionH}>Identidad</div>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Low Occupancy -15%" style={{...inpS,marginBottom:6}} maxLength={100}/>
+        <input value={descr} onChange={e=>setDescr(e.target.value)} placeholder="Descripción (opcional)" style={inpS}/>
+      </div>
+      {/* Conditions */}
+      <div style={{marginBottom:14}}>
+        <div style={sectionH}>Condiciones (AND, todas opcionales)</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10,padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
+          {/* Occupancy */}
+          <div>
+            <Toggle on={useOcc} onToggle={()=>setUseOcc(o=>!o)} label="Ocupación %"/>
+            {useOcc&&<div style={{display:"flex",gap:6,marginTop:6,paddingLeft:40}}>
+              <input type="number" value={occMin} onChange={e=>setOccMin(e.target.value)} placeholder="min" min="0" max="100" style={{...inpS,fontSize:11}}/>
+              <span style={{color:C.tm,alignSelf:"center"}}>–</span>
+              <input type="number" value={occMax} onChange={e=>setOccMax(e.target.value)} placeholder="max" min="0" max="100" style={{...inpS,fontSize:11}}/>
+            </div>}
+          </div>
+          {/* Lookahead window */}
+          <div>
+            <Toggle on={useLook} onToggle={()=>setUseLook(o=>!o)} label="Horas restantes"/>
+            {useLook&&<div style={{display:"flex",gap:6,marginTop:6,paddingLeft:40}}>
+              <input type="number" value={lookMin} onChange={e=>setLookMin(e.target.value)} placeholder="min h" min="0" style={{...inpS,fontSize:11}}/>
+              <span style={{color:C.tm,alignSelf:"center"}}>–</span>
+              <input type="number" value={lookMax} onChange={e=>setLookMax(e.target.value)} placeholder="max h" min="1" style={{...inpS,fontSize:11}}/>
+            </div>}
+          </div>
+          {/* Hour range */}
+          <div>
+            <Toggle on={useHour} onToggle={()=>setUseHour(o=>!o)} label="Horario del día (0-23)"/>
+            {useHour&&<div style={{display:"flex",gap:6,marginTop:6,paddingLeft:40}}>
+              <input type="number" value={hrStart} onChange={e=>setHrStart(e.target.value)} placeholder="desde" min="0" max="23" style={{...inpS,fontSize:11}}/>
+              <span style={{color:C.tm,alignSelf:"center"}}>–</span>
+              <input type="number" value={hrEnd} onChange={e=>setHrEnd(e.target.value)} placeholder="hasta" min="0" max="23" style={{...inpS,fontSize:11}}/>
+            </div>}
+          </div>
+          {/* Days of week */}
+          <div>
+            <Toggle on={useDays} onToggle={()=>setUseDays(o=>!o)} label="Días de la semana"/>
+            {useDays&&<div style={{display:"flex",gap:4,marginTop:6,paddingLeft:40,flexWrap:"wrap"}}>
+              {DN.map((d,i)=><button key={i} onClick={()=>toggleDay(i)} style={{width:28,height:28,borderRadius:8,border:"1px solid "+(days.includes(i)?"#6c5ce7":C.bd),background:days.includes(i)?"#6c5ce715":"transparent",color:days.includes(i)?"#6c5ce7":C.ts,fontSize:11,fontWeight:700,cursor:"pointer"}}>{d}</button>)}
+            </div>}
+          </div>
+          {/* Months */}
+          <div>
+            <Toggle on={useMonth} onToggle={()=>setUseMonth(o=>!o)} label="Meses del año (1-12)"/>
+            {useMonth&&<div style={{display:"flex",gap:6,marginTop:6,paddingLeft:40}}>
+              <input type="number" value={monStart} onChange={e=>setMonStart(e.target.value)} placeholder="ej 6" min="1" max="12" style={{...inpS,fontSize:11}}/>
+              <span style={{color:C.tm,alignSelf:"center"}}>–</span>
+              <input type="number" value={monEnd} onChange={e=>setMonEnd(e.target.value)} placeholder="ej 8" min="1" max="12" style={{...inpS,fontSize:11}}/>
+            </div>}
+          </div>
+        </div>
+      </div>
+      {/* Adjustment */}
+      <div style={{marginBottom:14}}>
+        <div style={sectionH}>Ajuste de precio</div>
+        <div style={{display:"flex",gap:6,marginBottom:8}}>
+          {[{k:"percent",l:"% Porcentaje"},{k:"fixed",l:"$ Fijo MXN"}].map(o=><button key={o.k} onClick={()=>setAdjType(o.k)} style={{flex:1,padding:"8px 10px",borderRadius:8,border:"1px solid "+(adjType===o.k?"#6c5ce7":C.bd),background:adjType===o.k?"#6c5ce715":C.cd,color:adjType===o.k?"#6c5ce7":C.ts,fontSize:11,fontWeight:700,cursor:"pointer"}}>{o.l}</button>)}
+        </div>
+        <input type="number" step="0.1" value={adjVal} onChange={e=>setAdjVal(e.target.value)} placeholder={adjType==="percent"?"Ej: -15 (descuento) o +20 (premium)":"Ej: -200 (descuento $) o +500 (premium $)"} style={inpS}/>
+        <div style={{fontSize:9,color:C.tm,marginTop:4}}>{adjType==="percent"?"Rango: -50 a +50 (no cero)":"Rango: -5000 a +5000 MXN (no cero)"}</div>
+      </div>
+      {/* Priority */}
+      <div style={{marginBottom:14}}>
+        <div style={sectionH}>Prioridad (mayor gana primero)</div>
+        <input type="number" value={priority} onChange={e=>setPriority(e.target.value)} min="1" style={inpS}/>
+      </div>
+      {/* Actions */}
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={onClose} style={{flex:1,padding:11,background:C.cd,border:"1px solid "+C.bd,borderRadius:11,color:C.ts,fontSize:12,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+        <button onClick={save} disabled={saving} style={{flex:2,padding:11,background:saving?C.bd:`linear-gradient(135deg,#6c5ce7,#a855f7)`,border:"none",borderRadius:11,color:"#fff",fontSize:12,fontWeight:700,cursor:saving?"default":"pointer"}}>{saving?"Guardando…":(isEdit?"Actualizar regla":"Crear regla")}</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function AdminPromos({course}){const[promos,setPromos]=useState([]);const[ld,setLd]=useState(true);const[create,setCreate]=useState(false);const[pType,setPType]=useState("percent");const[pVal,setPVal]=useState("");const[pFrom,setPFrom]=useState("");const[pUntil,setPUntil]=useState("");const[pTStart,setPTStart]=useState("");const[pTEnd,setPTEnd]=useState("");const[pDesc,setPDesc]=useState("");const[pMin,setPMin]=useState("1");const[pMaxUses,setPMaxUses]=useState("");const[editId,setEditId]=useState(null);
   // v20.0: Smart Promotions state
   const[smart,setSmart]=useState(null);const[smartLd,setSmartLd]=useState(false);const[smartErr,setSmartErr]=useState(null);const[applying,setApplying]=useState(null); // slot_id en proceso
@@ -5885,7 +6559,10 @@ function AdminPromos({course}){const[promos,setPromos]=useState([]);const[ld,set
     <div style={{display:"flex",gap:6,marginBottom:12}}>{Object.entries(PL).map(([k,l])=><button key={k} onClick={()=>setPType(k)} style={{flex:1,padding:8,borderRadius:10,border:"2px solid "+(pType===k?C.acc:C.bd),background:pType===k?C.acc+"15":C.cd,color:pType===k?C.acc:C.ts,fontSize:11,fontWeight:700,cursor:"pointer"}}>{l}</button>)}</div>
     <div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>VALOR*</label><input value={pVal} onChange={e=>setPVal(e.target.value)} type="number" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>{t("MÍN JUG")}</label><input value={pMin} onChange={e=>setPMin(e.target.value)} type="number" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>DESDE*</label><input type="date" value={pFrom} onChange={e=>setPFrom(e.target.value)} style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>HASTA*</label><input type="date" value={pUntil} onChange={e=>setPUntil(e.target.value)} style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>{t("HORA INI")}</label><input type="time" value={pTStart} onChange={e=>setPTStart(e.target.value)} style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>{t("HORA FIN")}</label><input type="time" value={pTEnd} onChange={e=>setPTEnd(e.target.value)} style={{...inp0,marginTop:4}}/></div></div>
     <div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>MÁX USOS</label><input value={pMaxUses} onChange={e=>setPMaxUses(e.target.value)} type="number" placeholder="∞" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>DESCRIPCIÓN</label><input value={pDesc} onChange={e=>setPDesc(e.target.value)} placeholder={t("Opcional")} style={{...inp0,marginTop:4}}/></div></div><button onClick={createPromo} style={{width:"100%",padding:14,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{editId?"Guardar":"Crear"}</button></div>;
-  return<div className="fi"><div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}> Promos</h3><button onClick={()=>setCreate(true)} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.grn},#55efc4)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ {t("Crear")}</button></div>
+  return<div className="fi"><div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}> Promos & Pricing</h3><button onClick={()=>setCreate(true)} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.grn},#55efc4)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ {t("Crear")}</button></div>
+
+    {/* v20.22: Dynamic Pricing Rules — Yield engine que ajusta precios automáticamente */}
+    <AdminPricingRules course={course}/>
 
     {/* v20.0: SMART PROMOTIONS — Sugerencias inteligentes basadas en slots subutilizados */}
     <div style={{background:`linear-gradient(135deg,${C.gld}10,${C.acc}08)`,border:"1px solid "+C.gld+"30",borderRadius:16,padding:14,marginBottom:16}}>
@@ -6654,6 +7331,276 @@ function PremiumInsights({course}){const{s}=useA();const{sub,isPremium}=usePremi
     {isPremium?<div style={{marginBottom:16}}>{(()=>{const suggestions=[];(m.hourData||[]).forEach(h=>{if(h.occ>80)suggestions.push({hour:h.hour,type:"increase",pct:15,reason:"Alta demanda ("+h.occ+"%)"});else if(h.occ<20&&h.hour>=6)suggestions.push({hour:h.hour,type:"decrease",pct:20,reason:"Baja demanda ("+h.occ+"%)"})});return<>{suggestions.length>0&&<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:14,marginBottom:10}}>{suggestions.slice(0,5).map((sg,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:8,background:sg.type==="increase"?C.grn+"10":C.acc+"10",borderRadius:10}}><div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:sg.type==="increase"?C.grn:C.acc}}>{sg.hour}:00 — {sg.type==="increase"?"Subir":"Bajar"} {sg.pct}%</div><div style={{fontSize:10,color:C.ts}}>{sg.reason}</div></div></div>)}</div>}</>})()}</div>:<LockedOverlay title={t("Pricing Dinámico")} desc={t("Ajusta precios por demanda")} onUpgrade={()=>setShowPricing(true)}/>}
   </div>}
 
+// v20.24 — Block Manager. Operating §4.4.
+// Bloqueos masivos por mantenimiento, weather, eventos privados, holidays.
+// Atomically: marca time_slots como blocked/maintenance, cancela bookings con refund_pending,
+// crea notifications a jugadores afectados, log auditable en block_affected_bookings.
+// Quick win: 30min de WhatsApp + 2h refunds manuales → 15 segundos.
+function AdminBlockManager({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(false);const[open,setOpen]=useState(false);
+  const[showModal,setShowModal]=useState(false);const[busyId,setBusyId]=useState(null);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_admin_blocks",{p_course_id:course.id,p_limit:50});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
+    setData(r);setLd(false)
+  }
+  useEffect(()=>{if(open&&!data)load()},[open]);
+  async function revert(blockId){if(busyId)return;
+    const ok=await new Promise(res=>{if(window.__confirm)window.__confirm("¿Revertir este bloqueo? Los slots volverán a estar disponibles. Los bookings cancelados NO se restauran automáticamente.",()=>res(true),()=>res(false));else res(confirm("¿Revertir?"))});
+    if(!ok)return;setBusyId(blockId);
+    const{data:r,error}=await sb.rpc("revert_block",{p_block_id:blockId});
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(r?.error){window.__toast?.(r.error,"warn");return}
+    window.__toast?.("Bloqueo revertido · "+r.slots_restored+" slots restaurados","success");load()
+  }
+  const BT={
+    weather:{l:"⛈️ Clima",c:"#3498db"},
+    maintenance:{l:"🔧 Mantenimiento",c:C.gld},
+    private_event:{l:"🎉 Evento privado",c:"#a855f7"},
+    holiday:{l:"📅 Feriado",c:C.tm},
+    other:{l:"📝 Otro",c:C.tm}
+  };
+  const RP={full:"💰 Full refund",credit:"🎫 Crédito",none:"⚠️ Sin refund"};
+  const blocks=data?.blocks||[];const summary=data?.summary||{};
+  function summarizeBlock(b){
+    const parts=[];
+    const dStart=new Date(b.start_date+"T12:00:00");const dEnd=new Date(b.end_date+"T12:00:00");
+    const dr=b.start_date===b.end_date?
+      dStart.toLocaleDateString("es-MX",{day:"numeric",month:"short"}):
+      dStart.toLocaleDateString("es-MX",{day:"numeric",month:"short"})+"–"+dEnd.toLocaleDateString("es-MX",{day:"numeric",month:"short"});
+    parts.push(dr);
+    if(b.start_time&&b.end_time)parts.push(b.start_time.slice(0,5)+"-"+b.end_time.slice(0,5)+"h");
+    else if(b.start_time)parts.push("desde "+b.start_time.slice(0,5)+"h");
+    else if(b.end_time)parts.push("hasta "+b.end_time.slice(0,5)+"h");
+    if(b.days_of_week&&b.days_of_week.length){
+      const DN_=["D","L","M","X","J","V","S"];
+      parts.push(b.days_of_week.map(d=>DN_[d]).join(""));
+    }
+    return parts.join(" · ");
+  }
+  return<div style={{background:`linear-gradient(135deg,${C.acc}10,#d63d5505)`,border:"1px solid "+C.acc+"30",borderRadius:14,padding:12,marginBottom:14}}>
+    <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+        <span style={{fontSize:18}}>🚫</span>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Bloqueos {summary.active>0&&<span style={{fontSize:10,fontWeight:700,color:C.acc,background:C.acc+"15",padding:"2px 6px",borderRadius:5,marginLeft:4}}>{summary.active} activo{summary.active===1?"":"s"}</span>}</div>
+          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Cierra slots por clima, mantenimiento o eventos · Refunds automáticos</div>
+        </div>
+      </div>
+      <button onClick={e=>{e.stopPropagation();setShowModal(true);if(!open)setOpen(true)}} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>+ Crear bloqueo</button>
+    </div>
+    {open&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.acc+"20"}}>
+      {/* Summary */}
+      {(summary.total||0)>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6,marginBottom:10}}>
+        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>{summary.total||0}</div><div style={{fontSize:9,color:C.tm}}>TOTAL</div></div>
+        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.acc}}>{summary.last_30d_bookings_impacted||0}</div><div style={{fontSize:9,color:C.tm}}>BOOKINGS 30d</div></div>
+        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:13,fontWeight:800,color:C.acc}}>${Math.round(summary.last_30d_revenue_impact||0).toLocaleString()}</div><div style={{fontSize:9,color:C.tm}}>IMPACT 30d</div></div>
+      </div>}
+      {/* List */}
+      {ld?<div style={{textAlign:"center",padding:14,color:C.tm,fontSize:11}}>Cargando…</div>:blocks.length===0?<div style={{fontSize:11,color:C.tm,textAlign:"center",padding:14}}>Sin bloqueos registrados. Crea uno cuando lo necesites.</div>:
+       <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:320,overflowY:"auto"}}>
+        {blocks.map(b=>{const bt=BT[b.block_type]||BT.other;const isActive=b.status==="active";return<div key={b.id} style={{background:C.cd,border:"1px solid "+(isActive?bt.c+"30":C.bd),borderRadius:10,padding:"8px 10px",opacity:isActive?1:.55}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,fontWeight:700,color:bt.c,background:bt.c+"15",padding:"2px 6px",borderRadius:5}}>{bt.l}</span>
+                {!isActive&&<span style={{fontSize:9,fontWeight:700,color:C.tm,background:C.bd,padding:"2px 5px",borderRadius:4,letterSpacing:".04em"}}>REVERTIDO</span>}
+                <span style={{fontSize:9,color:C.tm}}>{RP[b.refund_policy]||b.refund_policy}</span>
+              </div>
+              {b.reason&&<div style={{fontSize:11,fontWeight:600,color:C.txt,marginBottom:2}}>{b.reason}</div>}
+              <div style={{fontSize:10,color:C.ts}}>{summarizeBlock(b)}</div>
+              <div style={{fontSize:9,color:C.tm,marginTop:2}}>{b.slots_affected_count||0} slots · {b.bookings_affected_count||0} bookings{b.total_revenue_impact>0?" · -$"+Math.round(b.total_revenue_impact).toLocaleString():""}</div>
+            </div>
+            {isActive&&<button onClick={()=>revert(b.id)} disabled={busyId===b.id} title="Revertir" style={{padding:"4px 8px",background:C.grn+"10",border:"1px solid "+C.grn+"30",borderRadius:6,color:C.grn,fontSize:10,fontWeight:700,cursor:busyId===b.id?"default":"pointer",flexShrink:0}}>↶ Revertir</button>}
+          </div>
+        </div>})}
+       </div>}
+      <div style={{fontSize:9,color:C.tm,marginTop:8,padding:"6px 0",borderTop:"1px solid "+C.bd,lineHeight:1.4}}>💡 Los bloqueos cancelan bookings y marcan pagos como refund_pending. Las notifications se envían automáticamente.</div>
+    </div>}
+    {showModal&&<BlockCreateModal course={course} onClose={()=>setShowModal(false)} onSaved={()=>{setShowModal(false);load()}}/>}
+  </div>;
+}
+
+// v20.24 — Wizard modal de creación de bloqueo (2 steps: config + preview-confirm)
+function BlockCreateModal({course,onClose,onSaved}){
+  const[step,setStep]=useState("config");
+  const[blockType,setBlockType]=useState("weather");
+  const[reason,setReason]=useState("");
+  const[startDate,setStartDate]=useState(new Date().toISOString().slice(0,10));
+  const[endDate,setEndDate]=useState(new Date().toISOString().slice(0,10));
+  const[allDay,setAllDay]=useState(true);
+  const[startTime,setStartTime]=useState("");
+  const[endTime,setEndTime]=useState("");
+  const[useDays,setUseDays]=useState(false);
+  const[days,setDays]=useState([]);
+  const[refundPolicy,setRefundPolicy]=useState("full");
+  const[notes,setNotes]=useState("");
+  const[notify,setNotify]=useState(true);
+  const[preview,setPreview]=useState(null);
+  const[loading,setLoading]=useState(false);
+  const[applying,setApplying]=useState(false);
+  
+  const BT=[
+    {k:"weather",l:"⛈️ Clima",desc:"Cierre por lluvia, tormenta o viento"},
+    {k:"maintenance",l:"🔧 Mantenimiento",desc:"Aireación, fertilización, reparación"},
+    {k:"private_event",l:"🎉 Evento privado",desc:"Torneo cerrado, evento corporativo"},
+    {k:"holiday",l:"📅 Feriado",desc:"Cierre programado, día festivo"},
+    {k:"other",l:"📝 Otro",desc:"Otra razón operativa"}
+  ];
+  const RP=[
+    {k:"full",l:"💰 Reembolso completo",desc:"Refund 100% a Stripe (5-7 días)"},
+    {k:"credit",l:"🎫 Crédito",desc:"Crédito para próxima reserva"},
+    {k:"none",l:"⚠️ Sin reembolso",desc:"Solo cancela, no refund"}
+  ];
+  const DN=["D","L","M","X","J","V","S"];
+  function toggleDay(d){setDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())}
+  
+  async function loadPreview(){
+    if(startDate>endDate){window.__toast?.("Rango de fechas inválido","warn");return}
+    if(!allDay&&(!startTime||!endTime)){window.__toast?.("Define horario o usa todo el día","warn");return}
+    setLoading(true);
+    const{data,error}=await sb.rpc("preview_block_impact",{
+      p_course_id:course.id,
+      p_start_date:startDate,p_end_date:endDate,
+      p_start_time:allDay?null:startTime,
+      p_end_time:allDay?null:endTime,
+      p_days_of_week:useDays&&days.length>0?days:null
+    });
+    setLoading(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    setPreview(data);setStep("preview")
+  }
+  
+  async function apply(){
+    if(applying)return;setApplying(true);
+    const{data,error}=await sb.rpc("apply_block",{
+      p_course_id:course.id,
+      p_block_type:blockType,
+      p_start_date:startDate,p_end_date:endDate,
+      p_reason:reason.trim()||null,
+      p_start_time:allDay?null:startTime,
+      p_end_time:allDay?null:endTime,
+      p_days_of_week:useDays&&days.length>0?days:null,
+      p_refund_policy:refundPolicy,
+      p_notes:notes.trim()||null,
+      p_send_notifications:notify
+    });
+    setApplying(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(data?.error){window.__toast?.(data.error,"warn");return}
+    window.__toast?.("Bloqueo aplicado · "+data.slots_affected_count+" slots · "+data.bookings_affected_count+" bookings","success");
+    onSaved()
+  }
+  
+  const inpS={width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"8px 10px",fontSize:12,color:C.txt,outline:"none",boxSizing:"border-box"};
+  const sectionH={fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".07em",textTransform:"uppercase",marginBottom:6};
+  
+  return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"16px 16px 0 0",maxWidth:560,width:"100%",maxHeight:"92vh",overflowY:"auto",padding:16,paddingBottom:24,borderTop:"1px solid "+C.bd}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>🚫 {step==="config"?"Crear bloqueo":"Confirmar bloqueo"}</h3>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:C.tm,cursor:"pointer",lineHeight:1}}>×</button>
+      </div>
+      
+      {step==="config"?<>
+        {/* Block type */}
+        <div style={{marginBottom:12}}>
+          <div style={sectionH}>Tipo *</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{BT.map(o=><div key={o.k} onClick={()=>setBlockType(o.k)} style={{padding:"8px 10px",borderRadius:8,border:"1px solid "+(blockType===o.k?C.acc:C.bd),background:blockType===o.k?C.acc+"10":C.cd,cursor:"pointer"}}><div style={{fontSize:12,fontWeight:700,color:blockType===o.k?C.acc:C.txt}}>{o.l}</div><div style={{fontSize:10,color:C.tm,marginTop:1}}>{o.desc}</div></div>)}</div>
+        </div>
+        {/* Reason */}
+        <div style={{marginBottom:12}}>
+          <div style={sectionH}>Razón / Descripción</div>
+          <input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Ej: Tormenta tropical, aireación greens, evento Capital Group..." style={inpS} maxLength={200}/>
+        </div>
+        {/* Date range */}
+        <div style={{marginBottom:12}}>
+          <div style={sectionH}>Fechas *</div>
+          <div style={{display:"flex",gap:6}}>
+            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={inpS}/>
+            <span style={{color:C.tm,alignSelf:"center"}}>→</span>
+            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={inpS}/>
+          </div>
+        </div>
+        {/* Time range optional */}
+        <div style={{marginBottom:12,padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:allDay?0:8,cursor:"pointer",userSelect:"none"}} onClick={()=>setAllDay(a=>!a)}>
+            <div style={{width:32,height:18,borderRadius:9,background:allDay?C.acc:C.bd,position:"relative",transition:"background .15s"}}><div style={{position:"absolute",top:2,left:allDay?16:2,width:14,height:14,borderRadius:7,background:"#fff",transition:"left .15s"}}/></div>
+            <span style={{fontSize:12,fontWeight:600,color:C.txt}}>{allDay?"Todo el día":"Solo en horario específico"}</span>
+          </div>
+          {!allDay&&<div style={{display:"flex",gap:6,marginTop:8}}>
+            <input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)} style={inpS}/>
+            <span style={{color:C.tm,alignSelf:"center"}}>→</span>
+            <input type="time" value={endTime} onChange={e=>setEndTime(e.target.value)} style={inpS}/>
+          </div>}
+        </div>
+        {/* Days of week optional */}
+        <div style={{marginBottom:12,padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:useDays?8:0,cursor:"pointer",userSelect:"none"}} onClick={()=>setUseDays(d=>!d)}>
+            <div style={{width:32,height:18,borderRadius:9,background:useDays?C.acc:C.bd,position:"relative"}}><div style={{position:"absolute",top:2,left:useDays?16:2,width:14,height:14,borderRadius:7,background:"#fff"}}/></div>
+            <span style={{fontSize:12,fontWeight:600,color:C.txt}}>{useDays?"Solo días específicos":"Todos los días del rango"}</span>
+          </div>
+          {useDays&&<div style={{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}}>
+            {DN.map((d,i)=><button key={i} onClick={()=>toggleDay(i)} style={{width:32,height:32,borderRadius:8,border:"1px solid "+(days.includes(i)?C.acc:C.bd),background:days.includes(i)?C.acc+"15":"transparent",color:days.includes(i)?C.acc:C.ts,fontSize:12,fontWeight:700,cursor:"pointer"}}>{d}</button>)}
+          </div>}
+        </div>
+        {/* Refund policy */}
+        <div style={{marginBottom:12}}>
+          <div style={sectionH}>Política de refund *</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{RP.map(o=><div key={o.k} onClick={()=>setRefundPolicy(o.k)} style={{padding:"8px 10px",borderRadius:8,border:"1px solid "+(refundPolicy===o.k?C.grn:C.bd),background:refundPolicy===o.k?C.grn+"10":C.cd,cursor:"pointer"}}><div style={{fontSize:12,fontWeight:700,color:refundPolicy===o.k?C.grn:C.txt}}>{o.l}</div><div style={{fontSize:10,color:C.tm,marginTop:1}}>{o.desc}</div></div>)}</div>
+        </div>
+        {/* Notes */}
+        <div style={{marginBottom:14}}>
+          <div style={sectionH}>Notas internas (opcional)</div>
+          <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Ej: claim para seguro, contactar Roberto..." style={inpS}/>
+        </div>
+        {/* Actions */}
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onClose} style={{flex:1,padding:11,background:C.cd,border:"1px solid "+C.bd,borderRadius:11,color:C.ts,fontSize:13,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={loadPreview} disabled={loading} style={{flex:2,padding:11,background:loading?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:11,color:"#fff",fontSize:13,fontWeight:700,cursor:loading?"default":"pointer"}}>{loading?"Calculando…":"Vista previa →"}</button>
+        </div>
+      </>:<>
+        {/* Preview/Confirm step */}
+        <div style={{marginBottom:14,padding:12,background:`linear-gradient(135deg,${C.acc}15,#d63d5508)`,border:"1px solid "+C.acc+"40",borderRadius:12}}>
+          <div style={{fontSize:11,color:C.tm,marginBottom:6}}>Vas a aplicar este bloqueo:</div>
+          <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:4}}>{(BT.find(x=>x.k===blockType)||{}).l}</div>
+          {reason&&<div style={{fontSize:12,color:C.ts,marginBottom:4}}>{reason}</div>}
+          <div style={{fontSize:11,color:C.ts}}>{startDate}{startDate!==endDate?" – "+endDate:""}{!allDay?" · "+startTime+"–"+endTime:""}{useDays&&days.length>0?" · "+days.map(d=>DN[d]).join(""):""}</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6,marginBottom:12}}>
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:C.acc}}>{preview?.slots_count||0}</div><div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>SLOTS</div></div>
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:C.acc}}>{preview?.bookings_count||0}</div><div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>BOOKINGS</div></div>
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.acc}}>-${Math.round(preview?.total_revenue_at_risk||0).toLocaleString()}</div><div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>REVENUE</div></div>
+        </div>
+        {/* Sample bookings */}
+        {preview?.sample_bookings?.length>0&&<div style={{marginBottom:12}}>
+          <div style={sectionH}>Bookings que serán cancelados (sample)</div>
+          <div style={{maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
+            {preview.sample_bookings.map(s=><div key={s.id} style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",display:"flex",alignItems:"center",gap:6,fontSize:11}}>
+              <span style={{fontWeight:700,color:C.txt,minWidth:90}}>{s.booking_date} {s.booking_time?.slice(0,5)}</span>
+              <span style={{flex:1,color:C.ts,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.player_name||s.player_email||"—"}</span>
+              <span style={{color:C.grn,fontWeight:700}}>${Math.round(s.total_cost||0).toLocaleString()}</span>
+            </div>)}
+          </div>
+        </div>}
+        {/* Notify toggle */}
+        <div style={{marginBottom:14,padding:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none"}} onClick={()=>setNotify(n=>!n)}>
+          <div style={{width:32,height:18,borderRadius:9,background:notify?C.grn:C.bd,position:"relative"}}><div style={{position:"absolute",top:2,left:notify?16:2,width:14,height:14,borderRadius:7,background:"#fff"}}/></div>
+          <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.txt}}>Enviar notificaciones a jugadores</div><div style={{fontSize:10,color:C.tm,marginTop:1}}>Recomendado · push + email automático</div></div>
+        </div>
+        {/* Warning */}
+        <div style={{padding:10,background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:8,marginBottom:12,fontSize:11,color:C.txt,lineHeight:1.4}}>⚠ <strong>Acción atómica</strong>: los slots se bloquean, los bookings se cancelan y los refunds se marcan como pendientes. Se puede revertir slots después pero las cancellations son permanentes.</div>
+        {/* Actions */}
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setStep("config")} disabled={applying} style={{flex:1,padding:11,background:C.cd,border:"1px solid "+C.bd,borderRadius:11,color:C.ts,fontSize:13,fontWeight:700,cursor:applying?"default":"pointer"}}>← Atrás</button>
+          <button onClick={apply} disabled={applying} style={{flex:2,padding:11,background:applying?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:11,color:"#fff",fontSize:13,fontWeight:700,cursor:applying?"default":"pointer"}}>{applying?"Aplicando…":"Aplicar bloqueo"}</button>
+        </div>
+      </>}
+    </div>
+  </div>;
+}
+
 function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]=useState(true);const[selDate,setSelDate]=useState(new Date().toISOString().split("T")[0]);const[gen,setGen]=useState(false);const[editSlot,setEditSlot]=useState(null);const[editPrice,setEditPrice]=useState("");
   useEffect(()=>{load()},[selDate]);
   async function load(){setLd(true);const{data}=await sb.from("time_slots").select("*").eq("course_name",course.course_name).eq("slot_date",selDate).order("slot_time");setSlots(data||[]);setLd(false)}
@@ -6669,6 +7616,8 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
   const bands=[{k:"early",l:"Early Bird (6-9h)",r:[0,9]},{k:"prime",l:"Prime (9-12h)",r:[9,12]},{k:"mid",l:t("Mediodía (12-15h)"),r:[12,15]},{k:"twi",l:t("Twilight (15+)"),r:[15,24]}];
   return<div className="fi">
     <div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}> {t("Tee Times")}</h3><button onClick={generateSlots} disabled={gen} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",opacity:gen?.5:1}}>{gen?t("Generando..."):t("+ Generar 30 días")}</button></div>
+    {/* v20.24: Block Manager — bloqueos masivos con auto-refund + notify */}
+    <AdminBlockManager course={course}/>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><button onClick={()=>navDay(-1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/><div style={{textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>{selDate===today&&<div style={{fontSize:10,color:C.acc,fontWeight:600}}>HOY</div>}<input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} style={{marginTop:4,background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"center"}}/></div><button onClick={()=>navDay(1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div className="sc"><div className="n" style={{color:C.grn,fontSize:18}}>{available.length}</div><div className="l">Disponibles</div></div><div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{booked.length}</div><div className="l">{t("Reservados")}</div></div><div className="sc"><div className="n" style={{color:C.tm,fontSize:18}}>{blocked.length}</div><div className="l">Bloqueados</div></div></div>
     {ld?<Skeleton w="100%" h={60}/>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}><div dangerouslySetInnerHTML={{__html:ic("calendar",28,C.tm)}} style={{marginBottom:8}}/><p>Sin slots para esta fecha</p><p style={{fontSize:12,marginTop:4}}>Click "Generar 30 días" para crear</p></div>:
@@ -7512,12 +8461,22 @@ function AdminCampaignsCard({course}){
   const[campaigns,setCampaigns]=useState([]);
   const[creating,setCreating]=useState(false);
   const[detailId,setDetailId]=useState(null);
+  // v20.19: plantillas
+  const[showTemplates,setShowTemplates]=useState(false);
+  const[prefill,setPrefill]=useState(null); // {type, subject, body, name?} → seed CampaignCreateModal
 
   useEffect(()=>{load()},[course?.id]);
   async function load(){setLd(true);
     const{data,error}=await sb.rpc("get_admin_campaigns",{p_course_id:course.id,p_limit:20});
     if(error){console.warn("[v20.10] campaigns err:",error);setLd(false);return}
     setCampaigns(data?.campaigns||[]);setLd(false);
+  }
+
+  function onTemplateUse(tpl){
+    // Cargar plantilla en el create modal: type, subject, body. Marcar uso async.
+    setPrefill({type:tpl.type,subject:tpl.subject||"",body:tpl.body||"",templateId:tpl.id});
+    setShowTemplates(false);
+    setCreating(true);
   }
 
   return<div style={{marginBottom:14,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12}}>
@@ -7528,7 +8487,10 @@ function AdminCampaignsCard({course}){
         </div>
         <div style={{fontSize:9,color:C.tm,marginTop:1}}>Email + WhatsApp con targeting por segmento</div>
       </div>
-      <button onClick={()=>setCreating(true)} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.acc},#ff6b81)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:.3}}>+ Nueva</button>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={()=>setShowTemplates(true)} title="Plantillas guardadas" style={{padding:"6px 10px",background:"transparent",border:"1px solid "+C.bd,borderRadius:8,color:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:.3}}>📋 Plantillas</button>
+        <button onClick={()=>{setPrefill(null);setCreating(true)}} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.acc},#ff6b81)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:.3}}>+ Nueva</button>
+      </div>
     </div>
 
     {ld?<Skeleton w="100%" h={120}/>:campaigns.length===0?<div style={{textAlign:"center",padding:24,color:C.tm,fontSize:11}}>
@@ -7548,24 +8510,27 @@ function AdminCampaignsCard({course}){
         </div>
         <div style={{fontSize:10,color:C.tm,..._s.mono,display:"flex",justifyContent:"space-between",gap:8}}>
           <span>{segLbl} · {c.recipient_count} dest.</span>
-          {c.status==="sent"||c.status==="partial"?<span>{c.sent_count} enviados{c.failed_count>0?` · ${c.failed_count} fallaron`:""}{c.opened_count>0?` · ${c.opened_count} abrieron`:""}{c.clicked_count>0?` · ${c.clicked_count} click${c.clicked_count===1?"":"s"}`:""}</span>:<span>{new Date(c.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>}
+          {c.status==="sent"||c.status==="partial"?<span>{c.sent_count} enviados{c.failed_count>0?` · ${c.failed_count} fallaron`:""}{c.opened_count>0?` · ${c.opened_count} abrieron`:""}{c.clicked_count>0?` · ${c.clicked_count} click${c.clicked_count===1?"":"s"}`:""}{(c.bot_filtered_opens>0||c.bot_filtered_clicks>0)?<span title="Bots filtrados (Google, Apple Mail Privacy, etc.) — v20.17" style={{color:C.tm,opacity:.7}}> · 🤖{c.bot_filtered_opens+c.bot_filtered_clicks}</span>:""}</span>:<span>{new Date(c.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>}
         </div>
       </div>})}
     </div>}
 
-    {creating&&<CampaignCreateModal course={course} onClose={()=>setCreating(false)} onCreated={()=>{setCreating(false);load()}}/>}
+    {creating&&<CampaignCreateModal course={course} prefill={prefill} onClose={()=>{setCreating(false);setPrefill(null)}} onCreated={()=>{setCreating(false);setPrefill(null);load()}}/>}
     {detailId&&<CampaignDetailModal campaignId={detailId} onClose={()=>setDetailId(null)} onSent={()=>{setDetailId(null);load()}}/>}
+    {showTemplates&&<CampaignTemplatesModal course={course} onClose={()=>setShowTemplates(false)} onUse={onTemplateUse}/>}
   </div>;
 }
 
-function CampaignCreateModal({course,onClose,onCreated}){
-  const[type,setType]=useState("email");
+function CampaignCreateModal({course,onClose,onCreated,prefill}){
+  const[type,setType]=useState(prefill?.type||"email");
   const[name,setName]=useState("");
   const[segment,setSegment]=useState("lapsed");
-  const[subject,setSubject]=useState("");
-  const[body,setBody]=useState("Hola {nombre}, te extrañamos en " + (course?.course_name||"") + ". Tienes 15% off esta semana 🏌️");
+  const[subject,setSubject]=useState(prefill?.subject||"");
+  const[body,setBody]=useState(prefill?.body || ("Hola {nombre}, te extrañamos en " + (course?.course_name||"") + ". Tienes 15% off esta semana 🏌️"));
   const[busy,setBusy]=useState(false);
   const[result,setResult]=useState(null);
+  // v20.19: guardar como plantilla
+  const[saveBusy,setSaveBusy]=useState(false);
   const previewName = "Roberto";
 
   async function create(){
@@ -7582,6 +8547,26 @@ function CampaignCreateModal({course,onClose,onCreated}){
     if(error){window.__toast?.("Error: "+error.message,"warn");return}
     setResult(data);
     window.__toast?.(`Campaña creada · ${data.recipient_count} destinatarios (${data.pending_count} pendientes, ${data.skipped_count} sin canal)`,"success");
+    // v20.19: si vino de una plantilla, marcar uso
+    if(prefill?.templateId){sb.rpc("mark_template_used",{p_template_id:prefill.templateId}).catch(()=>{})}
+  }
+
+  async function saveAsTemplate(){
+    if(saveBusy||busy)return;
+    if(type==="email"&&!subject.trim()){window.__toast?.("Falta el subject del email","warn");return}
+    if(!body.trim()){window.__toast?.("Falta el cuerpo del mensaje","warn");return}
+    const tplName=prompt("Nombre de la plantilla:",name||"Plantilla "+new Date().toLocaleDateString("es-MX"));
+    if(!tplName||!tplName.trim())return;
+    setSaveBusy(true);
+    const{data,error}=await sb.rpc("save_admin_campaign_template",{
+      p_course_id:course.id, p_template_id:null,
+      p_name:tplName.trim(), p_type:type,
+      p_subject:type==="email"?subject:null, p_body:body
+    });
+    setSaveBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(data?.error){window.__toast?.(data.error,"warn");return}
+    window.__toast?.(`✓ Plantilla "${tplName.trim()}" guardada`,"success");
   }
 
   return ReactDOM.createPortal(<div onClick={()=>{if(!busy&&!result)onClose()}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",zIndex:10001,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
@@ -7597,6 +8582,10 @@ function CampaignCreateModal({course,onClose,onCreated}){
         <div style={{fontSize:11,color:C.tm,..._s.mono,marginBottom:14}}>{result.recipient_count} destinatarios · {result.pending_count} listos · {result.skipped_count} sin canal</div>
         <button onClick={()=>{onCreated()}} style={{padding:"11px 22px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",letterSpacing:.3}}>Ver y enviar</button>
       </div>:<>
+        {/* v20.19: banner de plantilla precargada */}
+        {prefill?.templateId&&<div style={{marginBottom:12,padding:"8px 10px",background:C.acc+"10",border:"1px dashed "+C.acc+"40",borderRadius:8,fontSize:10,color:C.acc,..._s.mono,display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:13}}>📋</span><span>Cargado desde plantilla — solo falta nombrar la campaña.</span>
+        </div>}
         {/* Type selector */}
         <div style={{marginBottom:12}}>
           <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:5}}>CANAL</div>
@@ -7642,6 +8631,8 @@ function CampaignCreateModal({course,onClose,onCreated}){
 
         <div style={{display:"flex",gap:6}}>
           <button onClick={onClose} disabled={busy} style={{flex:1,padding:11,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.tm,fontSize:12,fontWeight:700,cursor:busy?"default":"pointer"}}>Cancelar</button>
+          {/* v20.19: guardar como plantilla (no bloquea el flow de crear) */}
+          <button onClick={saveAsTemplate} disabled={busy||saveBusy} title="Guarda el subject + body actual como plantilla reusable" style={{padding:"11px 13px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:saveBusy?C.tm:C.ts,fontSize:11,fontWeight:700,cursor:busy||saveBusy?"default":"pointer",letterSpacing:.3,whiteSpace:"nowrap"}}>{saveBusy?"…":"💾 Plantilla"}</button>
           <button onClick={create} disabled={busy} style={{flex:2,padding:11,background:busy?C.bd:`linear-gradient(135deg,${C.acc},#ff6b81)`,border:"none",borderRadius:10,color:busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"Creando…":"Crear como borrador"}</button>
         </div>
       </>}
@@ -7721,10 +8712,12 @@ function CampaignDetailModal({campaignId,onClose,onSent}){
           <div style={{padding:7,background:"#3b82f615",border:"1px solid #3b82f640",borderRadius:7,textAlign:"center"}}>
             <div style={{fontSize:13,fontWeight:900,color:"#3b82f6",..._s.mono}}>{data.campaign.opened_count||0}</div>
             <div style={{fontSize:8,color:C.tm}}>Abiertos {data.campaign.sent_count>0?<span style={{opacity:.7}}>· {Math.round((data.campaign.opened_count||0)/data.campaign.sent_count*100)}%</span>:null}</div>
+            {data.campaign.bot_filtered_opens>0&&<div title="Aperturas detectadas como bots (Google, Apple Mail Privacy, Outlook scanner, etc.) y filtradas — v20.17" style={{fontSize:8,color:C.tm,marginTop:2,..._s.mono,opacity:.85}}>🤖 +{data.campaign.bot_filtered_opens} bot{data.campaign.bot_filtered_opens===1?"":"s"}</div>}
           </div>
           <div style={{padding:7,background:"#8b5cf615",border:"1px solid #8b5cf640",borderRadius:7,textAlign:"center"}}>
             <div style={{fontSize:13,fontWeight:900,color:"#8b5cf6",..._s.mono}}>{data.campaign.clicked_count||0}</div>
             <div style={{fontSize:8,color:C.tm}}>Clicks {data.campaign.sent_count>0?<span style={{opacity:.7}}>· {Math.round((data.campaign.clicked_count||0)/data.campaign.sent_count*100)}%</span>:null}</div>
+            {data.campaign.bot_filtered_clicks>0&&<div title="Clicks de bots filtrados — v20.17" style={{fontSize:8,color:C.tm,marginTop:2,..._s.mono,opacity:.85}}>🤖 +{data.campaign.bot_filtered_clicks} bot{data.campaign.bot_filtered_clicks===1?"":"s"}</div>}
           </div>
         </div>
 
@@ -7754,6 +8747,89 @@ function CampaignDetailModal({campaignId,onClose,onSent}){
         </div>
         {data.campaign.type==="whatsapp"&&data.campaign.status==="sent"&&<div style={{fontSize:10,color:C.tm,marginTop:10,padding:8,background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:6,lineHeight:1.4}}>💡 Click cada destinatario para abrir WhatsApp con el mensaje pre-rellenado.</div>}
       </>}
+    </div>
+  </div>,document.body);
+}
+
+// v20.19: CampaignTemplatesModal — plantillas reusables de subject+body por curso.
+// Backend: get_admin_campaign_templates / save_admin_campaign_template /
+//          delete_admin_campaign_template / mark_template_used (vía useTemplate handler en parent).
+function CampaignTemplatesModal({course,onClose,onUse}){
+  const[ld,setLd]=useState(true);
+  const[templates,setTemplates]=useState([]);
+  const[filterType,setFilterType]=useState("all"); // all / email / whatsapp
+  const[busyId,setBusyId]=useState(null);
+
+  useEffect(()=>{load()},[course?.id,filterType]);
+  async function load(){setLd(true);
+    const p_type=filterType==="all"?null:filterType;
+    const{data,error}=await sb.rpc("get_admin_campaign_templates",{p_course_id:course.id,p_type});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
+    setTemplates(data||[]);setLd(false);
+  }
+
+  async function del(id){
+    if(!confirm("¿Eliminar esta plantilla? Las campañas ya creadas a partir de ella no se afectan."))return;
+    setBusyId(id);
+    const{data,error}=await sb.rpc("delete_admin_campaign_template",{p_template_id:id});
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    if(data?.error){window.__toast?.(data.error,"warn");return}
+    window.__toast?.("Plantilla eliminada","success");
+    load();
+  }
+
+  return ReactDOM.createPortal(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",zIndex:10001,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"20px 20px 0 0",padding:18,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",border:"1px solid "+C.bd}}>
+      <div style={{..._s.flexB,marginBottom:14,paddingBottom:10,borderBottom:"1px solid "+C.bd}}>
+        <div>
+          <div style={{fontSize:14,fontWeight:800,color:C.txt}}>📋 Plantillas de campaña</div>
+          <div style={{fontSize:10,color:C.tm,marginTop:2}}>Reusa subject + body para ahorrarte rescribir cada vez</div>
+        </div>
+        <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{display:"flex",gap:4,marginBottom:12,padding:3,background:C.cd,borderRadius:8}}>
+        {[{v:"all",lbl:"Todas"},{v:"email",lbl:"✉️ Email"},{v:"whatsapp",lbl:"💬 WhatsApp"}].map(o=>
+          <button key={o.v} onClick={()=>setFilterType(o.v)} style={{flex:1,padding:"6px 8px",background:filterType===o.v?C.bg:"transparent",border:"none",borderRadius:6,color:filterType===o.v?C.txt:C.tm,fontSize:11,fontWeight:filterType===o.v?800:600,cursor:"pointer"}}>{o.lbl}</button>)}
+      </div>
+
+      {ld?<><Skeleton w="100%" h={70} mb={8}/><Skeleton w="100%" h={70}/></>:templates.length===0?<div style={{textAlign:"center",padding:32,color:C.tm,fontSize:12}}>
+        <div style={{fontSize:30,marginBottom:6}}>📭</div>
+        <div>Sin plantillas aún</div>
+        <div style={{fontSize:10,marginTop:4,opacity:.8,lineHeight:1.5,padding:"0 20px"}}>Crea una campaña como borrador y usa "💾 Plantilla" para guardarla aquí.</div>
+      </div>:<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {templates.map(tpl=>{
+          const created=new Date(tpl.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"2-digit"});
+          const lastUsed=tpl.last_used_at?new Date(tpl.last_used_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"}):null;
+          return<div key={tpl.id} style={{padding:11,background:C.cd,border:"1px solid "+C.bd,borderRadius:10}}>
+            <div style={{..._s.flexB,marginBottom:6,gap:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
+                <span style={{fontSize:13,flexShrink:0}}>{tpl.type==="email"?"✉️":"💬"}</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tpl.name}</span>
+              </div>
+              <div style={{display:"flex",gap:4,flexShrink:0}}>
+                <button onClick={()=>onUse(tpl)} title="Cargar en nuevo borrador" style={{padding:"5px 11px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:6,color:"#fff",fontSize:10,fontWeight:800,cursor:"pointer",letterSpacing:.3}}>Usar</button>
+                <button onClick={()=>del(tpl.id)} disabled={busyId===tpl.id} title="Eliminar plantilla" style={{padding:"5px 9px",background:"transparent",border:"1px solid "+C.bd,borderRadius:6,color:busyId===tpl.id?C.tm:C.acc,fontSize:10,fontWeight:700,cursor:busyId===tpl.id?"default":"pointer"}}>{busyId===tpl.id?"…":"🗑"}</button>
+              </div>
+            </div>
+            {tpl.subject&&<div style={{fontSize:10,fontWeight:700,color:C.ts,marginBottom:4,paddingBottom:4,borderBottom:"1px dashed "+C.bd,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Asunto: {tpl.subject}</div>}
+            <div style={{fontSize:10,color:C.tm,whiteSpace:"pre-wrap",lineHeight:1.5,maxHeight:48,overflow:"hidden",position:"relative"}}>
+              {tpl.body}
+              {tpl.body&&tpl.body.length>140&&<div style={{position:"absolute",bottom:0,left:0,right:0,height:18,background:`linear-gradient(transparent,${C.cd})`}}/>}
+            </div>
+            <div style={{fontSize:9,color:C.tm,..._s.mono,marginTop:6,paddingTop:6,borderTop:"1px solid "+C.bd,display:"flex",justifyContent:"space-between",gap:8}}>
+              <span>Creada {created}{lastUsed?` · usada ${lastUsed}`:""}</span>
+              <span>{tpl.usage_count||0} uso{tpl.usage_count===1?"":"s"}{(tpl.variables_used||[]).length>0?` · vars: ${(tpl.variables_used||[]).map(v=>"{"+v+"}").join(", ")}`:""}</span>
+            </div>
+          </div>;
+        })}
+      </div>}
+
+      <div style={{marginTop:14,fontSize:10,color:C.tm,padding:8,background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:6,lineHeight:1.5}}>
+        💡 Las variables (<code style={{color:C.acc,..._s.mono}}>{"{nombre}"}</code>, <code style={{color:C.acc,..._s.mono}}>{"{handicap}"}</code>, etc.) se detectan automáticamente al guardar.
+      </div>
     </div>
   </div>,document.body);
 }
