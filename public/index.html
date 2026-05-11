@@ -8,7 +8,23 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v20.25 (Tee Sheet Pro v1 — Operating §4.1 centerpiece)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.26 (AI Concierge Admin — Claude Haiku 4.5 + tool_use)","color:#a855f7;font-weight:bold;font-size:13px");
+// v20.26 — AI Concierge Admin. §12.2 + §14.1 del Admin OS.
+//   Chat con Claude Haiku 4.5 que tiene tool_use sobre 5 RPCs internos:
+//     - get_course_overview → get_admin_dashboard_v2 (revenue, top, segments, alerts)
+//     - get_smart_promotions → get_smart_promo_suggestions (sugerencias auto)
+//     - get_week_operations → get_tee_sheet_week trimmed (days + summary, sin slots individuales)
+//     - get_walk_ins_summary → get_admin_walk_ins (revenue 30d on-site)
+//     - get_pricing_rules → DP rules activas
+//   Edge function: admin-concierge v1 (verify_jwt=false + manual getUser auth + service_role
+//   para RPCs). Loop tool_use max 5 iteraciones. Conversation se persiste cross-turn.
+//   Frontend: CTA card "🤖 Pregúntale a Claude" en AdminDash top → modal AdminConciergeChat
+//   (bottom sheet 92vh): mensajes con bubbles user/assistant, badges de tools_used,
+//   5 quick suggestions al abrir, input multiline con Enter-to-send, botón "+ Nuevo" para
+//   reset conversation.
+//   System prompt: responde español MX, conciso, accionable, usa tools antes de inventar.
+//   Cost: ~$0.02/turn (Haiku 4.5).
+//
 // v20.25 — Tee Sheet Pro v1. Operating §4.1 del Admin OS.
 //   Centerpiece operativo: vista semanal densa que une bookings + walk-ins + standby + blocks + DP.
 //   Layout 3-tier:
@@ -5465,7 +5481,155 @@ function Customer360({course,userId,onClose}){
   </div>
 }
 
+// v20.26 — AI Concierge Admin (§12.2 + §14.1 del Admin OS).
+// Chat con Claude Haiku 4.5 que tiene tool_use sobre 5 RPCs internos:
+// get_course_dashboard, get_smart_promotions, get_week_operations, get_walk_ins_summary, get_pricing_rules.
+// Edge function: admin-concierge v1 (verify_jwt=false + manual getUser inside).
+function AdminConciergeChat({course,onClose}){
+  const{s}=useA();
+  const[messages,setMessages]=useState([]);  // [{role:'user'|'assistant', content:string, tools:[]}]
+  const[conversation,setConversation]=useState([]);  // Raw conversation para enviar al edge fn
+  const[input,setInput]=useState("");
+  const[sending,setSending]=useState(false);
+  const[err,setErr]=useState(null);
+  const scrollRef=useRef(null);
+  
+  const SUGGESTIONS=[
+    "¿Cómo va mi semana?",
+    "¿Qué promoción me sugieres para este weekend?",
+    "¿Cuál es mi día más débil esta semana?",
+    "¿Cuánto generé en walk-ins este mes?",
+    "Resume mi día de hoy en 3 puntos clave"
+  ];
+  
+  async function send(text){
+    const question=(text||input).trim();
+    if(!question||sending)return;
+    setInput("");setErr(null);setSending(true);
+    
+    // Optimistic: agregar mensaje del user
+    const newMessages=[...messages,{role:"user",content:question,ts:Date.now()}];
+    setMessages(newMessages);
+    
+    try{
+      const token=s?.access_token;
+      const url=SB_FN_URL+"/admin-concierge";
+      const res=await fetch(url,{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":"Bearer "+token,
+        },
+        body:JSON.stringify({question,course_id:course.id,conversation}),
+      });
+      if(!res.ok){
+        const t2=await res.text();
+        throw new Error("HTTP "+res.status+" — "+t2.slice(0,200));
+      }
+      const data=await res.json();
+      if(data.error){throw new Error(data.message||data.error)}
+      
+      setMessages([...newMessages,{
+        role:"assistant",content:data.answer||"(sin respuesta)",
+        tools:data.tools_used||[],ts:Date.now()
+      }]);
+      setConversation(data.conversation||conversation);
+    }catch(e){
+      setErr(String(e?.message||e));
+      setMessages(newMessages);  // Roll back si quieres mostrar error inline
+    }finally{
+      setSending(false);
+      // Auto-scroll
+      setTimeout(()=>{if(scrollRef.current)scrollRef.current.scrollTop=scrollRef.current.scrollHeight},50)
+    }
+  }
+  
+  function newChat(){
+    setMessages([]);setConversation([]);setErr(null);setInput("")
+  }
+  
+  // Formatear mensajes assistant con saltos de línea
+  function formatMsg(text){
+    return (text||"").split("\n").map((line,i)=><div key={i} style={{marginBottom:line.trim()===""?6:0}}>{line||"\u00A0"}</div>);
+  }
+  
+  const TL={
+    get_course_overview:"📊 Dashboard",
+    get_smart_promotions:"✨ Smart Promos",
+    get_week_operations:"📅 Tee Sheet",
+    get_walk_ins_summary:"🚶 Walk-ins",
+    get_pricing_rules:"⚙️ DP Rules"
+  };
+  
+  return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"16px 16px 0 0",maxWidth:560,width:"100%",height:"92vh",display:"flex",flexDirection:"column",borderTop:"1px solid "+C.bd}}>
+      {/* Header */}
+      <div style={{padding:"14px 16px",borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{fontSize:22}}>🤖</div>
+          <div>
+            <h3 style={{margin:0,fontSize:15,fontWeight:800,color:C.txt}}>AI Concierge</h3>
+            <div style={{fontSize:9,color:C.tm,letterSpacing:".04em",marginTop:1}}>POWERED BY CLAUDE HAIKU 4.5 · TOOLS: 5 RPCs</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:4}}>
+          {messages.length>0&&<button onClick={newChat} title="Nuevo chat" style={{padding:"5px 9px",background:C.cd,border:"1px solid "+C.bd,borderRadius:7,color:C.tm,fontSize:11,cursor:"pointer"}}>+ Nuevo</button>}
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:C.tm,cursor:"pointer",lineHeight:1,padding:"0 4px"}}>×</button>
+        </div>
+      </div>
+      
+      {/* Messages */}
+      <div ref={scrollRef} style={{flex:1,overflowY:"auto",padding:"14px 16px"}}>
+        {messages.length===0?<div>
+          {/* Intro */}
+          <div style={{padding:14,background:`linear-gradient(135deg,${C.grn}10,#00cec906)`,border:"1px solid "+C.grn+"30",borderRadius:14,marginBottom:14}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:4}}>Hola 👋</div>
+            <div style={{fontSize:12,color:C.ts,lineHeight:1.4}}>Soy tu asistente AI para <strong style={{color:C.txt}}>{course.course_name}</strong>. Pregúntame sobre tus métricas, sugerencias de promos, ocupación o cualquier duda operativa. Consulto datos reales de tu campo en tiempo real.</div>
+          </div>
+          {/* Quick suggestions */}
+          <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".07em",textTransform:"uppercase",marginBottom:8}}>Sugerencias para empezar</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {SUGGESTIONS.map((s,i)=><button key={i} onClick={()=>send(s)} disabled={sending} style={{textAlign:"left",padding:"10px 12px",background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:C.txt,fontSize:12,cursor:sending?"default":"pointer",lineHeight:1.4}}>{s}</button>)}
+          </div>
+        </div>:<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {messages.map((m,i)=>{
+            const isUser=m.role==="user";
+            return<div key={i} style={{display:"flex",justifyContent:isUser?"flex-end":"flex-start"}}>
+              <div style={{maxWidth:"86%",padding:"10px 12px",background:isUser?C.grn+"15":C.cd,border:"1px solid "+(isUser?C.grn+"30":C.bd),borderRadius:isUser?"14px 14px 4px 14px":"14px 14px 14px 4px"}}>
+                <div style={{fontSize:12.5,color:C.txt,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{formatMsg(m.content)}</div>
+                {!isUser&&m.tools?.length>0&&<div style={{marginTop:6,paddingTop:6,borderTop:"1px solid "+C.bd,display:"flex",flexWrap:"wrap",gap:4}}>
+                  {m.tools.map((tk,j)=><span key={j} style={{fontSize:9,fontWeight:600,color:C.tm,background:C.bg,padding:"2px 6px",borderRadius:4,border:"1px solid "+C.bd}}>{TL[tk]||tk}</span>)}
+                </div>}
+              </div>
+            </div>;
+          })}
+          {sending&&<div style={{display:"flex",justifyContent:"flex-start"}}>
+            <div style={{padding:"10px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:"14px 14px 14px 4px"}}>
+              <span className="pl" style={{color:C.tm,fontSize:12}}>Claude está pensando...</span>
+            </div>
+          </div>}
+          {err&&<div style={{padding:10,background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:10,fontSize:11,color:C.acc}}>⚠ {err}</div>}
+        </div>}
+      </div>
+      
+      {/* Input */}
+      <div style={{padding:"10px 12px",borderTop:"1px solid "+C.bd,flexShrink:0,background:C.bg}}>
+        <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+          <textarea value={input} onChange={e=>setInput(e.target.value)} 
+            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}}
+            placeholder="Pregúntale algo a tu Concierge..." rows={1}
+            disabled={sending}
+            style={{flex:1,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:"10px 12px",fontSize:13,color:C.txt,outline:"none",resize:"none",minHeight:38,maxHeight:120,fontFamily:"inherit",lineHeight:1.4}}/>
+          <button onClick={()=>send()} disabled={sending||!input.trim()} style={{padding:"10px 14px",background:!sending&&input.trim()?`linear-gradient(135deg,${C.grn},#00cec9)`:C.bd,border:"none",borderRadius:12,color:sending||!input.trim()?C.tm:"#fff",fontSize:13,fontWeight:700,cursor:sending||!input.trim()?"default":"pointer",flexShrink:0,minHeight:38}}>{sending?"...":"↑"}</button>
+        </div>
+        <div style={{fontSize:9,color:C.tm,marginTop:5,textAlign:"center"}}>Enter para enviar · Shift+Enter para nueva línea · Las respuestas son IA generada · {messages.length} msgs</div>
+      </div>
+    </div>
+  </div>;
+}
+
 function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);const[monthly,setMonthly]=useState([]);const[ld,setLd]=useState(true);const[csvRange,setCsvRange]=useState(false);const[csvFrom,setCsvFrom]=useState("");const[csvTo,setCsvTo]=useState(new Date().toISOString().slice(0,10));const[atRiskOpen,setAtRiskOpen]=useState(false);const[dashV2,setDashV2]=useState(null);const[cust360,setCust360]=useState(null);
+  const[concierge,setConcierge]=useState(false); // v20.26: AI Concierge chat modal
   const ft=course.facility_type||"campo";const unitLabel=ft==="campo"?t("Jugadores"):ft==="plataforma"?t("Visitantes"):t("Sesiones");const unitIcon=ft==="campo"?ic("golf",14,C.txt):ft==="plataforma"?ic("target",14,C.txt):ic("smartphone",14,C.txt);const capLabel=ft==="campo"?t("Hoyos"):ft==="plataforma"?t("Bahías"):t("Cabinas");const capCount=ft==="campo"?(course.hole_count||18):ft==="plataforma"?(course.stations_count||0):(course.cabins_count||0);
   useEffect(()=>{
     // v19.72: cargar dashboard v2 en paralelo (no-blocking — si falla, dashboard sigue funcional con datos legacy)
@@ -5565,6 +5729,15 @@ function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);cons
   };
   return<div className="fi">
     <CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/>
+    {/* v20.26: AI Concierge entry CTA */}
+    <div onClick={()=>setConcierge(true)} style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.grn}15,#00cec908)`,border:"1px solid "+C.grn+"40",borderRadius:14,marginBottom:14,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+      <div style={{fontSize:26,flexShrink:0}}>🤖</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>Pregúntale a Claude <span style={{fontSize:9,fontWeight:700,color:"#6c5ce7",background:"#6c5ce715",padding:"1px 5px",borderRadius:4,marginLeft:4,letterSpacing:".05em"}}>BETA</span></div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>Tu AI Concierge — métricas, sugerencias, análisis en lenguaje natural</div>
+      </div>
+      <span style={{color:C.grn,fontSize:18,flexShrink:0}}>›</span>
+    </div>
     <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14,letterSpacing:"-0.02em"}}>{t("Resumen")}</h3>
     {st.todayCount>0&&<div style={{background:`linear-gradient(135deg,${C.grn}15,${C.grn}08)`,border:"1px solid "+C.grn+"30",borderRadius:16,padding:14,marginBottom:16}}><div style={{fontSize:11,fontWeight:700,color:C.grn,marginBottom:6}}>📅 HOY</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.txt,..._s.mono}}>{st.todayCount}</div><div style={{fontSize:9,color:C.ts}}>Reservas</div></div><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.grn,..._s.mono}}>{st.todayPax}</div><div style={{fontSize:9,color:C.ts}}>Jugadores</div></div><div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:C.gld,..._s.mono}}>${fm(st.todayRev)}</div><div style={{fontSize:9,color:C.ts}}>Ingresos</div></div></div></div>}
 
@@ -5747,6 +5920,8 @@ function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);cons
 
     {/* v19.72: CUSTOMER 360 modal — overlay activado desde top spenders / today bookings */}
     {cust360&&<Customer360 course={course} userId={cust360} onClose={()=>setCust360(null)}/>}
+    {/* v20.26: AI Concierge chat modal */}
+    {concierge&&<AdminConciergeChat course={course} onClose={()=>setConcierge(false)}/>}
   </div>}
 
 // v20.23 — AdminWalkInsCard: registro on-site sin booking previo.
