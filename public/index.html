@@ -8,7 +8,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v20.26 (AI Concierge Admin — Claude Haiku 4.5 + tool_use)","color:#a855f7;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.27 (QA pt.19 fixes — MED-1 book_slot dynamic capacity + MED-2 Stripe rollback on INSERT fail)","color:#e17055;font-weight:bold;font-size:13px");
+// v20.27 — Fixes detectados en QA Pre-Go-Live pt.19 (mayo 2026).
+//   MED-1: book_slot ahora usa v_slot.capacity dinámicamente en lugar de literal 8.
+//     Migration: qa_pt19_fix_book_slot_dynamic_capacity. Smoke 10/10 PASS con caps 1, 4, 6, 8.
+//     En prod no cambia comportamiento (todos los slots cap=8); prepara plataformas/simuladores
+//     con capacities ≠ 8 en v20.28+. Max bookings sigue en 2 (sin cambio).
+//   MED-2: createBookingAfterPay con retry 3x + rollback Stripe si todos fallan.
+//     Antes: si INSERT bookings fallaba post-charge, el user pagaba sin booking.
+//     Ahora: 3 retries con backoff 300ms/600ms; si todos fallan, llama edge fn
+//     process-orphan-refund que reembolsa Stripe y logea en payment_recovery_log
+//     (tabla nueva con RLS platform_admin-only). Notif al user con el monto, y al
+//     platform-admin si el refund automático también falla (intervención manual).
+//
 // v20.26 — AI Concierge Admin. §12.2 + §14.1 del Admin OS.
 //   Chat con Claude Haiku 4.5 que tiene tool_use sobre 5 RPCs internos:
 //     - get_course_overview → get_admin_dashboard_v2 (revenue, top, segments, alerts)
@@ -1860,8 +1872,45 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     setPayData({amount:grand,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n,extras:Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0),promoCode:appliedPromo?.code||null,promoId:appliedPromo?.id||null,discountAmt:discount})
   };
   const createBookingAfterPay=async(paymentIntentId)=>{
-    const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",payment_status:"paid",stripe_payment_intent:paymentIntentId,promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();
-    if(error){if(window.__toast)window.__toast("Pago exitoso pero error al guardar reserva: "+error.message,"error");return null}
+    // v20.27 MED-2 fix (QA pt.19): retry 3 attempts + rollback Stripe si todos fallan.
+    // Antes: si INSERT bookings fallaba post-charge, el user pagaba sin booking.
+    // Ahora: retry exponential backoff. Si falla → call process-orphan-refund edge fn
+    // que reembolsa el PI y logea en payment_recovery_log para platform-admin.
+    const bookingPayload={user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:grand,extras_total:eT,status:"confirmed",payment_status:"paid",stripe_payment_intent:paymentIntentId,promo_code:appliedPromo?.code||null,discount_amount:discount||0};
+    let bk=null,lastErr=null;
+    for(let attempt=1;attempt<=3;attempt++){
+      const{data,error}=await sb.from("bookings").insert(bookingPayload).select().single();
+      if(!error&&data){bk=data;break}
+      lastErr=error;
+      console.warn("[MED-2] INSERT bookings attempt "+attempt+"/3 failed:",error?.message);
+      if(attempt<3)await new Promise(r=>setTimeout(r,300*attempt)); // 300ms, 600ms backoff
+    }
+    if(!bk){
+      // Todos los retries fallaron → intentar rollback Stripe
+      console.error("[MED-2] INSERT bookings FAILED 3x → triggering orphan refund. PI:",paymentIntentId);
+      try{
+        const res=await fetch(SB_FN_URL+"/process-orphan-refund",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","Authorization":"Bearer "+s.access_token},
+          body:JSON.stringify({
+            payment_intent_id:paymentIntentId,
+            failure_reason:"insert_bookings_failed",
+            failure_details:lastErr?.message||"unknown",
+            attempted_payload:bookingPayload
+          })
+        });
+        const result=await res.json();
+        if(result.success){
+          if(window.__toast)window.__toast("Hubo un error al guardar tu reserva. Tu pago fue reembolsado automáticamente ($"+fm(grand)+" MXN). Intenta reservar de nuevo.","info",10000);
+        }else{
+          if(window.__toast)window.__toast("Error al guardar reserva. Soporte fue notificado para procesar tu reembolso manualmente. Conserva este código: "+paymentIntentId.slice(-8),"error",15000);
+        }
+      }catch(refundErr){
+        console.error("[MED-2] orphan-refund call failed:",refundErr);
+        if(window.__toast)window.__toast("Error guardando tu reserva. Contacta a soporte con este código: "+paymentIntentId.slice(-8),"error",15000);
+      }
+      return null;
+    }
     if(payData?.extras?.length>0){const ei=payData.extras.map(e=>({...e,booking_id:bk.id}));await sb.from("booking_extras").insert(ei)}
     await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
     if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
