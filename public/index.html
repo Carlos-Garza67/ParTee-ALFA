@@ -8,7 +8,27 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v20.24 (Block Manager — bloqueos masivos con auto-refund + notify)","color:#e74c3c;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.25 (Tee Sheet Pro v1 — Operating §4.1 centerpiece)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.25 — Tee Sheet Pro v1. Operating §4.1 del Admin OS.
+//   Centerpiece operativo: vista semanal densa que une bookings + walk-ins + standby + blocks + DP.
+//   Layout 3-tier:
+//     1) WEEK STRIP horizontal (7 chips D L M X J V S con día número, mini bar de occupancy,
+//        dots indicadores: bloqueados gris · maint gold · ofertas rojo · DP púrpura)
+//     2) DAY STATS (libres, bookings, revenue, occ%)
+//     3) DAY VIEW denso: slots agrupados por banda (Early/Prime/Mid/Twi), cada slot card muestra:
+//        hora, capacity counter (booked/total), 🚶walk-ins + ⏳standby overlay, precio con
+//        ▲▼ DP trend vs base_price, Hot Deal badge. Color-coded por status×occupancy.
+//   Click slot → SlotDetailDrawer (bottom sheet): bookings con avatares + walk-ins + standby
+//     queue + DP rule info + price card (current vs base) + quick actions (bloquear, marcar Hot Deal).
+//   AdminSlots ahora con TOGGLE "📅 Calendario" / "≣ Lista" — default calendar, legacy list disponible.
+//   Backend (v20.25): 2 RPCs SEC DEF nuevos:
+//     - get_tee_sheet_week(course_id, start_date): 168 slots × 7 días con aggregates
+//       (bookings_count, bookings_pax, bookings_revenue, walk_ins_count, standby_count,
+//        dp_rule_name) + day stats + week summary.
+//     - get_slot_full_detail(slot_id): drill-down completo (bookings con avatars/emails,
+//       walk-ins, standby queue, dp_rule).
+//   Smoke 6/6 TS + 4/4 SEC PASS.
+//
 // v20.24 — Block Manager. Operating §4.4 del Admin OS.
 //   Bloqueos masivos por clima, mantenimiento, eventos privados, holidays. Atomic:
 //   1) Marca time_slots como blocked/maintenance, 2) Cancela bookings afectados con
@@ -7601,7 +7621,308 @@ function BlockCreateModal({course,onClose,onSaved}){
   </div>;
 }
 
+// v20.25 — Tee Sheet Pro v1 (Operating §4.1).
+// Centerpiece operativo: vista semanal densa que une bookings + walk-ins + standby + blocks + DP.
+// Layout: week strip horizontal (7 chips D-S con stats), day view denso (slots por banda),
+// click slot → SlotDetailDrawer con drill-down completo.
+// Reemplaza AdminSlots como vista por defecto; admin puede togglear a "Lista" legacy.
+function TeeSheetPro({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+  const[weekStart,setWeekStart]=useState(()=>{
+    const d=new Date();d.setHours(12,0,0,0);
+    // Empezar la semana en el dom (DOW=0) para alinear con EXTRACT
+    const dow=d.getDay();d.setDate(d.getDate()-dow);
+    return d.toISOString().slice(0,10);
+  });
+  const[selectedDate,setSelectedDate]=useState(new Date().toISOString().slice(0,10));
+  const[drawerSlotId,setDrawerSlotId]=useState(null);
+  
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_tee_sheet_week",{p_course_id:course.id,p_start_date:weekStart});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
+    setData(r);setLd(false)
+  }
+  useEffect(()=>{load()},[weekStart,course.id]);
+  
+  function navWeek(delta){
+    const d=new Date(weekStart+"T12:00:00");d.setDate(d.getDate()+(7*delta));
+    setWeekStart(d.toISOString().slice(0,10))
+  }
+  function goToday(){
+    const d=new Date();d.setHours(12,0,0,0);
+    const dow=d.getDay();
+    const ws=new Date(d);ws.setDate(d.getDate()-dow);
+    setWeekStart(ws.toISOString().slice(0,10));
+    setSelectedDate(d.toISOString().slice(0,10))
+  }
+  
+  const today=new Date().toISOString().slice(0,10);
+  const days=data?.days||[];const slots=data?.slots||[];const summary=data?.summary||{};
+  const selectedDayInfo=days.find(d=>d.slot_date===selectedDate)||{};
+  const selectedSlots=slots.filter(s=>s.slot_date===selectedDate);
+  
+  // Mapping de color por status + occupancy
+  function slotPalette(s){
+    if(s.status==="blocked")return{bg:C.tm+"15",bd:C.tm+"35",dot:C.tm,label:"Bloqueado"};
+    if(s.status==="maintenance")return{bg:C.gld+"12",bd:C.gld+"35",dot:C.gld,label:"Mantenim"};
+    const cap=s.capacity||1;const used=s.booked_count||0;
+    const occ=cap>0?used/cap:0;
+    if(occ>=1)return{bg:C.acc+"12",bd:C.acc+"35",dot:C.acc,label:"Lleno"};
+    if(occ>0)return{bg:C.gld+"10",bd:C.gld+"30",dot:C.gld,label:"Parcial"};
+    return{bg:C.grn+"08",bd:C.grn+"25",dot:C.grn,label:"Libre"};
+  }
+  function dowName(dow){return["D","L","M","X","J","V","S"][dow]||"?"}
+  function dayShort(dt){const d=new Date(dt+"T12:00:00");return d.getDate()}
+  function dpTrend(s){if(!s.dynamic_pricing_rule_id||s.base_price==null)return null;
+    if(s.price>s.base_price)return"up";if(s.price<s.base_price)return"down";return null
+  }
+  // Bandas por hora
+  const bands=[{k:"early",l:"Early Bird",r:[0,9]},{k:"prime",l:"Prime",r:[9,12]},{k:"mid",l:"Midday",r:[12,15]},{k:"twi",l:"Twilight",r:[15,24]}];
+  
+  return<div>
+    {/* Header: week nav + summary */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,gap:8}}>
+      <button onClick={()=>navWeek(-1)} title="Semana anterior" style={{width:32,height:32,borderRadius:16,border:"1px solid "+C.bd,background:C.cd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",13,C.txt)}}/>
+      <div style={{flex:1,textAlign:"center"}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt}}>{(()=>{const ws=new Date(weekStart+"T12:00:00");const we=new Date(weekStart+"T12:00:00");we.setDate(ws.getDate()+6);return ws.toLocaleDateString("es-MX",{day:"numeric",month:"short"})+" – "+we.toLocaleDateString("es-MX",{day:"numeric",month:"short"})})()}</div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>Semana · {summary.total_bookings_count||0} bookings · ${Math.round(summary.total_revenue||0).toLocaleString()} · {summary.week_occupancy_pct||0}% occ</div>
+      </div>
+      <button onClick={()=>navWeek(1)} title="Semana siguiente" style={{width:32,height:32,borderRadius:16,border:"1px solid "+C.bd,background:C.cd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",13,C.txt)}}/>
+    </div>
+    
+    {/* Week strip: 7 day chips */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)",gap:4,marginBottom:12}}>
+      {days.map(d=>{
+        const isSel=d.slot_date===selectedDate;
+        const isToday=d.slot_date===today;
+        const occ=d.occupancy_pct||0;
+        const dotColor=occ>=80?C.acc:occ>=40?C.gld:C.grn;
+        return<div key={d.slot_date} onClick={()=>setSelectedDate(d.slot_date)} style={{padding:"6px 4px",borderRadius:8,border:"1px solid "+(isSel?C.grn:isToday?C.acc+"30":C.bd),background:isSel?C.grn+"15":isToday?C.acc+"06":C.cd,cursor:"pointer",textAlign:"center",position:"relative"}}>
+          <div style={{fontSize:9,fontWeight:700,color:isSel?C.grn:C.tm,letterSpacing:".05em"}}>{dowName(d.dow)}</div>
+          <div style={{fontSize:14,fontWeight:800,color:isSel?C.grn:C.txt,marginTop:1}}>{dayShort(d.slot_date)}</div>
+          <div style={{fontSize:8,color:C.tm,marginTop:2}}>{d.bookings_count||0}/{d.slots_total||0}</div>
+          {(d.slots_total||0)>0&&<div style={{height:3,background:C.bd,borderRadius:2,marginTop:3,overflow:"hidden"}}>
+            <div style={{height:"100%",width:occ+"%",background:dotColor}}/>
+          </div>}
+          {(d.offers_count>0||d.dp_count>0||d.slots_blocked>0||d.slots_maintenance>0)&&<div style={{position:"absolute",top:2,right:2,display:"flex",gap:1}}>
+            {d.slots_blocked>0&&<span title="Bloqueados" style={{width:5,height:5,borderRadius:2.5,background:C.tm}}/>}
+            {d.slots_maintenance>0&&<span title="Mantenimiento" style={{width:5,height:5,borderRadius:2.5,background:C.gld}}/>}
+            {d.offers_count>0&&<span title="Ofertas" style={{width:5,height:5,borderRadius:2.5,background:C.acc}}/>}
+            {d.dp_count>0&&<span title="DP" style={{width:5,height:5,borderRadius:2.5,background:"#6c5ce7"}}/>}
+          </div>}
+        </div>;
+      })}
+    </div>
+    
+    {/* Day stats */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:6,marginBottom:12}}>
+      <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+        <div style={{fontSize:14,fontWeight:800,color:C.grn}}>{selectedDayInfo.slots_available||0}</div>
+        <div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>LIBRES</div>
+      </div>
+      <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+        <div style={{fontSize:14,fontWeight:800,color:C.acc}}>{selectedDayInfo.bookings_count||0}</div>
+        <div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>BOOKINGS</div>
+      </div>
+      <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt}}>${Math.round(selectedDayInfo.revenue||0).toLocaleString()}</div>
+        <div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>REVENUE</div>
+      </div>
+      <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+        <div style={{fontSize:14,fontWeight:800,color:(selectedDayInfo.occupancy_pct||0)>=70?C.grn:C.txt}}>{selectedDayInfo.occupancy_pct||0}%</div>
+        <div style={{fontSize:9,color:C.tm,letterSpacing:".04em"}}>OCC</div>
+      </div>
+    </div>
+    
+    {/* Day slots grouped by band */}
+    {ld?<div style={{textAlign:"center",padding:30,color:C.tm,fontSize:11}}>Cargando tee sheet…</div>:
+     selectedSlots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}>
+       <div dangerouslySetInnerHTML={{__html:ic("calendar",28,C.tm)}} style={{marginBottom:8}}/>
+       <p style={{fontSize:13,color:C.tm}}>Sin slots para este día</p>
+       <p style={{fontSize:11,color:C.tm,marginTop:4}}>Usa "Generar 30 días" en la vista Lista para crear</p>
+     </div>:
+     bands.map(band=>{
+       const bs=selectedSlots.filter(s=>{const h=parseInt(s.slot_time);return h>=band.r[0]&&h<band.r[1]});
+       if(!bs.length)return null;
+       return<div key={band.k} style={{marginBottom:14}}>
+         <div style={{fontSize:11,fontWeight:700,color:C.ts,marginBottom:6,letterSpacing:".05em"}}>{band.l.toUpperCase()} <span style={{color:C.tm,fontWeight:500}}>· {bs.length} slots</span></div>
+         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(115px, 1fr))",gap:6}}>
+           {bs.map(s=>{
+             const pal=slotPalette(s);
+             const trend=dpTrend(s);
+             const isFull=(s.booked_count||0)>=s.capacity;
+             return<div key={s.id} onClick={()=>setDrawerSlotId(s.id)} style={{padding:"7px 8px",background:pal.bg,border:"1px solid "+pal.bd,borderRadius:8,cursor:"pointer",position:"relative",minHeight:62}}>
+               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
+                 <span style={{fontSize:13,fontWeight:800,color:C.txt,..._s.mono}}>{s.slot_time?.slice(0,5)}</span>
+                 <span style={{width:6,height:6,borderRadius:3,background:pal.dot}} title={pal.label}/>
+               </div>
+               <div style={{fontSize:10,color:C.ts,marginBottom:3,display:"flex",alignItems:"center",gap:3}}>
+                 <span style={{fontWeight:600}}>{s.booked_count||0}/{s.capacity}</span>
+                 {(s.walk_ins_count||0)>0&&<span title="Walk-ins" style={{fontSize:9,color:C.grn}}>+{s.walk_ins_count}🚶</span>}
+                 {(s.standby_count||0)>0&&<span title="Standby" style={{fontSize:9,color:C.gld}}>{s.standby_count}⏳</span>}
+               </div>
+               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:3}}>
+                 <span style={{fontSize:11,fontWeight:700,color:C.grn}}>${Math.round(s.price).toLocaleString()}</span>
+                 <div style={{display:"flex",gap:2}}>
+                   {s.is_offer&&<span title="Hot Deal" style={{fontSize:8,fontWeight:700,color:"#fff",background:C.acc,padding:"1px 4px",borderRadius:3,..._s.mono}}>-{s.discount_pct||10}%</span>}
+                   {trend==="up"&&<span title={s.dp_rule_name||"DP"} style={{fontSize:8,color:"#6c5ce7"}}>▲</span>}
+                   {trend==="down"&&<span title={s.dp_rule_name||"DP"} style={{fontSize:8,color:"#6c5ce7"}}>▼</span>}
+                 </div>
+               </div>
+             </div>;
+           })}
+         </div>
+       </div>;
+     })}
+    
+    {/* Footer: legend */}
+    <div style={{padding:"8px 10px",background:C.cd,border:"1px solid "+C.bd,borderRadius:8,marginTop:10}}>
+      <div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:4}}>LEYENDA</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,fontSize:10,color:C.ts}}>
+        <span style={{display:"inline-flex",alignItems:"center",gap:3}}><span style={{width:6,height:6,borderRadius:3,background:C.grn}}/>Libre</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:3}}><span style={{width:6,height:6,borderRadius:3,background:C.gld}}/>Parcial</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:3}}><span style={{width:6,height:6,borderRadius:3,background:C.acc}}/>Lleno</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:3}}><span style={{width:6,height:6,borderRadius:3,background:C.tm}}/>Bloqueado</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:3}}>🚶 Walk-in</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:3}}>⏳ Standby</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:3,color:"#6c5ce7"}}>▲▼ DP</span>
+      </div>
+    </div>
+    
+    {selectedDate!==today&&<button onClick={goToday} style={{width:"100%",padding:10,marginTop:8,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.acc,fontSize:12,fontWeight:600,cursor:"pointer"}}>📅 Ir a hoy</button>}
+    
+    {drawerSlotId&&<SlotDetailDrawer slotId={drawerSlotId} course={course} onClose={()=>setDrawerSlotId(null)} onChange={()=>{load();setDrawerSlotId(null)}}/>}
+  </div>;
+}
+
+// v20.25 — Drawer modal con detalle completo de un slot: bookings, walk-ins, standby queue, DP info
+function SlotDetailDrawer({slotId,course,onClose,onChange}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+  const[busyId,setBusyId]=useState(null);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_slot_full_detail",{p_slot_id:slotId});
+    if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
+    if(r?.error){window.__toast?.(r.error,"warn");setLd(false);return}
+    setData(r);setLd(false)
+  }
+  useEffect(()=>{load()},[slotId]);
+  
+  async function toggleStatus(){if(busyId||!data?.slot)return;setBusyId("toggle");
+    const newStatus=data.slot.status==="available"?"blocked":"available";
+    const{error}=await sb.from("time_slots").update({status:newStatus}).eq("id",slotId);
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.("Slot "+(newStatus==="blocked"?"bloqueado":"liberado"),"success");load()
+  }
+  async function toggleOffer(){if(busyId||!data?.slot)return;setBusyId("offer");
+    const{error}=await sb.from("time_slots").update({is_offer:!data.slot.is_offer}).eq("id",slotId);
+    setBusyId(null);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    load()
+  }
+  
+  const s=data?.slot;
+  const bookings=data?.bookings||[];
+  const walkIns=data?.walk_ins||[];
+  const standby=data?.standby_queue||[];
+  const dp=data?.dp_rule;
+  
+  const sectionH={fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".07em",textTransform:"uppercase",marginBottom:6};
+  
+  return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"16px 16px 0 0",maxWidth:560,width:"100%",maxHeight:"92vh",overflowY:"auto",padding:16,paddingBottom:24,borderTop:"1px solid "+C.bd}}>
+      {ld?<div style={{padding:30,textAlign:"center",color:C.tm}}>Cargando…</div>:
+       !s?<div style={{padding:30,textAlign:"center",color:C.acc}}>Slot no encontrado</div>:<>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <div>
+            <h3 style={{margin:0,fontSize:18,fontWeight:800,color:C.txt}}>{new Date(s.slot_date+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"short"})}</h3>
+            <div style={{fontSize:22,fontWeight:800,color:C.grn,..._s.mono,marginTop:2}}>{s.slot_time?.slice(0,5)}</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:C.tm,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+        
+        {/* Status pills */}
+        <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+          <span style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:700,background:s.status==="available"?C.grn+"15":s.status==="booked"?C.acc+"15":s.status==="blocked"?C.tm+"20":C.gld+"15",color:s.status==="available"?C.grn:s.status==="booked"?C.acc:s.status==="blocked"?C.tm:C.gld,letterSpacing:".04em"}}>{({available:"DISPONIBLE",booked:"OCUPADO",blocked:"BLOQUEADO",maintenance:"MANTENIMIENTO"})[s.status]||s.status.toUpperCase()}</span>
+          <span style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,background:C.cd,color:C.ts}}>{s.booked_count||0}/{s.capacity} jug</span>
+          {s.is_offer&&<span style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:700,background:C.acc,color:"#fff"}}>🔥 HOT DEAL -{s.discount_pct||10}%</span>}
+          {dp&&<span title={dp.name} style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:700,background:"#6c5ce715",color:"#6c5ce7"}}>⚙️ DP · {dp.name}</span>}
+        </div>
+        
+        {/* Price card */}
+        <div style={{padding:12,background:`linear-gradient(135deg,${C.grn}10,#00cec905)`,border:"1px solid "+C.grn+"30",borderRadius:12,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8}}>
+            <div>
+              <div style={{fontSize:9,color:C.tm,letterSpacing:".07em"}}>PRECIO ACTUAL</div>
+              <div style={{fontSize:26,fontWeight:800,color:C.grn}}>${Math.round(s.price).toLocaleString()} <span style={{fontSize:11,color:C.tm,fontWeight:500}}>MXN</span></div>
+            </div>
+            {s.base_price!=null&&s.base_price!==s.price&&<div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,color:C.tm,letterSpacing:".07em"}}>BASE</div>
+              <div style={{fontSize:14,color:C.tm,textDecoration:"line-through"}}>${Math.round(s.base_price).toLocaleString()}</div>
+              <div style={{fontSize:10,fontWeight:700,color:s.price>s.base_price?"#6c5ce7":C.grn,marginTop:2}}>{s.price>s.base_price?"▲ +":"▼ "}${Math.round(s.price-s.base_price).toLocaleString()}</div>
+            </div>}
+          </div>
+        </div>
+        
+        {/* Quick actions */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14}}>
+          <button onClick={toggleStatus} disabled={busyId==="toggle"||s.status==="booked"||s.status==="maintenance"} style={{padding:10,background:s.status==="blocked"?C.grn+"15":C.cd,border:"1px solid "+(s.status==="blocked"?C.grn+"30":C.bd),borderRadius:10,color:s.status==="blocked"?C.grn:C.txt,fontSize:11,fontWeight:700,cursor:busyId==="toggle"||s.status==="booked"||s.status==="maintenance"?"not-allowed":"pointer",opacity:(s.status==="booked"||s.status==="maintenance")?.5:1}}>{s.status==="blocked"?"▶ Liberar slot":"⏸ Bloquear slot"}</button>
+          <button onClick={toggleOffer} disabled={busyId==="offer"} style={{padding:10,background:s.is_offer?C.acc+"15":C.cd,border:"1px solid "+(s.is_offer?C.acc+"30":C.bd),borderRadius:10,color:s.is_offer?C.acc:C.txt,fontSize:11,fontWeight:700,cursor:busyId==="offer"?"default":"pointer"}}>{s.is_offer?"× Quitar Hot Deal":"🔥 Marcar Hot Deal"}</button>
+        </div>
+        
+        {/* Bookings */}
+        <div style={{marginBottom:12}}>
+          <div style={sectionH}>Bookings ({bookings.length})</div>
+          {bookings.length===0?<div style={{fontSize:11,color:C.tm,padding:8,textAlign:"center"}}>Sin bookings activos</div>:
+           <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {bookings.map(b=><div key={b.id} style={{padding:"8px 10px",background:C.cd,border:"1px solid "+C.bd,borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:28,height:28,borderRadius:14,background:C.grn+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{b.avatar_url?<img src={b.avatar_url} style={{width:28,height:28,borderRadius:14,objectFit:"cover"}}/>:<span dangerouslySetInnerHTML={{__html:ic("user",13,C.grn)}}/>}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.player_name||b.player_email||"—"}</div>
+                <div style={{fontSize:10,color:C.tm}}>{b.party_size} jug · {b.booking_code||b.id.slice(0,8)}{b.payment_status?" · "+b.payment_status:""}</div>
+              </div>
+              <span style={{fontSize:12,fontWeight:700,color:C.grn,flexShrink:0}}>${Math.round(b.total_cost||0).toLocaleString()}</span>
+            </div>)}
+           </div>}
+        </div>
+        
+        {/* Walk-ins */}
+        {walkIns.length>0&&<div style={{marginBottom:12}}>
+          <div style={sectionH}>Walk-ins ({walkIns.length})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {walkIns.map(w=><div key={w.id} style={{padding:"8px 10px",background:C.grn+"08",border:"1px solid "+C.grn+"20",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:16}}>🚶</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.txt}}>{w.customer_name||"Walk-in"}</div>
+                <div style={{fontSize:10,color:C.tm}}>{w.party_size} jug · {w.payment_method}</div>
+              </div>
+              <span style={{fontSize:12,fontWeight:700,color:C.grn,flexShrink:0}}>${Math.round(w.amount_paid||0).toLocaleString()}</span>
+            </div>)}
+          </div>
+        </div>}
+        
+        {/* Standby queue */}
+        {standby.length>0&&<div style={{marginBottom:12}}>
+          <div style={sectionH}>Lista de espera ({standby.length})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {standby.map(q=><div key={q.id} style={{padding:"8px 10px",background:q.status==="notified"?C.gld+"15":C.cd,border:"1px solid "+(q.status==="notified"?C.gld+"40":C.bd),borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{width:22,height:22,borderRadius:11,background:C.bg,border:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.txt,flexShrink:0}}>#{q.position}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.user_name||"—"}</div>
+                <div style={{fontSize:10,color:C.tm}}>{q.party_size} jug · {q.status==="notified"?"🎯 NOTIFICADO":"⏳ esperando"}</div>
+              </div>
+              {q.max_price&&<span style={{fontSize:10,color:C.tm,flexShrink:0}}>≤${Math.round(q.max_price).toLocaleString()}</span>}
+            </div>)}
+          </div>
+        </div>}
+       </>}
+    </div>
+  </div>;
+}
+
 function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]=useState(true);const[selDate,setSelDate]=useState(new Date().toISOString().split("T")[0]);const[gen,setGen]=useState(false);const[editSlot,setEditSlot]=useState(null);const[editPrice,setEditPrice]=useState("");
+  const[view,setView]=useState("calendar"); // v20.25: 'calendar' = TeeSheetPro · 'list' = legacy
   useEffect(()=>{load()},[selDate]);
   async function load(){setLd(true);const{data}=await sb.from("time_slots").select("*").eq("course_name",course.course_name).eq("slot_date",selDate).order("slot_time");setSlots(data||[]);setLd(false)}
   async function deleteSlot(id){const go=async()=>{await sb.from("time_slots").delete().eq("id",id);loadData();window.__toast?.(t("Slot eliminado"),"success")};if(window.__confirm)window.__confirm(t("¿Eliminar este slot?"),go);else go()}
@@ -7618,6 +7939,12 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
     <div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}> {t("Tee Times")}</h3><button onClick={generateSlots} disabled={gen} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",opacity:gen?.5:1}}>{gen?t("Generando..."):t("+ Generar 30 días")}</button></div>
     {/* v20.24: Block Manager — bloqueos masivos con auto-refund + notify */}
     <AdminBlockManager course={course}/>
+    {/* v20.25: Toggle Calendar (Tee Sheet Pro) / Lista (legacy) */}
+    <div style={{display:"flex",gap:4,padding:3,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,marginBottom:14}}>
+      <button onClick={()=>setView("calendar")} style={{flex:1,padding:"6px 10px",borderRadius:7,border:"none",background:view==="calendar"?C.grn+"20":"transparent",color:view==="calendar"?C.grn:C.tm,fontSize:11,fontWeight:700,cursor:"pointer"}}>📅 Calendario</button>
+      <button onClick={()=>setView("list")} style={{flex:1,padding:"6px 10px",borderRadius:7,border:"none",background:view==="list"?C.grn+"20":"transparent",color:view==="list"?C.grn:C.tm,fontSize:11,fontWeight:700,cursor:"pointer"}}>≣ Lista</button>
+    </div>
+    {view==="calendar"?<TeeSheetPro course={course}/>:<>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><button onClick={()=>navDay(-1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/><div style={{textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>{selDate===today&&<div style={{fontSize:10,color:C.acc,fontWeight:600}}>HOY</div>}<input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} style={{marginTop:4,background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"center"}}/></div><button onClick={()=>navDay(1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div className="sc"><div className="n" style={{color:C.grn,fontSize:18}}>{available.length}</div><div className="l">Disponibles</div></div><div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{booked.length}</div><div className="l">{t("Reservados")}</div></div><div className="sc"><div className="n" style={{color:C.tm,fontSize:18}}>{blocked.length}</div><div className="l">Bloqueados</div></div></div>
     {ld?<Skeleton w="100%" h={60}/>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}><div dangerouslySetInnerHTML={{__html:ic("calendar",28,C.tm)}} style={{marginBottom:8}}/><p>Sin slots para esta fecha</p><p style={{fontSize:12,marginTop:4}}>Click "Generar 30 días" para crear</p></div>:
@@ -7640,6 +7967,7 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
       <div style={{display:"flex",gap:8}}><button onClick={savePrice} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button><button onClick={()=>setEditSlot(null)} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div>
     </div></div>}
     {selDate!==today&&<button onClick={()=>setSelDate(today)} style={{width:"100%",padding:10,marginTop:10,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Ir a hoy</button>}
+    </>}
   </div>}
 
 // AdminPayouts (v19.0): panel de pagos para course_admin con filtro, banner Stripe Connect y toggle payout_method
