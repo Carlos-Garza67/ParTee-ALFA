@@ -8,6 +8,73 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.16 (Cierre del ciclo notif preferences — los 4 toggles ahora SÍ funcionan)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.16 — 100% backend. Cierra el loop de v20.12 conectando las 3 prefs restantes a sus
+// puntos de envío. Frontend SIN cambios (las prefs ya estaban editables).
+//   1 RPC helper:
+//     - create_admin_notif_with_pref(user_id, course_id, kind, title, message, ...): SECURITY DEFINER
+//       service_role only. Internamente checa is_admin_notif_enabled_internal y solo crea
+//       notification si pref está on.
+//   3 integraciones:
+//     - critical_alerts: refresh_churn_alerts ahora cuenta nuevos inserts con risk_score>=75 y
+//       dispara create_admin_notif_with_pref('critical_alerts', ...) → notif inmediata al admin.
+//     - campaign_summary: send-admin-campaign v3 al final del envío llama
+//       create_admin_notif_with_pref('campaign_summary', ...) al creator de la campaign con stats
+//       (sent/failed counts).
+//     - weekly_insight_email: generate-weekly-insight v2 después de save() llama
+//       sendInsightEmail() que (a) busca course_admin, (b) check pref weekly_insight_email_enabled,
+//       (c) si on + RESEND_API_KEY: envía email HTML con insight rendered (markdown→HTML inline
+//       con headers H2/H3, bold, italic, listas).
+//   Grants ajustados: is_admin_notif_enabled_internal + create_admin_notif_with_pref → service_role.
+//   Smoke E2E: refresh_churn con VIP critical → new_critical_alerts=1 + 1 notif creada ✓
+console.log("%c[Partee] Build v20.15 (Automation Health Card — estado en vivo de pulse/insight/churn)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.15 — Visibilidad de salud de las 3 automations (pulse, insight, churn) para el course-admin.
+//   1 RPC SECURITY DEFINER: get_course_automation_status(course_id) agrega timestamps + counts
+//     de admin_pulse_log + admin_weekly_insights + admin_churn_alerts.
+//   Status calculado en SQL con 4 niveles:
+//     - fresh: pulse hoy / insight esta semana / churn últ. 24h
+//     - recent: pulse últ. 2 días / insight semana pasada / churn últ. 7 días
+//     - stale: más viejo que recent
+//     - never: nunca corrió
+//   Frontend: AutomationHealthCard al final de AdminProfile (antes de NotifPrefsCard). 3 rows con
+//     icon + label + timestamp relativo + badge color por status. Útil para debug "¿cron está
+//     corriendo?" sin tener que ir a Supabase logs.
+console.log("%c[Partee] Build v20.13 (Open/click tracking para campaigns — pixel 1x1 + redirect URLs)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.13 — Cierra el loop de v20.10 con tracking real de engagement.
+//   RPC helper record_campaign_engagement(recipient_id, kind) SECURITY DEFINER sin grant a authenticated:
+//     - kind='open': sets opened_at + status='opened' (si era 'sent') + increment opened_count (idempotente)
+//     - kind='click': sets clicked_at + opened_at (si NULL) + status='clicked' + increment clicked_count
+//       y opened_count (si era el primer engagement). Click implica open automático.
+//     - Skip si recipient ya está en estado terminal (failed/bounced/skipped).
+//   Edge function track-campaign v1 PÚBLICA (verify_jwt=false):
+//     - GET ?r=<id>&t=open → 1x1 PNG transparente con Cache-Control: no-cache
+//     - GET ?r=<id>&t=click&u=<base64url(url)> → 302 redirect a URL, registra click primero
+//     - Resiliente: errores no rompen UX (pixel/redirect default igual)
+//     - URL validation: solo http/https, fallback a partee.com.mx
+//   Edge function send-admin-campaign v2:
+//     - wrapEmailHtml ahora recibe recipient_id
+//     - Reescribe URLs en body a tracking redirects (regex /https?:\/\/[^\s<]+/g)
+//     - Inyecta pixel 1x1 al final del HTML antes de </body>
+//     - CTA "Abrir Partee" también trackeado
+//   Frontend: CampaignDetailModal stats grid expanded de 4→5 columnas con Clicks separado,
+//     open_rate% y click_rate% calculados inline.
+//   Smoke E2E: open1 incrementa, open2 idempotente, click1 incrementa, click2 idempotente.
+//     Stats finales: opened=1, clicked=1 (no duplicó). Status final='clicked'.
+console.log("%c[Partee] Build v20.12 (Notification preferences UI — control sobre daily pulse, weekly insight, alerts)","color:#00b894;font-weight:bold;font-size:13px");
+// v20.12 — UI de notification preferences para course-admins. Cierra el ciclo de control sobre las
+// automations de v20.7-v20.10. 1 tabla + 3 RPCs SECURITY DEFINER + 1 frontend card.
+//   Tabla admin_notification_prefs UNIQUE(user_id, course_id) con 4 toggles boolean default true:
+//     daily_pulse_enabled, weekly_insight_email_enabled, critical_alerts_enabled,
+//     campaign_summary_enabled. RLS: user reads own prefs only.
+//   3 RPCs:
+//     - get_admin_notification_prefs(course_id): devuelve prefs con defaults inline si no existe.
+//     - update_admin_notification_prefs(course_id, ...4 booleans): UPSERT por (user_id, course_id).
+//     - is_admin_notif_enabled_internal(user_id, course_id, kind): helper SECURITY DEFINER, sin
+//       grant a authenticated. Llamada desde dispatch_admin_pulse para respetar pref.
+//   Modificación clave: dispatch_admin_pulse v20.9 ahora checa daily_pulse_enabled antes de crear
+//     notification. Si pref=false: persiste log para idempotencia pero NO crea notif (skip).
+//   Frontend: AdminNotifPrefsCard al final de AdminProfile (course-admin). 4 toggles con copy
+//     descriptivo + indicador de estado actual + botón "Guardar".
 console.log("%c[Partee] Build v20.11 (Weekly cron Lunes 8am — orquestación completa: pulse + churn + insight)","color:#00b894;font-weight:bold;font-size:13px");
 // v20.11 — Cron Lunes 8am cierra el loop de automation. 100% backend, sin cambios frontend.
 //   2 RPCs SECURITY DEFINER:
@@ -5446,6 +5513,169 @@ function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=
     {cust360&&<Customer360 course={course} userId={cust360} onClose={()=>setCust360(null)}/>}
   </div>}
 
+// v20.15: AutomationHealthCard — estado en vivo de las 3 automations para el course-admin.
+// 3 rows con badge por status (fresh/recent/stale/never).
+function AutomationHealthCard({course}){
+  const[data,setData]=useState(null);const[ld,setLd]=useState(true);
+
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);
+    const{data:r,error}=await sb.rpc("get_course_automation_status",{p_course_id:course.id});
+    if(error){console.warn("[v20.15] auto health err:",error);setLd(false);return}
+    setData(r);setLd(false);
+  }
+
+  function statusVisual(s){
+    if(s==="fresh")return{bg:C.grn+"15",border:C.grn+"40",fg:C.grn,lbl:"Activo",icon:"●"};
+    if(s==="recent")return{bg:C.gld+"15",border:C.gld+"40",fg:C.gld,lbl:"Reciente",icon:"●"};
+    if(s==="stale")return{bg:C.acc+"15",border:C.acc+"40",fg:C.acc,lbl:"Stale",icon:"●"};
+    return{bg:C.bd,border:C.bd,fg:C.tm,lbl:"Sin actividad",icon:"○"};
+  }
+
+  function relTime(iso){
+    if(!iso)return"—";
+    const d=new Date(iso);const now=new Date();
+    const diffSec=Math.floor((now-d)/1000);
+    if(diffSec<60)return"hace segundos";
+    if(diffSec<3600)return`hace ${Math.floor(diffSec/60)}m`;
+    if(diffSec<86400)return`hace ${Math.floor(diffSec/3600)}h`;
+    if(diffSec<2592000)return`hace ${Math.floor(diffSec/86400)}d`;
+    return d.toLocaleDateString("es-MX",{day:"2-digit",month:"short"});
+  }
+
+  function relDate(d){
+    if(!d)return"—";
+    const dt=new Date(d);const now=new Date();
+    const diffDays=Math.floor((now-dt)/(1000*60*60*24));
+    if(diffDays===0)return"hoy";
+    if(diffDays===1)return"ayer";
+    if(diffDays<7)return`hace ${diffDays}d`;
+    return dt.toLocaleDateString("es-MX",{day:"2-digit",month:"short"});
+  }
+
+  if(ld)return<div style={{marginTop:18}}><Skeleton w="100%" h={140}/></div>;
+  if(!data)return null;
+
+  const rows=[
+    {key:"pulse",icon:"📡",label:"Daily Pulse",desc:"Resumen diario de anomalías",status:data.pulse.status,
+      detail:data.pulse.status==="never"?"Aún no ha corrido":
+        `${relDate(data.pulse.last_date)} · ${data.pulse.last_anomaly_count} alerta${data.pulse.last_anomaly_count===1?"":"s"}${data.pulse.last_notif_sent?" · 🔔 notif enviada":""}`},
+    {key:"insight",icon:"🤖",label:"Weekly Insight",desc:"Narrativa AI semanal",status:data.insight.status,
+      detail:data.insight.status==="never"?"Aún no se ha generado":
+        `${relTime(data.insight.last_generated_at)} · ${data.insight.last_source==="claude"?"Claude AI":data.insight.last_source||"template"}`},
+    {key:"churn",icon:"🎯",label:"Churn Alerts",desc:"Refresh de alerts at-risk",status:data.churn.status,
+      detail:data.churn.status==="never"?"Aún no se han detectado":
+        `${relTime(data.churn.last_activity)} · ${data.churn.open_alerts} abierta${data.churn.open_alerts===1?"":"s"}${data.churn.critical_alerts>0?` · ${data.churn.critical_alerts} crítica${data.churn.critical_alerts===1?"":"s"}`:""}`}
+  ];
+
+  return<div style={{marginTop:18,padding:16,background:C.cd,border:"1px solid "+C.bd,borderRadius:14}}>
+    <div style={{..._s.flexB,marginBottom:14}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:14}}>⚙️</span>Salud de automatizaciones
+        </div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>Estado en vivo de las rutinas de Partee OS</div>
+      </div>
+      <button onClick={load} title="Refrescar" style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+C.bd,background:"transparent",color:C.ts,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:.3}}>↻</button>
+    </div>
+
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {rows.map(r=>{const sv=statusVisual(r.status);
+      return<div key={r.key} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",background:C.bg,border:"1px solid "+sv.border,borderRadius:10}}>
+        <span style={{fontSize:18,lineHeight:1,flexShrink:0}}>{r.icon}</span>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,fontWeight:700,color:C.txt,marginBottom:1}}>{r.label}</div>
+          <div style={{fontSize:10,color:C.tm,..._s.mono}}>{r.detail}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:5,padding:"3px 8px",background:sv.bg,border:"1px solid "+sv.border,borderRadius:5,flexShrink:0}}>
+          <span style={{color:sv.fg,fontSize:10,lineHeight:1}}>{sv.icon}</span>
+          <span style={{fontSize:9,fontWeight:800,color:sv.fg,letterSpacing:.3}}>{sv.lbl}</span>
+        </div>
+      </div>})}
+    </div>
+
+    <div style={{fontSize:9,color:C.tm,opacity:.7,marginTop:10,lineHeight:1.4,..._s.mono}}>El cron Lunes 8am orquesta los 3 al mismo tiempo. Ajusta qué recibes en "Notificaciones de automatizaciones" ↓</div>
+  </div>;
+}
+
+// v20.12: AdminNotifPrefsCard — toggles para que el course-admin elija qué automations recibir.
+// Se monta al final del AdminProfile. Visualmente: card con 4 toggles + descripción + save button.
+function AdminNotifPrefsCard({course}){
+  const[ld,setLd]=useState(true);
+  const[exists,setExists]=useState(false);
+  const[dailyPulse,setDailyPulse]=useState(true);
+  const[weeklyEmail,setWeeklyEmail]=useState(true);
+  const[criticalAlerts,setCriticalAlerts]=useState(true);
+  const[campaignSummary,setCampaignSummary]=useState(true);
+  const[busy,setBusy]=useState(false);
+  const[dirty,setDirty]=useState(false);
+
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);
+    const{data,error}=await sb.rpc("get_admin_notification_prefs",{p_course_id:course.id});
+    if(error){console.warn("[v20.12] notif prefs err:",error);setLd(false);return}
+    setExists(!!data?.exists);
+    setDailyPulse(data?.daily_pulse_enabled!==false);
+    setWeeklyEmail(data?.weekly_insight_email_enabled!==false);
+    setCriticalAlerts(data?.critical_alerts_enabled!==false);
+    setCampaignSummary(data?.campaign_summary_enabled!==false);
+    setDirty(false);setLd(false);
+  }
+  async function save(){
+    if(busy)return;
+    setBusy(true);
+    const{error}=await sb.rpc("update_admin_notification_prefs",{
+      p_course_id:course.id,
+      p_daily_pulse:dailyPulse,
+      p_weekly_insight_email:weeklyEmail,
+      p_critical_alerts:criticalAlerts,
+      p_campaign_summary:campaignSummary
+    });
+    setBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.("Preferencias guardadas","success");
+    setDirty(false);setExists(true);
+  }
+  function tog(setter,curr){return()=>{setter(!curr);setDirty(true)}}
+
+  const toggles=[
+    {k:"dp",val:dailyPulse,set:setDailyPulse,icon:"📡",label:"Pulse diario",desc:"Resumen matutino con anomalías del día (revenue drop, hot deals, VIPs at-risk)"},
+    {k:"we",val:weeklyEmail,set:setWeeklyEmail,icon:"🤖",label:"Insight semanal por email",desc:"Cada lunes 8am — narrativa AI del rendimiento del campo"},
+    {k:"ca",val:criticalAlerts,set:setCriticalAlerts,icon:"⚠️",label:"Alertas críticas inmediatas",desc:"Notificación instantánea cuando un VIP entra en riesgo de churn"},
+    {k:"cs",val:campaignSummary,set:setCampaignSummary,icon:"📨",label:"Resumen de campañas",desc:"Stats post-envío: opens, clicks, bounces"}
+  ];
+
+  return<div style={{marginTop:18,padding:16,background:C.cd,border:"1px solid "+C.bd,borderRadius:14}}>
+    <div style={{..._s.flexB,marginBottom:14}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:14}}>🔔</span>Notificaciones de automatizaciones
+        </div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>Elige qué resúmenes de Partee OS quieres recibir</div>
+      </div>
+      {!exists&&!ld&&<span style={{fontSize:9,color:C.gld,fontWeight:700,padding:"2px 7px",background:C.gld+"15",borderRadius:4,letterSpacing:.3}}>DEFAULT</span>}
+    </div>
+
+    {ld?<Skeleton w="100%" h={180}/>:<>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+        {toggles.map(t=><div key={t.k} onClick={tog(t.set,t.val)} style={{display:"flex",alignItems:"flex-start",gap:11,padding:"11px 12px",background:t.val?C.bg:C.cd,border:"1px solid "+(t.val?C.acc+"40":C.bd),borderRadius:10,cursor:"pointer",transition:"all .15s"}}>
+          <span style={{fontSize:18,lineHeight:1,marginTop:1,flexShrink:0,opacity:t.val?1:.5}}>{t.icon}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:t.val?C.txt:C.tm,marginBottom:2}}>{t.label}</div>
+            <div style={{fontSize:10,color:C.tm,lineHeight:1.4}}>{t.desc}</div>
+          </div>
+          {/* Toggle switch */}
+          <div style={{width:36,height:20,borderRadius:10,background:t.val?C.acc:C.bd,position:"relative",transition:"background .2s",flexShrink:0,marginTop:1}}>
+            <div style={{position:"absolute",top:2,left:t.val?18:2,width:16,height:16,borderRadius:8,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+          </div>
+        </div>)}
+      </div>
+
+      <button onClick={save} disabled={busy||!dirty} style={{width:"100%",padding:11,background:!dirty?C.bd:busy?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:!dirty||busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:!dirty||busy?"default":"pointer",letterSpacing:.3,transition:"all .15s"}}>{busy?"Guardando…":dirty?"💾 Guardar cambios":"✓ Sin cambios"}</button>
+    </>}
+  </div>;
+}
+
 function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed}){const{s,out:ctxOut}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[desc,setDesc]=useState(course.description||"");const[phone,setPhone]=useState(course.phone_number||"");const[feeMin,setFeeMin]=useState(course.green_fee_min?.toString()||"");const[feeMax,setFeeMax]=useState(course.green_fee_max?.toString()||"");const[cancelHrs,setCancelHrs]=useState(course.cancellation_hours?.toString()||"24");const[cancelPct,setCancelPct]=useState(course.cancellation_refund_pct?.toString()||"100");const[opHours,setOpHours]=useState(course.operating_hours||"");const[opDays,setOpDays]=useState(course.operating_days||"");const[addr,setAddr]=useState(course.full_address||course.address||"");const[courseTz,setCourseTz]=useState(course.timezone||"America/Mexico_City");
   // v19.68: campo `website` retirado del UI por estrategia de moat (controlar flow de comunicaciones via Partee).
   // La columna golf_courses.website permanece en DB con datos legacy intactos — decisión de drop diferida.
@@ -5589,6 +5819,12 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
       if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>doOut());
       else if(confirm(t("Cerrar sesión?")))doOut();
     }} style={{width:"100%",padding:12,marginTop:16,marginBottom:14,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
+    {/* v20.15: Salud de automatizaciones — estado en vivo de pulse/insight/churn */}
+    <AutomationHealthCard course={course}/>
+
+    {/* v20.12: Notification preferences UI — toggles para automations (daily pulse, weekly insight, etc) */}
+    <AdminNotifPrefsCard course={course}/>
+
     <button onClick={()=>{
       // v19.60: alineado con el flow elaborado del Profile — usa edge function delete-account
       // (soft-delete con blockers check + ban auth.users + anonymize profile + signOut global).
@@ -7312,7 +7548,7 @@ function AdminCampaignsCard({course}){
         </div>
         <div style={{fontSize:10,color:C.tm,..._s.mono,display:"flex",justifyContent:"space-between",gap:8}}>
           <span>{segLbl} · {c.recipient_count} dest.</span>
-          {c.status==="sent"||c.status==="partial"?<span>{c.sent_count} enviados{c.failed_count>0?` · ${c.failed_count} fallaron`:""}</span>:<span>{new Date(c.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>}
+          {c.status==="sent"||c.status==="partial"?<span>{c.sent_count} enviados{c.failed_count>0?` · ${c.failed_count} fallaron`:""}{c.opened_count>0?` · ${c.opened_count} abrieron`:""}{c.clicked_count>0?` · ${c.clicked_count} click${c.clicked_count===1?"":"s"}`:""}</span>:<span>{new Date(c.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>}
         </div>
       </div>})}
     </div>}
@@ -7468,8 +7704,8 @@ function CampaignDetailModal({campaignId,onClose,onSent}){
           <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
         </div>
 
-        {/* Stats */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5,marginBottom:12}}>
+        {/* Stats — v20.13 expanded: 5 cols with Clicks + rates inline */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:4,marginBottom:12}}>
           <div style={{padding:7,background:C.cd,border:"1px solid "+C.bd,borderRadius:7,textAlign:"center"}}>
             <div style={{fontSize:13,fontWeight:900,color:C.txt,..._s.mono}}>{data.campaign.recipient_count}</div>
             <div style={{fontSize:8,color:C.tm}}>Destinatarios</div>
@@ -7484,7 +7720,11 @@ function CampaignDetailModal({campaignId,onClose,onSent}){
           </div>
           <div style={{padding:7,background:"#3b82f615",border:"1px solid #3b82f640",borderRadius:7,textAlign:"center"}}>
             <div style={{fontSize:13,fontWeight:900,color:"#3b82f6",..._s.mono}}>{data.campaign.opened_count||0}</div>
-            <div style={{fontSize:8,color:C.tm}}>Abiertos</div>
+            <div style={{fontSize:8,color:C.tm}}>Abiertos {data.campaign.sent_count>0?<span style={{opacity:.7}}>· {Math.round((data.campaign.opened_count||0)/data.campaign.sent_count*100)}%</span>:null}</div>
+          </div>
+          <div style={{padding:7,background:"#8b5cf615",border:"1px solid #8b5cf640",borderRadius:7,textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:900,color:"#8b5cf6",..._s.mono}}>{data.campaign.clicked_count||0}</div>
+            <div style={{fontSize:8,color:C.tm}}>Clicks {data.campaign.sent_count>0?<span style={{opacity:.7}}>· {Math.round((data.campaign.clicked_count||0)/data.campaign.sent_count*100)}%</span>:null}</div>
           </div>
         </div>
 
