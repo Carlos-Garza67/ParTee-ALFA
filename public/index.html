@@ -8,7 +8,89 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v20.27 (QA pt.19 fixes — MED-1 book_slot dynamic capacity + MED-2 Stripe rollback on INSERT fail)","color:#e17055;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.29 (Admin OS Operating Layer extra: E.1+E.2+E.3)","color:#fdcb6e;font-weight:bold;font-size:13px");
+// v20.29 — Operating Layer extra (Pace of Play + Roster).
+//   E.1 Roster operativo:
+//     - 2 tablas + 3 enums (staff_role, equipment_type, equipment_status)
+//     - course_staff: caddies, marshals, rangers, pros, attendants, starter, etc.
+//     - course_equipment: carts eléctricos/gas, push carts, club sets, rangefinders
+//     - RLS: course_admin del curso + platform_admin
+//     - RPC get_course_roster: 1 call retorna staff + equipment + 2 summaries
+//     - AdminRoster modal fullscreen con 2 tabs (Staff | Equipo) + CRUD inline
+//     - Quick toggle status equipment (available ↔ maintenance)
+//   E.2 Pace of Play tracking v1 (marshal-marks-position):
+//     - pace_tracking_events append-only con UNIQUE(booking_id, hole_number)
+//     - 3 RPCs: mark_group_hole (idempotente vía ON CONFLICT), unmark_group_hole,
+//       get_pace_dashboard (computa current vs expected, status, holes_behind)
+//     - Lógica expected: floor((NOW - tee_time) / 15min), cap 18
+//     - Status: on_pace / slow (1 behind) / very_slow (2+) / ahead / finished / not_started
+//   E.3 Marshal Mobile View:
+//     - Componente MarshalView fullscreen mobile-first
+//     - Lista grupos ordenados por urgencia (very_slow → slow → on_pace → finished)
+//     - Card por grupo: hoyo gigante actual/esperado + status badge + botón "+1 hoyo"
+//     - Card very_slow tiene animation pulse rojo
+//     - Botón "phone" cuando holes_behind >= 2 (call player)
+//     - Auto-refresh 30s + clock tick 1s
+//   Acceso: 3 botones en header AdminBookings (Check-in + Marshal + Roster)
+//   JSX 189 stmts (+2 componentes nuevos).
+// v20.28 — Admin OS Fase 1 Operating polish (post Pre-Go-Live).
+//   A.1 Filtros + búsqueda avanzada en AdminBookings:
+//     - Quick chips (Hoy/Mañana/Próx7d/Próx30d/Pasadas7d/Custom)
+//     - Vista day o range con date pickers
+//     - Filtros locales: status (5 opciones), payment (5 opciones)
+//     - Search por nombre, código, email, teléfono o Player ID
+//     - Counter "X de Y" + botón "Borrar todo"
+//     - Export CSV usa la lista filtrada (no la cruda)
+//   A.2 Reportes operativos diarios automáticos:
+//     - Tabla daily_ops_reports con RLS course_admin-own + platform_admin-all
+//     - RPC generate_daily_ops_report(course_id, date) atomic upsert con 14 KPIs
+//       (bookings, ingresos, occupancy, walk-ins, top jugadores, forecast mañana)
+//     - Edge fn daily-ops-report v1 deployed (verify_jwt=false + cron secret)
+//     - Email HTML responsive vía Resend con alertas inteligentes
+//     - pg_cron job 'partee_daily_ops_report' @ 6:00 UTC (= 00:00 MX)
+//       envía reporte del día anterior recién finalizado
+//     - Opt-in por curso (golf_courses.daily_report_enabled, default true)
+//   A.3 Check-in tablet mode:
+//     - bookings.checked_in_at + checked_in_by columnas nuevas
+//     - 3 RPCs: checkin_booking (idempotente), uncheckin_booking, get_checkin_dashboard
+//     - Componente CheckinTablet fullscreen optimizado iPad/tablet
+//     - Auto-refresh 60s, clock tick 1s, color-coded (verde/gld/rojo)
+//     - Botón gigante check-in con haptic-friendly tap targets
+//     - Quick-tap phone para llamar jugador atrasado
+//   JSX 187 stmts (+1 por CheckinTablet).
+// v20.27.3 — Gate #8 Pre-Go-Live: Platform-admin approval workflow.
+//   4 RPCs SEC DEFINER deployed: submit_course_for_review, approve_course,
+//   reject_course, suspend_course. Todos con validación de role server-side,
+//   FOR UPDATE row lock, audit trail (approved_by/at, suspended_at, rejected_at,
+//   rejection_reason, review_notes), y notifs automáticas a course_admin y a
+//   platform_admins. 13/14 smoke PASS (el 1 fail es test setup, no RPC).
+//   Frontend: 2 puntos migrados de UPDATE directo a RPCs:
+//     - CourseStatusBanner.submitReview → submit_course_for_review (con reason map)
+//     - PlatformCourseDetail.doAction (approve/reject/suspend/reactivate) → RPCs
+//   Banner suspended ahora distingue rejected (con razón visible + botón "Corregir
+//   y reenviar") vs suspended post-active (solo info de contacto soporte).
+// v20.27.2 — HIGH-2 frontend migration (QA pt.19 cierre).
+//   Antes: validatePromo + redeemPromo hacían queries DIRECTOS a promo_codes /
+//   promo_code_uses, INSERT manual + UPDATE counter (race condition + target_role
+//   check vivía solo en cliente, manipulable).
+//   Ahora: usan validate_promo_code_preview (SEC DEFINER, valida auth.uid() y
+//   user_role server-side) y redeem_promo_code (SEC DEFINER, FOR UPDATE atomic,
+//   INSERT + counter en una transacción). Migración invisible al usuario: signatures
+//   externas de helpers idénticas, los 5 callers (Confirm modal player, AdminPromos
+//   course_admin, Path 1 free, createBookingAfterPay, activatePlan) no cambian.
+//   Backend: anon execute REVOCADO en ambas RPCs (defensa adicional).
+//   Smoke 6/6 PASS con OMNIMAN/OLIVER/wrong_role/invalid/anon-blocked.
+// v20.27.1 — Fix #6 doble-clic guard pago (Pre-Go-Live QA pt.19).
+//   Agrega useRef sync guards en 5 handlers críticos que cobran/refundan Stripe:
+//     1. StripePayment.handlePay (Card Element flow del Confirm modal)
+//     2. Confirm.go (puede crear booking gratis directo o abrir StripePayment sheet)
+//     3. AcceptInvitationModal.accept (cobra split via saved card)
+//     4. AcceptInvitationModal.payWithNewCard (cobra split via new card)
+//     5. ReduceBookingDialog.confirm (dispara process-refund a Stripe)
+//   Patrón: useRef bool sincróno checa al inicio del handler. setState es async,
+//   entre 2 clicks ultra-rápidos (touch devices, double-tap) React podría no haber
+//   rerendereado disabled=true. useRef captura el flag instantáneamente.
+//   Reset del ref en TODOS los exit paths (return, throw, finally).
 // v20.27 — Fixes detectados en QA Pre-Go-Live pt.19 (mayo 2026).
 //   MED-1: book_slot ahora usa v_slot.capacity dinámicamente en lugar de literal 8.
 //     Migration: qa_pt19_fix_book_slot_dynamic_capacity. Smoke 10/10 PASS con caps 1, 4, 6, 8.
@@ -1655,6 +1737,10 @@ const STRIPE_PK="pk_test_51TKk1IPbfR39rPLyAWk5ML2tFgKT431Ez2kPmCx1D1EjyaCN84MRpb
 function StripePayment({amount,bookingId,courseName,date,time,partySize,onSuccess,onCancel}){
   const[phase,setPhase]=useState("loading");const[paying,setPaying]=useState(false);const[error,setError]=useState("");
   const stripeRef=useRef(null);const cardRef=useRef(null);const secretRef=useRef("");const mountRef=useRef(null);
+  // v20.27 #6 fix (QA pt.19): guard SÍNCRONO contra doble-clic en touch devices.
+  // setPaying(true) es async; entre clicks rápidos React podría no haber re-renderado
+  // el botón con disabled=true → 2 calls a handlePay = 2 charges. payingRef previene esto.
+  const payingRef=useRef(false);
   useEffect(()=>{
     if(!window.Stripe){setError("Stripe no disponible");setPhase("error");return}
     let dead=false;
@@ -1678,12 +1764,15 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
     return()=>{dead=true}
   },[]);
   const handlePay=async()=>{
+    // v20.27 #6: sync guard. Si payingRef ya true, OTRO clic está en curso → no-op.
+    if(payingRef.current)return;
     if(!stripeRef.current||!cardRef.current||!secretRef.current)return;
+    payingRef.current=true;
     setPaying(true);setError("");
     // v18.0.24 — Bug #20 fix correcto: crear paymentMethod primero (devuelve last4/brand)
     // y después confirmar el paymentIntent con el id. Esto unifica el flow con el del split (línea 1474).
     const{error:pmErr,paymentMethod}=await stripeRef.current.createPaymentMethod({type:"card",card:cardRef.current});
-    if(pmErr){setError(pmErr.message);setPaying(false);return}
+    if(pmErr){setError(pmErr.message);setPaying(false);payingRef.current=false;return}
     const{error:err,paymentIntent}=await stripeRef.current.confirmCardPayment(secretRef.current,{payment_method:paymentMethod.id});
     if(err){
       // v19.22 — Fallback defensivo: si Stripe reporta error pero el PaymentIntent
@@ -1694,7 +1783,7 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
         const{paymentIntent:piCheck}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
         if(piCheck?.status==="succeeded"){
           const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
-          setPaying(false);onSuccess?.(piCheck.id,cardDetails);return
+          setPaying(false);payingRef.current=false;onSuccess?.(piCheck.id,cardDetails);return
         }
         if(piCheck?.status==="processing"){
           // Stripe procesando; esperar 1.5s y reintentar verificación
@@ -1702,16 +1791,16 @@ function StripePayment({amount,bookingId,courseName,date,time,partySize,onSucces
           const{paymentIntent:piRetry}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
           if(piRetry?.status==="succeeded"){
             const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
-            setPaying(false);onSuccess?.(piRetry.id,cardDetails);return
+            setPaying(false);payingRef.current=false;onSuccess?.(piRetry.id,cardDetails);return
           }
         }
       }catch(checkErr){console.warn("[StripePayment] PI verification failed:",checkErr)}
-      setError(err.message);setPaying(false);return
+      setError(err.message);setPaying(false);payingRef.current=false;return
     }
     if(paymentIntent?.status==="succeeded"){
       const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
-      setPaying(false);onSuccess?.(paymentIntent.id,cardDetails)
-    }else{setError("Estado: "+(paymentIntent?.status||"desconocido"));setPaying(false)}
+      setPaying(false);payingRef.current=false;onSuccess?.(paymentIntent.id,cardDetails)
+    }else{setError("Estado: "+(paymentIntent?.status||"desconocido"));setPaying(false);payingRef.current=false}
   };
   return<div style={{background:C.cd,borderRadius:20,padding:20,border:"1px solid "+C.bd}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
@@ -1761,24 +1850,67 @@ async function initPush(userId){
     await sb.from("push_subscriptions").upsert({user_id:userId,endpoint:sub.endpoint,p256dh,auth_key:authKey},{onConflict:"user_id,endpoint"});
   }catch(e){console.log("Push setup skipped:",e.message)}}
 
+// v20.27.2 HIGH-2 fix (QA pt.19): valida y redime promo codes vía RPCs server-side
+// con FOR UPDATE atomic + target_role enforcement. Antes los queries directos a
+// promo_codes + INSERT manual + UPDATE current_uses tenían race condition (un user
+// podía redimir 1 código N veces si hacía clic rápido) y el target_role check vivía
+// solo en el cliente (manipulable). Las RPCs validate_promo_code_preview y
+// redeem_promo_code son SECURITY DEFINER y validan auth.uid() + user_role server-side.
 async function validatePromo(code,userId,role){
+  // Nota: userId y role ya no se usan (el RPC los infiere de auth.uid() + user_profiles).
+  // Se mantienen en signature por compat con callers (Confirm + AdminPromos).
   if(!code||!code.trim())return{ok:false,msg:"Ingresa un código"};
   const cd=code.trim().toUpperCase();
-  const{data:pc,error}=await sb.from("promo_codes").select("*").eq("code",cd).eq("status","active").single();
-  if(error||!pc)return{ok:false,msg:t("Código inválido o expirado")};
-  if(pc.target_role!==role)return{ok:false,msg:t("Este código no aplica para tu perfil")};
-  if(pc.current_uses>=pc.max_uses_global)return{ok:false,msg:t("Código agotado")};
-  if(pc.valid_until&&new Date(pc.valid_until)<new Date())return{ok:false,msg:t("Código expirado")};
-  const{data:used}=await sb.from("promo_code_uses").select("id").eq("promo_code_id",pc.id).eq("user_id",userId);
-  if(used&&used.length>=pc.max_uses_per_user)return{ok:false,msg:t("Ya usaste este código")};
-  return{ok:true,promo:pc,msg:pc.discount_type==="percent"?pc.discount_value+"% de descuento":pc.discount_type==="free"?"100% gratis":"$"+fm(pc.discount_value)+" de descuento"}}
+  const{data,error}=await sb.rpc("validate_promo_code_preview",{p_code:cd});
+  if(error)return{ok:false,msg:t("Error al validar código")};
+  if(!data?.ok){
+    // Map de reasons del RPC → mensajes UX en MX-Español
+    const reasonMap={
+      no_auth:t("Inicia sesión para continuar."),
+      no_profile:t("Completa tu perfil para reservar"),
+      invalid_code:t("Código inválido o expirado"),
+      inactive_code:t("Código inválido o expirado"),
+      expired_code:t("Código expirado"),
+      not_yet_valid:t("Código aún no válido"),
+      wrong_role:t("Este código no aplica para tu perfil"),
+      exhausted:t("Código agotado"),
+      already_used:t("Ya usaste este código")
+    };
+    return{ok:false,msg:reasonMap[data?.reason]||t("Código inválido o expirado")};
+  }
+  // Construir objeto promo compat con el shape antiguo que esperan los callers
+  const promo={
+    id:data.promo_id,
+    code:data.code,
+    discount_type:data.discount_type,
+    discount_value:Number(data.discount_value),
+    applies_to:data.applies_to
+  };
+  const msg=promo.discount_type==="percent"?promo.discount_value+"% de descuento"
+    :promo.discount_type==="free"?"100% gratis"
+    :"$"+fm(promo.discount_value)+" de descuento";
+  return{ok:true,promo,msg}}
 
-async function redeemPromo(promoId,userId,contextType,contextId,discountApplied){
-  await sb.from("promo_code_uses").insert({promo_code_id:promoId,user_id:userId,context_type:contextType,context_id:contextId,discount_applied:discountApplied});
-  await sb.rpc("increment_promo_uses",{promo_id:promoId}).catch(()=>{
-    sb.from("promo_codes").select("current_uses").eq("id",promoId).single().then(({data})=>{
-      if(data)sb.from("promo_codes").update({current_uses:(data.current_uses||0)+1}).eq("id",promoId)})
-  })}
+async function redeemPromo(promoId,userId,contextType,contextId,discountApplied,code){
+  // v20.27.2: usa redeem_promo_code RPC (atomic FOR UPDATE + INSERT + counter).
+  // El RPC necesita el code (text), no el promoId. Los callers viejos pasan promoId+code
+  // (vía `appliedPromo.code` o similar). Si no recibimos code, fallback a fetch.
+  let cd=code;
+  if(!cd&&promoId){
+    const{data:pc}=await sb.from("promo_codes").select("code").eq("id",promoId).maybeSingle();
+    cd=pc?.code;
+  }
+  if(!cd)return{ok:false,reason:"no_code_provided"};
+  const{data,error}=await sb.rpc("redeem_promo_code",{
+    p_code:cd,
+    p_context_type:contextType,
+    p_context_id:contextId,
+    p_discount_applied:discountApplied
+  });
+  if(error){console.warn("[HIGH-2] redeem_promo_code RPC error:",error.message);return{ok:false,reason:"rpc_error"}}
+  if(!data?.ok)console.warn("[HIGH-2] redeem_promo_code rejected:",data?.reason);
+  return data||{ok:false,reason:"empty_response"}
+}
 
 async function lockSlot(courseName,slotDate,slotTime,partySize){
   try{
@@ -1798,6 +1930,10 @@ async function sendBookingEmails(bk,course,playerEmail,playerName,partySize,tota
 }
 
 function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState(1);const[busy,setBusy]=useState(false);const[extras,setExtras]=useState([]);const[cat,setCat]=useState("equipo");const[cart,setCart]=useState({});const[extrasOpen,setExtrasOpen]=useState(false);const[promoCode,setPromoCode]=useState("");const[promoResult,setPromoResult]=useState(null);const[promoLoading,setPromoLoading]=useState(false);const[appliedPromo,setAppliedPromo]=useState(null);const[payData,setPayData]=useState(null);const[paymentMode,setPaymentMode]=useState("compartir");const[selectedFriends,setSelectedFriends]=useState([]);const[friendsList,setFriendsList]=useState([]);const[friendSearch,setFriendSearch]=useState("");const[friendsOpen,setFriendsOpen]=useState(false);
+  // v20.27 #6 fix (QA pt.19): sync guard contra doble-clic. busyRef es síncrono;
+  // setBusy(true) es async y entre clicks rápidos React podría no haber re-renderado.
+  // go() es el handler crítico (puede crear booking gratis o setPayData del Stripe sheet).
+  const busyRef=useRef(false);
   // v20.3.1: Membership benefit state
   const[memPreview,setMemPreview]=useState(null);  // {has_membership, membership_id, tier_name, badge_label, badge_color, days_remaining, options:{free_booking, discount}}
   const[memMode,setMemMode]=useState("none");      // 'none' | 'free_booking' | 'discount'
@@ -1827,13 +1963,18 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
   const grand=Math.max(0,gT-discount-memDiscount+eT);
   const setQty=(eid,d)=>{setCart(prev=>{const c=prev[eid]||0;const nx=Math.max(0,c+d);if(nx===0){const{[eid]:_,...r}=prev;return r}return{...prev,[eid]:nx}})};
   const go=async()=>{if(!s)return;
-    const{data:conflictCheck}=await sb.rpc("check_booking_conflict",{p_user_id:s.user.id,p_booking_date:sl.slot_date,p_booking_time:sl.slot_time});if(conflictCheck?.conflict){window.__toast?.(t("Ya tienes una reservación en ")+conflictCheck.existing_course+" a las "+conflictCheck.existing_time?.slice(0,5)+" ese día","error");return}
-    const{data:capCheck}=await sb.from("time_slots").select("booked_count,booking_count,status").eq("course_name",c.course_name).eq("slot_date",sl.slot_date).eq("slot_time",sl.slot_time).single();if(capCheck){const spotsLeft=8-(capCheck.booked_count||0);const bksLeft=2-(capCheck.booking_count||0);if(capCheck.status==="booked"||bksLeft<=0||spotsLeft<n){window.__toast?.("Slot no disponible"+(spotsLeft<n?" ("+spotsLeft+" "+t("lugares restantes")+")" :""),"error");return}}
+    // v20.27 #6: sync guard contra doble-clic. busyRef captura SINCRÓNICAMENTE
+    // un clic en curso antes de cualquier work async. Sin esto, 2 clicks rápidos
+    // (sobre todo en touch devices) podrían disparar 2 INSERTs de booking en paralelo.
+    if(busyRef.current)return;
+    busyRef.current=true;
+    const{data:conflictCheck}=await sb.rpc("check_booking_conflict",{p_user_id:s.user.id,p_booking_date:sl.slot_date,p_booking_time:sl.slot_time});if(conflictCheck?.conflict){window.__toast?.(t("Ya tienes una reservación en ")+conflictCheck.existing_course+" a las "+conflictCheck.existing_time?.slice(0,5)+" ese día","error");busyRef.current=false;return}
+    const{data:capCheck}=await sb.from("time_slots").select("booked_count,booking_count,status").eq("course_name",c.course_name).eq("slot_date",sl.slot_date).eq("slot_time",sl.slot_time).single();if(capCheck){const spotsLeft=8-(capCheck.booked_count||0);const bksLeft=2-(capCheck.booking_count||0);if(capCheck.status==="booked"||bksLeft<=0||spotsLeft<n){window.__toast?.("Slot no disponible"+(spotsLeft<n?" ("+spotsLeft+" "+t("lugares restantes")+")" :""),"error");busyRef.current=false;return}}
     // ==== Path 2 (n>1): usa StripePayment modal + RPC atomico en onSuccess ====
     if(n>1){
-      if(appliedPromo){window.__toast?.(t("Los códigos promocionales aún no aplican a reservas con varios jugadores"),"warn");return}
+      if(appliedPromo){window.__toast?.(t("Los códigos promocionales aún no aplican a reservas con varios jugadores"),"warn");busyRef.current=false;return}
       // v19.23 — Validar que split tenga al menos 1 amigo invitado
-      if(paymentMode==="split"&&selectedFriends.length===0){window.__toast?.(t("Para Split necesitas invitar al menos a 1 amigo"),"warn");return}
+      if(paymentMode==="split"&&selectedFriends.length===0){window.__toast?.(t("Para Split necesitas invitar al menos a 1 amigo"),"warn");busyRef.current=false;return}
       // v20.3.2: en compartir mode, grand ya incluye memDiscount → chargeAmount queda con descuento aplicado.
       // En split mode, memDiscount es 0 (forzado por useEffect), así que gT/n no recibe descuento.
       const chargeAmount=paymentMode==="split"?Math.round((gT/n)*100)/100:grand;
@@ -1846,17 +1987,20 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
         // v20.3.2: pasar membership info al post-pay para aplicarla (solo en compartir mode)
         membershipApply:(paymentMode==="compartir"&&memPreview?.has_membership&&memMode!=="none"&&memDiscount>0)?{membership_id:memPreview.membership_id,mode:memMode,discount_amount:memDiscount}:null
       });
+      // busyRef se resetea cuando el StripePayment sheet cierra (success o cancel).
+      // El sheet tiene su propio payingRef que previene doble-clic DENTRO de él.
+      busyRef.current=false;
       return;
     }
     // ==== Path 1 (n=1): flujo existente ====
     if(grand<=0){
       setBusy(true);
       const{data:bk,error}=await sb.from("bookings").insert({user_id:s.user.id,course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,total_cost:0,extras_total:eT,status:"confirmed",payment_status:"free",promo_code:appliedPromo?.code||null,discount_amount:discount||0}).select().single();
-      if(error){if(window.__toast)window.__toast(error.message,"error");setBusy(false);return}
+      if(error){if(window.__toast)window.__toast(error.message,"error");setBusy(false);busyRef.current=false;return}
       const ei=Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{booking_id:bk.id,extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0);
       if(ei.length>0)await sb.from("booking_extras").insert(ei);
       await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
-      if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
+      if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount,appliedPromo.code);
       // v20.3.1 + v20.3.2: si el booking quedó gratis por free_booking de membresía, aplicar el benefit
       // (n===1 guard removido — multi-player con compartir mode también puede llegar aquí si grand=0)
       if(memPreview?.has_membership&&memMode!=="none"&&memDiscount>0){
@@ -1867,9 +2011,11 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
       }
       createNotif(s.user.id,"booking","Reserva confirmada","Tu reserva en "+c.course_name+" para el "+sl.slot_date+" a las "+sl.slot_time?.slice(0,5)+" está confirmada. Código: "+(bk.booking_code||""),{course_name:c.course_name,booking_id:bk.id,action_route:"tab:1",action_label:"Ver reserva"});
       sendBookingEmails(bk,c,s.user.email,pr?.full_name||s.user.email,n,0);
-      setBusy(false);onOk({bk,tot:0});return
+      setBusy(false);busyRef.current=false;onOk({bk,tot:0});return
     }
-    setPayData({amount:grand,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n,extras:Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0),promoCode:appliedPromo?.code||null,promoId:appliedPromo?.id||null,discountAmt:discount})
+    setPayData({amount:grand,courseName:c.course_name,date:sl.slot_date,time:sl.slot_time?.slice(0,5),partySize:n,extras:Object.entries(cart).map(([eid,qty])=>{const ex=extras.find(e=>e.id===eid);return{extra_id:eid,quantity:qty,unit_price:Number(ex.price),total_price:Number(ex.price)*qty}}).filter(e=>e.quantity>0),promoCode:appliedPromo?.code||null,promoId:appliedPromo?.id||null,discountAmt:discount});
+    // Reset busyRef: el StripePayment sheet ya está abierto con su propio payingRef guard.
+    busyRef.current=false;
   };
   const createBookingAfterPay=async(paymentIntentId)=>{
     // v20.27 MED-2 fix (QA pt.19): retry 3 attempts + rollback Stripe si todos fallan.
@@ -1913,7 +2059,7 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     }
     if(payData?.extras?.length>0){const ei=payData.extras.map(e=>({...e,booking_id:bk.id}));await sb.from("booking_extras").insert(ei)}
     await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
-    if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount);
+    if(appliedPromo)await redeemPromo(appliedPromo.id,s.user.id,"booking",bk.id,discount,appliedPromo.code);
     // v20.3.1 + v20.3.2: si user eligió aplicar membership benefit, marcarlo en la booking + decrementar counter.
     // n===1 guard removido. Path 2 (n>1, compartir mode) usa payData.membershipApply para evitar referencias stale.
     const memApplyData=payData?.membershipApply||((memPreview?.has_membership&&memMode!=="none"&&n===1&&memDiscount>0)?{membership_id:memPreview.membership_id,mode:memMode,discount_amount:memDiscount}:null);
@@ -2553,6 +2699,9 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
   const stripeRef=useRef(null);
   const cardRef=useRef(null);
   const mountRef=useRef(null);
+  // v20.27 #6: sync guard contra doble-clic en payWithNewCard / acceptWithSavedCard.
+  // Estos handlers cobran a Stripe directamente → guard síncrono crítico.
+  const processingRef=useRef(false);
   // Fetch booking fresh vía booking_id para no depender de joined metadata.
   useEffect(()=>{
     if(!inv.booking_id)return;
@@ -2595,6 +2744,8 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
   };
   // Accept flow (no split o split con tarjeta guardada)
   const accept=async()=>{
+    if(processingRef.current)return;  // v20.27 #6: sync guard — protege split-charge (saved card)
+    processingRef.current=true;
     setProcessing(true);setError("");
     try{
       // Caso simple (no split): marcar directo como accepted. Trigger notifica al creator.
@@ -2602,12 +2753,13 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
         const{error:err}=await sb.from("booking_participants").update({status:"accepted",updated_at:new Date().toISOString()}).eq("id",inv.id);
         if(err)throw err;
         window.__toast?.(t("¡Reserva confirmada!"),"success");
+        processingRef.current=false;
         onResponded?.();onClose?.();
         return;
       }
       // Split sin tarjeta guardada → ir directo a captura de tarjeta inline.
       if(!hasSavedCard){
-        setPhase("card_entry");setProcessing(false);return;
+        setPhase("card_entry");setProcessing(false);processingRef.current=false;return;
       }
       // Split con tarjeta guardada: llamar edge function split-charge (cobra saved card).
       const sess=await sb.auth.getSession();
@@ -2618,10 +2770,11 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
         const piId=data.payment_intent_id||data.payment_intent;
         await completeRpc({paymentIntentId:piId,last4:p?.card_last4,brand:p?.card_brand,customerId:p?.stripe_customer_id||data.customer_id});
         window.__toast?.(t("¡Pagado! Tu lugar está asegurado"),"success");
+        processingRef.current=false;
         onResponded?.();onClose?.();
       }else if(data.requires_action&&data.client_secret){
         // 3DS sobre saved card
-        if(!window.Stripe){setError("Stripe no disponible");setProcessing(false);return}
+        if(!window.Stripe){setError("Stripe no disponible");setProcessing(false);processingRef.current=false;return}
         const stripe=window.Stripe(STRIPE_PK);
         const{error:stripeErr,paymentIntent}=await stripe.confirmCardPayment(data.client_secret);
         if(stripeErr){
@@ -2631,27 +2784,31 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
             if(piCheck?.status==="succeeded"){
               await completeRpc({paymentIntentId:piCheck.id,last4:p?.card_last4,brand:p?.card_brand,customerId:p?.stripe_customer_id||data.customer_id});
               window.__toast?.(t("¡Pagado! Tu lugar está asegurado"),"success");
+              processingRef.current=false;
               onResponded?.();onClose?.();return
             }
           }catch(checkErr){console.warn("[split-3ds] PI verification failed:",checkErr)}
-          setError(stripeErr.message);setProcessing(false);return
+          setError(stripeErr.message);setProcessing(false);processingRef.current=false;return
         }
         if(paymentIntent?.status==="succeeded"){
           await completeRpc({paymentIntentId:paymentIntent.id,last4:p?.card_last4,brand:p?.card_brand,customerId:p?.stripe_customer_id||data.customer_id});
           window.__toast?.(t("¡Pagado! Tu lugar está asegurado"),"success");
+          processingRef.current=false;
           onResponded?.();onClose?.();
-        }else{setError("Pago en estado: "+(paymentIntent?.status||"desconocido"));setProcessing(false)}
+        }else{setError("Pago en estado: "+(paymentIntent?.status||"desconocido"));setProcessing(false);processingRef.current=false}
       }else if(data.needs_card){
         // Backend reporta falta de tarjeta aunque el perfil la tuviera → abrir captura.
-        setPhase("card_entry");setProcessing(false);
+        setPhase("card_entry");setProcessing(false);processingRef.current=false;
       }else{
-        setError(data.message||data.error||"Error al procesar pago");setProcessing(false);
+        setError(data.message||data.error||"Error al procesar pago");setProcessing(false);processingRef.current=false;
       }
-    }catch(e){setError(e.message||"Error inesperado");setProcessing(false);}
+    }catch(e){setError(e.message||"Error inesperado");setProcessing(false);processingRef.current=false;}
   };
   // Pay con tarjeta nueva (Stripe Elements inline)
   const payWithNewCard=async()=>{
+    if(processingRef.current)return;  // v20.27 #6: sync guard
     if(!stripeRef.current||!cardRef.current){setError("Stripe no listo");return}
+    processingRef.current=true;
     setProcessing(true);setError("");
     try{
       // 1) Crear PaymentMethod client-side para obtener last4/brand
@@ -2687,8 +2844,9 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
       const{error:rpcErr}=await completeRpc({paymentIntentId:piId,last4,brand,customerId});
       if(rpcErr)throw new Error(rpcErr.message||"Error al registrar pago");
       window.__toast?.(t("¡Pagado! Tu lugar está asegurado"),"success");
+      processingRef.current=false;
       onResponded?.();onClose?.();
-    }catch(e){setError(e.message||"Error inesperado");setProcessing(false);}
+    }catch(e){setError(e.message||"Error inesperado");setProcessing(false);processingRef.current=false;}
   };
   const reject=async()=>{
     const go=async()=>{
@@ -2758,6 +2916,8 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
 // ReduceBookingDialog: confirma reducción de reserva (party_size, refund parcial, notif al campo)
 function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
   const[processing,setProcessing]=useState(false);
+  // v20.27 #6: sync guard — confirm() dispara process-refund a Stripe (refund parcial real).
+  const processingRef=useRef(false);
   const newSize=Math.max(1,booking.party_size-rejectedParts.length);
   const pricePerPlayer=Number(booking.total_cost||0)/Math.max(booking.party_size,1);
   // v19.26: Refund = suma de split_amount de participants removidos que YA PAGARON
@@ -2768,6 +2928,8 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
   },0);
   const refundAmount=Math.round(paidRemovedAmt*100)/100;
   const confirm=async()=>{
+    if(processingRef.current)return;  // v20.27 #6: previene doble refund
+    processingRef.current=true;
     setProcessing(true);
     try{
       const{data,error}=await sb.rpc("reduce_booking_size",{
@@ -2790,7 +2952,7 @@ function ReduceBookingDialog({booking,rejectedParts,onClose,onReduced}){
       if(msg.includes("tee_time_too_close"))window.__toast?.("No se puede reducir a <2h del tee time","error");
       else if(msg.includes("cannot_reduce_with_paid_participants"))window.__toast?.("No se puede reducir incluyendo jugadores que ya pagaron","error");
       else window.__toast?.("Error: "+msg,"error");
-    }finally{setProcessing(false)}
+    }finally{setProcessing(false);processingRef.current=false}
   };
   return<div className="modal-bg" onClick={processing?null:onClose}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:420}}>
     <h3 style={{color:C.txt,fontSize:16,fontWeight:800,margin:"0 0 10px"}}>{t("Reducir reserva")}</h3>
@@ -5250,9 +5412,24 @@ function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=us
   // Slots sigue siendo tab 2 (no se desplazó).
   const REQ_NAV={photos:{tab:7,edit:false,field:"photos"},desc:{tab:7,edit:true,field:"desc"},fees:{tab:7,edit:true,field:"fees"},phone:{tab:7,edit:true,field:"phone"},hours:{tab:7,edit:true,field:"hours"},days:{tab:7,edit:true,field:"days"},addr:{tab:7,edit:true,field:"addr"},holes:{tab:7,edit:false,field:"holes"},slots:{tab:2,edit:false,field:null}};
   const goToReq=(k)=>{const n=REQ_NAV[k];if(!n||!navTo)return;navTo(n.tab,{autoEdit:n.edit,focusField:n.field})};
-  async function submitReview(){if(!comp.allDone||submitting)return;setSubmitting(true);
-    const{error}=await sb.from("golf_courses").update({listing_status:"pending_review",submitted_at:new Date().toISOString()}).eq("id",course.id);
+  async function submitReview(){if(submitting)return;setSubmitting(true);
+    // v20.27.3 #8 fix (QA pt.19): usa RPC server-side. Antes hacía UPDATE directo
+    // a golf_courses (bypassed validation). El RPC valida ownership + requisitos
+    // mínimos + notifica a platform_admins automáticamente.
+    const{data,error}=await sb.rpc("submit_course_for_review",{p_course_id:course.id});
     if(error){window.__toast?.(error.message,"error");setSubmitting(false);return}
+    if(!data?.ok){
+      const reasonMap={
+        no_auth:t("Inicia sesión para continuar."),
+        not_course_admin:t("No tienes permisos"),
+        not_owner:t("No eres el admin de este curso"),
+        course_not_found:t("Curso no encontrado"),
+        invalid_transition:t("Este curso no puede enviarse a revisión en su estado actual"),
+        requirements_missing:t("Completa los requisitos antes de enviar")
+      };
+      window.__toast?.(reasonMap[data?.reason]||t("Error al enviar a revisión"),"warn");
+      setSubmitting(false);return;
+    }
     fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_review_submitted",data:{course_name:course.course_name,city:course.city,state:course.state,facility_type:course.facility_type}})}).catch(()=>{});
     window.__toast?.(t("Enviado a revisión"),"success");setSubmitting(false);if(onRefresh)onRefresh()
   }
@@ -5263,13 +5440,21 @@ function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=us
       <div style={{fontSize:11,color:C.ts,marginTop:2}}>Tu locación es visible para jugadores</div>
     </div>
   </div>}
-  if(status==="suspended"){return<div style={{background:C.acc+"12",border:"1px solid "+C.acc+"30",borderRadius:14,padding:14,marginBottom:16}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-      <div dangerouslySetInnerHTML={{__html:ic("alert",18,C.acc)}}/>
-      <div style={{fontSize:13,fontWeight:800,color:C.acc}}>Locación suspendida</div>
+  if(status==="suspended"){
+    // v20.27.3 #8: distinguir rejected (en revisión inicial, con reason visible) vs suspended (post-active).
+    const wasRejected=!!course.rejection_reason;
+    const reason=course.rejection_reason||course.suspension_reason||"No visible para jugadores. Contacta soporte para más información.";
+    return<div style={{background:C.acc+"12",border:"1px solid "+C.acc+"30",borderRadius:14,padding:14,marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+        <div dangerouslySetInnerHTML={{__html:ic("alert",18,C.acc)}}/>
+        <div style={{fontSize:13,fontWeight:800,color:C.acc}}>{wasRejected?t("Revisión completada — cambios necesarios"):t("Locación suspendida")}</div>
+      </div>
+      <div style={{fontSize:12,color:C.txt,lineHeight:1.5,marginBottom:wasRejected?12:0,fontWeight:wasRejected?500:400}}>{reason}</div>
+      {wasRejected&&<button onClick={submitReview} disabled={submitting} style={{width:"100%",padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:submitting?"wait":"pointer",opacity:submitting?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        {submitting?t("Enviando..."):t("Corregir y reenviar a revisión")}
+      </button>}
     </div>
-    <div style={{fontSize:11,color:C.ts,lineHeight:1.4}}>{course.suspension_reason||"No visible para jugadores. Contacta soporte para más información."}</div>
-  </div>}
+  }
   const isPending=status==="pending_review";const barColor=isPending?C.gld:C.acc;const barBg=isPending?C.gld+"12":C.acc+"10";const barBd=isPending?C.gld+"30":C.acc+"25";
   const firstPending=comp.items.find(i=>!i.p);
   return<div style={{background:barBg,border:"1px solid "+barBd,borderRadius:14,padding:14,marginBottom:16}}>
@@ -6106,41 +6291,777 @@ function WalkInModal({course,onClose,onSaved}){
   </div>;
 }
 
-function AdminBookings({course}){const[bks,setBks]=useState([]);const[ld,setLd]=useState(true);const[selDate,setSelDate]=useState(new Date().toISOString().split("T")[0]);const[det,setDet]=useState(null);const[bkSearch,setBkSearch]=useState("");const[cust360,setCust360]=useState(null); // v19.72: Customer 360 modal
-  useEffect(()=>{load()},[selDate]);async function load(){setLd(true);const{data}=await sb.from("bookings").select("*,user_profiles!inner(full_name,email,phone,player_id)").eq("course_id",course.id).eq("booking_date",selDate).order("booking_time");setBks(data||[]);setLd(false)}
-  const navDay=(d)=>{const dt=new Date(selDate+"T12:00:00");dt.setDate(dt.getDate()+d);setSelDate(dt.toISOString().split("T")[0])};
-  const stc={confirmed:{l:t("Confirmada"),c:C.grn},cancelled:{l:t("Cancelada"),c:C.acc},pending:{l:t("Pendiente"),c:C.gld}};const dayLabel=(d)=>{const dt=new Date(d+"T12:00:00");return DN[dt.getDay()]+" "+dt.getDate()+" "+dt.toLocaleDateString("es-MX",{month:"short"})};const today=new Date().toISOString().split("T")[0];
-  const confirmed=bks.filter(b=>b.status==="confirmed");const totalRev=confirmed.reduce((s,b)=>s+Number(b.total_cost||0),0);const totalPax=confirmed.reduce((s,b)=>s+(b.party_size||0),0);
+// v20.28 A.3: Check-in tablet mode
+// Vista optimizada para tablet/iPad en el pro shop: cards grandes touch-friendly,
+// auto-refresh, color-coded por urgency (late=rojo, upcoming=amarillo, done=verde).
+// Acceso: botón "Modo Check-in" desde el header de AdminBookings.
+function CheckinTablet({course, date, onExit}){
+  const{s,p:pr}=useA();
+  const[data,setData]=useState(null);
+  const[ld,setLd]=useState(true);
+  const[busyId,setBusyId]=useState(null);
+  const[clock,setClock]=useState(new Date());
+  const today=date||new Date().toISOString().split("T")[0];
+  
+  // Loader
+  async function load(){
+    const{data:r}=await sb.rpc("get_checkin_dashboard",{p_course_id:course.id,p_date:today});
+    setData(r);setLd(false);
+  }
+  
+  useEffect(()=>{load();const i=setInterval(()=>{load();setClock(new Date())},60000);return()=>clearInterval(i)},[course.id,today]);
+  // Clock tick segundos
+  useEffect(()=>{const i=setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(i)},[]);
+  
+  async function doCheckin(bk){
+    if(busyId)return;
+    setBusyId(bk.id);
+    const{data:r,error}=await sb.rpc("checkin_booking",{p_booking_id:bk.id});
+    setBusyId(null);
+    if(error){window.__toast?.(error.message,"error");return}
+    if(!r?.ok){window.__toast?.(r?.reason==="not_authorized"?"Sin permisos":"Error: "+r?.reason,"warn");return}
+    if(r.already_checked_in)window.__toast?.("Ya estaba checked-in","info");
+    else window.__toast?.("✓ Check-in registrado","success");
+    load();
+  }
+  
+  async function doUncheckin(bk){
+    if(busyId)return;
+    if(!window.confirm("¿Deshacer check-in?"))return;
+    setBusyId(bk.id);
+    await sb.rpc("uncheckin_booking",{p_booking_id:bk.id});
+    setBusyId(null);
+    window.__toast?.("Check-in deshecho","info");
+    load();
+  }
+  
+  if(ld||!data)return<div style={{padding:30,textAlign:"center",color:C.tm}}>Cargando...</div>;
+  
+  const sum=data.summary||{};
+  const bookings=data.bookings||[];
+  const fmtTime=(d)=>d.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit",hour12:false});
+  const fmtRelMin=(min)=>{const m=Math.round(min);if(m===0)return"ahora";if(m>0&&m<60)return"en "+m+"m";if(m<0&&m>-60)return"hace "+Math.abs(m)+"m";if(m>=60)return"en "+Math.floor(m/60)+"h"+(m%60?" "+(m%60)+"m":"");return"hace "+Math.floor(Math.abs(m)/60)+"h"};
+  
+  return<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+    {/* Header sticky */}
+    <div style={{position:"sticky",top:0,zIndex:10,background:C.bg,borderBottom:"1px solid "+C.bd,padding:"14px 18px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        <div>
+          <div style={{fontSize:11,color:C.tm,fontWeight:600,letterSpacing:1.5}}>CHECK-IN · {course.course_name}</div>
+          <div style={{fontSize:24,fontWeight:900,color:C.txt,marginTop:2,..._s.mono,letterSpacing:"-0.02em"}}>{fmtTime(clock)}</div>
+        </div>
+        <button onClick={onExit} style={{padding:"10px 18px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          <span dangerouslySetInnerHTML={{__html:ic("x",14,C.txt)}}/>
+          Salir
+        </button>
+      </div>
+      {/* Summary chips */}
+      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:2}}>
+        <div style={{padding:"8px 14px",background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:12,minWidth:90,flexShrink:0}}>
+          <div style={{fontSize:10,color:C.grn,fontWeight:700,letterSpacing:1}}>CHECKED-IN</div>
+          <div style={{fontSize:22,fontWeight:900,color:C.grn,..._s.mono}}>{sum.checked_in}<span style={{fontSize:13,color:C.tm,fontWeight:600}}>/{sum.total_bookings}</span></div>
+        </div>
+        <div style={{padding:"8px 14px",background:C.gld+"15",border:"1px solid "+C.gld+"40",borderRadius:12,minWidth:90,flexShrink:0}}>
+          <div style={{fontSize:10,color:C.gld,fontWeight:700,letterSpacing:1}}>PENDIENTES</div>
+          <div style={{fontSize:22,fontWeight:900,color:C.gld,..._s.mono}}>{sum.pending}</div>
+        </div>
+        {sum.late>0&&<div style={{padding:"8px 14px",background:C.acc+"15",border:"1px solid "+C.acc+"60",borderRadius:12,minWidth:90,flexShrink:0,animation:"pulse 2s infinite"}}>
+          <div style={{fontSize:10,color:C.acc,fontWeight:700,letterSpacing:1}}>LATE (15+ min)</div>
+          <div style={{fontSize:22,fontWeight:900,color:C.acc,..._s.mono}}>{sum.late}</div>
+        </div>}
+        <div style={{padding:"8px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,minWidth:90,flexShrink:0}}>
+          <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1}}>JUGADORES</div>
+          <div style={{fontSize:22,fontWeight:900,color:C.txt,..._s.mono}}>{sum.players_checked_in}<span style={{fontSize:13,color:C.tm,fontWeight:600}}>/{sum.total_players}</span></div>
+        </div>
+      </div>
+    </div>
+    
+    {/* Lista de bookings — cards grandes */}
+    <div style={{padding:"16px 14px",display:"flex",flexDirection:"column",gap:10}}>
+      {bookings.length===0?
+        <div style={{textAlign:"center",padding:60,color:C.tm,fontSize:14}}>Sin reservas para hoy</div>
+      :bookings.filter(b=>b.status==="confirmed").map(b=>{
+        const isChecked=b.is_checked_in;
+        const isLate=b.is_late;
+        const isUpcoming=b.is_upcoming_30min;
+        const minTo=b.minutes_to_tee;
+        const cardBg=isChecked?C.grn+"08":isLate?C.acc+"10":isUpcoming?C.gld+"10":C.cd;
+        const cardBd=isChecked?C.grn+"40":isLate?C.acc+"60":isUpcoming?C.gld+"50":C.bd;
+        const teeColor=isChecked?C.grn:isLate?C.acc:isUpcoming?C.gld:C.txt;
+        const busy=busyId===b.id;
+        return<div key={b.id} style={{background:cardBg,border:"2px solid "+cardBd,borderRadius:16,padding:14,transition:"all .2s"}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            {/* Tee time gigante */}
+            <div style={{minWidth:80,textAlign:"center",flexShrink:0}}>
+              <div style={{fontSize:26,fontWeight:900,color:teeColor,..._s.mono,letterSpacing:"-0.02em",lineHeight:1}}>{b.booking_time?.slice(0,5)}</div>
+              <div style={{fontSize:10,color:C.tm,marginTop:3,fontWeight:600}}>{fmtRelMin(minTo)}</div>
+            </div>
+            {/* Avatar + jugador */}
+            <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:10}}>
+              {b.player_avatar_url?
+                <img src={b.player_avatar_url} style={{width:44,height:44,borderRadius:22,objectFit:"cover",flexShrink:0,border:"1px solid "+C.bd}} alt=""/>
+              :
+                <div style={{width:44,height:44,borderRadius:22,background:C.grn+"25",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("user",20,C.grn)}}/>
+              }
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:15,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.player_name||"Sin nombre"}</div>
+                <div style={{fontSize:11,color:C.tm,marginTop:2,display:"flex",gap:8,alignItems:"center"}}>
+                  <span><b style={{color:C.txt,fontSize:13}}>{b.party_size}</b> jug</span>
+                  {b.booking_code&&<span style={{..._s.mono,color:C.gld,fontWeight:700,letterSpacing:1}}>{b.booking_code}</span>}
+                </div>
+              </div>
+            </div>
+            {/* Botón check-in / status */}
+            {isChecked?
+              <button onClick={()=>doUncheckin(b)} disabled={busy} style={{padding:"12px 18px",background:C.grn,border:"none",borderRadius:14,color:"#fff",fontSize:13,fontWeight:800,cursor:busy?"wait":"pointer",display:"flex",alignItems:"center",gap:8,minWidth:120,justifyContent:"center",boxShadow:"0 3px 10px "+C.grn+"40"}}>
+                <span dangerouslySetInnerHTML={{__html:ic("check",16,"#fff")}}/>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontSize:12,lineHeight:1.1}}>CHECKED-IN</div>
+                  <div style={{fontSize:9,opacity:.85,fontWeight:600,marginTop:1}}>{new Date(b.checked_in_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit",hour12:false})}</div>
+                </div>
+              </button>
+            :
+              <button onClick={()=>doCheckin(b)} disabled={busy} style={{padding:"14px 22px",background:isLate?`linear-gradient(135deg,${C.acc},#d63d55)`:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:14,fontWeight:800,cursor:busy?"wait":"pointer",minWidth:130,display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:isLate?"0 4px 14px "+C.acc+"50":"0 4px 14px "+C.grn+"40",opacity:busy?.6:1}}>
+                {busy?<div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>:<>
+                  <span dangerouslySetInnerHTML={{__html:ic("check",18,"#fff")}}/>
+                  Check-in
+                </>}
+              </button>
+            }
+          </div>
+          {/* Phone quick-tap */}
+          {b.player_phone&&!isChecked&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+cardBd,display:"flex",gap:8}}>
+            <a href={"tel:"+b.player_phone} style={{flex:1,padding:8,background:C.grn+"12",border:"1px solid "+C.grn+"30",borderRadius:10,color:C.grn,fontSize:12,fontWeight:700,textAlign:"center",textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              <span dangerouslySetInnerHTML={{__html:ic("phone",13,C.grn)}}/>
+              {b.player_phone}
+            </a>
+          </div>}
+        </div>
+      })}
+    </div>
+  </div>
+}
+
+
+// v20.29 E.1: Admin Roster — gestiona staff (caddies/marshals/pros) + equipment (carts/clubs).
+// CRUD compacto con 2 tabs internos. Llama get_course_roster + direct insert/update/delete.
+function AdminRoster({course, onExit}){
+  const[data,setData]=useState(null);
+  const[ld,setLd]=useState(true);
+  const[tab,setTab]=useState("staff");
+  const[editingStaff,setEditingStaff]=useState(null);
+  const[editingEq,setEditingEq]=useState(null);
+  
+  async function load(){
+    const{data:r}=await sb.rpc("get_course_roster",{p_course_id:course.id});
+    setData(r);setLd(false);
+  }
+  useEffect(()=>{load()},[course.id]);
+  
+  // Staff CRUD
+  async function saveStaff(s){
+    const payload={course_id:course.id,full_name:s.full_name?.trim(),role:s.role,phone:s.phone||null,email:s.email||null,active:s.active!==false,notes:s.notes||null};
+    if(!payload.full_name){window.__toast?.("Nombre requerido","warn");return}
+    const{error}=s.id?
+      await sb.from("course_staff").update(payload).eq("id",s.id):
+      await sb.from("course_staff").insert(payload);
+    if(error){window.__toast?.(error.message,"error");return}
+    window.__toast?.(s.id?"Actualizado":"Agregado","success");
+    setEditingStaff(null);load();
+  }
+  async function deleteStaff(id){
+    if(!window.confirm("¿Eliminar?"))return;
+    const{error}=await sb.from("course_staff").delete().eq("id",id);
+    if(error){window.__toast?.(error.message,"error");return}
+    load();
+  }
+  
+  // Equipment CRUD
+  async function saveEq(e){
+    const payload={course_id:course.id,equipment_type:e.equipment_type,identifier:e.identifier?.trim(),status:e.status,notes:e.notes||null};
+    if(!payload.identifier){window.__toast?.("Identificador requerido","warn");return}
+    const{error}=e.id?
+      await sb.from("course_equipment").update(payload).eq("id",e.id):
+      await sb.from("course_equipment").insert(payload);
+    if(error){window.__toast?.(error.message,"error");return}
+    window.__toast?.(e.id?"Actualizado":"Agregado","success");
+    setEditingEq(null);load();
+  }
+  async function deleteEq(id){
+    if(!window.confirm("¿Eliminar?"))return;
+    const{error}=await sb.from("course_equipment").delete().eq("id",id);
+    if(error){window.__toast?.(error.message,"error");return}
+    load();
+  }
+  async function toggleEqStatus(eq){
+    const next=eq.status==="available"?"maintenance":"available";
+    const{error}=await sb.from("course_equipment").update({status:next}).eq("id",eq.id);
+    if(error){window.__toast?.(error.message,"error");return}
+    load();
+  }
+  
+  if(ld||!data)return<div style={{padding:30,textAlign:"center",color:C.tm}}>Cargando...</div>;
+  
+  const staff=data.staff||[];
+  const equipment=data.equipment||[];
+  const sumStaff=data.staff_summary||{};
+  const sumEq=data.equipment_summary||{};
+  
+  const roleLabels={caddie:"Caddie",marshal:"Marshal",ranger:"Ranger",pro:"Pro",cart_attendant:"Carritos",starter:"Starter",beverage_cart:"Bebidas",maintenance:"Mant.",other:"Otro"};
+  const eqLabels={golf_cart_electric:"Carro elec.",golf_cart_gas:"Carro gas",push_cart:"Push cart",club_set_right:"Palos diestros",club_set_left:"Palos zurdos",range_finder:"Telémetro",umbrella:"Sombrilla",other:"Otro"};
+  const statusColors={available:C.grn,in_use:C.gld,maintenance:C.acc,retired:C.tm};
+  
+  const inpSm={padding:"8px 10px",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:13,outline:"none",width:"100%"};
+  
+  return<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+    {/* Header sticky */}
+    <div style={{position:"sticky",top:0,zIndex:10,background:C.bg,borderBottom:"1px solid "+C.bd,padding:"14px 18px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <div style={{fontSize:11,color:C.tm,fontWeight:600,letterSpacing:1.5}}>ROSTER · {course.course_name}</div>
+          <div style={{fontSize:18,fontWeight:800,color:C.txt,marginTop:2}}>Staff y Equipo</div>
+        </div>
+        <button onClick={onExit} style={{padding:"10px 18px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          <span dangerouslySetInnerHTML={{__html:ic("x",14,C.txt)}}/>
+          Salir
+        </button>
+      </div>
+      {/* Tabs */}
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={()=>setTab("staff")} style={{flex:1,padding:"10px 12px",background:tab==="staff"?C.grn+"15":C.cd,border:"1px solid "+(tab==="staff"?C.grn+"40":C.bd),borderRadius:10,color:tab==="staff"?C.grn:C.tm,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+          Staff ({sumStaff.total_active||0})
+        </button>
+        <button onClick={()=>setTab("equipment")} style={{flex:1,padding:"10px 12px",background:tab==="equipment"?C.acc+"15":C.cd,border:"1px solid "+(tab==="equipment"?C.acc+"40":C.bd),borderRadius:10,color:tab==="equipment"?C.acc:C.tm,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+          Equipo ({(sumEq.carts_total||0)+(sumEq.clubs_available||0)})
+        </button>
+      </div>
+    </div>
+    
+    {/* Content */}
+    <div style={{padding:"16px 14px"}}>
+      {tab==="staff"?<>
+        {/* Summary */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+          <div className="sc"><div className="n" style={{color:C.grn,fontSize:18}}>{sumStaff.total_active}</div><div className="l">Activos</div></div>
+          <div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{sumStaff.caddies}</div><div className="l">Caddies</div></div>
+          <div className="sc"><div className="n" style={{color:C.gld,fontSize:18}}>{sumStaff.marshals}</div><div className="l">Marshals</div></div>
+        </div>
+        
+        <button onClick={()=>setEditingStaff({role:"caddie",active:true})} style={{width:"100%",padding:10,marginBottom:12,background:C.grn+"15",border:"1px dashed "+C.grn+"50",borderRadius:10,color:C.grn,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+          + Agregar staff
+        </button>
+        
+        {staff.length===0?
+          <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:12}}>Sin staff registrado</div>
+        :staff.map(s=><div key={s.id} style={{padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,marginBottom:8,opacity:s.active?1:.5}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.txt}}>{s.full_name}</div>
+                <span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.grn+"15",color:C.grn,letterSpacing:.5}}>{roleLabels[s.role]||s.role}</span>
+                {!s.active&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.tm+"15",color:C.tm}}>INACTIVO</span>}
+              </div>
+              {s.phone&&<div style={{fontSize:11,color:C.tm,marginTop:2}}>{s.phone}</div>}
+              {s.notes&&<div style={{fontSize:10,color:C.tm,marginTop:2,fontStyle:"italic"}}>{s.notes}</div>}
+            </div>
+            <button onClick={()=>setEditingStaff(s)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",14,C.txt)}}/>
+            <button onClick={()=>deleteStaff(s.id)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("trash",14,C.acc)}}/>
+          </div>
+        </div>)}
+      </>:<>
+        {/* Equipment tab */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+          <div className="sc"><div className="n" style={{color:C.grn,fontSize:18}}>{sumEq.carts_available}</div><div className="l">Carros disp.</div></div>
+          <div className="sc"><div className="n" style={{color:C.gld,fontSize:18}}>{sumEq.in_maintenance}</div><div className="l">Mant.</div></div>
+          <div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{sumEq.clubs_available}</div><div className="l">Palos disp.</div></div>
+        </div>
+        
+        <button onClick={()=>setEditingEq({equipment_type:"golf_cart_electric",status:"available"})} style={{width:"100%",padding:10,marginBottom:12,background:C.acc+"15",border:"1px dashed "+C.acc+"50",borderRadius:10,color:C.acc,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+          + Agregar equipo
+        </button>
+        
+        {equipment.length===0?
+          <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:12}}>Sin equipo registrado</div>
+        :equipment.map(eq=><div key={eq.id} style={{padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,marginBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.txt,..._s.mono}}>{eq.identifier}</div>
+                <span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.tm+"15",color:C.tm,letterSpacing:.5}}>{eqLabels[eq.equipment_type]||eq.equipment_type}</span>
+              </div>
+              {eq.notes&&<div style={{fontSize:10,color:C.tm,marginTop:2,fontStyle:"italic"}}>{eq.notes}</div>}
+            </div>
+            <button onClick={()=>toggleEqStatus(eq)} title="Toggle disponible/mantenimiento" style={{padding:"4px 10px",borderRadius:8,background:(statusColors[eq.status]||C.tm)+"15",border:"1px solid "+(statusColors[eq.status]||C.tm)+"40",color:(statusColors[eq.status]||C.tm),fontSize:10,fontWeight:700,cursor:"pointer"}}>{eq.status==="available"?"Disp.":eq.status==="in_use"?"En uso":eq.status==="maintenance"?"Mant.":"Retirado"}</button>
+            <button onClick={()=>setEditingEq(eq)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",14,C.txt)}}/>
+            <button onClick={()=>deleteEq(eq.id)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("trash",14,C.acc)}}/>
+          </div>
+        </div>)}
+      </>}
+    </div>
+    
+    {/* Edit staff modal */}
+    {editingStaff&&<div onClick={()=>setEditingStaff(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:500,background:C.bg,borderRadius:"16px 16px 0 0",padding:18,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14}}>{editingStaff.id?"Editar":"Agregar"} staff</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>NOMBRE</div>
+            <input value={editingStaff.full_name||""} onChange={e=>setEditingStaff({...editingStaff,full_name:e.target.value})} style={inpSm} placeholder="Juan Pérez"/>
+          </div>
+          <div>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>ROLE</div>
+            <select value={editingStaff.role||"caddie"} onChange={e=>setEditingStaff({...editingStaff,role:e.target.value})} style={inpSm}>
+              {Object.entries(roleLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>TELÉFONO</div>
+            <input value={editingStaff.phone||""} onChange={e=>setEditingStaff({...editingStaff,phone:e.target.value})} style={inpSm} placeholder="+52 624 123 4567"/>
+          </div>
+          <div>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>NOTAS (opcional)</div>
+            <input value={editingStaff.notes||""} onChange={e=>setEditingStaff({...editingStaff,notes:e.target.value})} style={inpSm} placeholder="Habla inglés / Caddie senior"/>
+          </div>
+          <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:C.txt,padding:"6px 0"}}>
+            <input type="checkbox" checked={editingStaff.active!==false} onChange={e=>setEditingStaff({...editingStaff,active:e.target.checked})}/>
+            Activo
+          </label>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button onClick={()=>setEditingStaff(null)} style={{flex:1,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:C.txt,fontSize:13,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={()=>saveStaff(editingStaff)} style={{flex:1,padding:12,background:C.grn,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}>Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>}
+    
+    {/* Edit equipment modal */}
+    {editingEq&&<div onClick={()=>setEditingEq(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:500,background:C.bg,borderRadius:"16px 16px 0 0",padding:18,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14}}>{editingEq.id?"Editar":"Agregar"} equipo</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>TIPO</div>
+            <select value={editingEq.equipment_type||"golf_cart_electric"} onChange={e=>setEditingEq({...editingEq,equipment_type:e.target.value})} style={inpSm}>
+              {Object.entries(eqLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>IDENTIFICADOR</div>
+            <input value={editingEq.identifier||""} onChange={e=>setEditingEq({...editingEq,identifier:e.target.value})} style={inpSm} placeholder="Cart-12 / SetPalos-A"/>
+          </div>
+          <div>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>STATUS</div>
+            <select value={editingEq.status||"available"} onChange={e=>setEditingEq({...editingEq,status:e.target.value})} style={inpSm}>
+              <option value="available">Disponible</option>
+              <option value="in_use">En uso</option>
+              <option value="maintenance">Mantenimiento</option>
+              <option value="retired">Retirado</option>
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>NOTAS</div>
+            <input value={editingEq.notes||""} onChange={e=>setEditingEq({...editingEq,notes:e.target.value})} style={inpSm} placeholder="Modelo / fecha de mant."/>
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button onClick={()=>setEditingEq(null)} style={{flex:1,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:C.txt,fontSize:13,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={()=>saveEq(editingEq)} style={{flex:1,padding:12,background:C.acc,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}>Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>}
+  </div>
+}
+
+
+// v20.29 E.3: Marshal Mobile View — pace of play tracking en vivo.
+// Mobile-first fullscreen para el ranger/marshal en el campo. Lista de grupos
+// del día ordenados por urgencia (very_slow → slow → on_pace → finished).
+// Cada card: hoyo actual vs esperado + botón "+1 hoyo" táctil grande.
+// Auto-refresh 30s + clock tick 1s.
+function MarshalView({course, date, onExit}){
+  const[data,setData]=useState(null);
+  const[ld,setLd]=useState(true);
+  const[busyId,setBusyId]=useState(null);
+  const[clock,setClock]=useState(new Date());
+  const today=date||new Date().toISOString().split("T")[0];
+  
+  async function load(){
+    const{data:r}=await sb.rpc("get_pace_dashboard",{p_course_id:course.id,p_date:today});
+    setData(r);setLd(false);
+  }
+  
+  useEffect(()=>{load();const i=setInterval(()=>{load();setClock(new Date())},30000);return()=>clearInterval(i)},[course.id,today]);
+  useEffect(()=>{const i=setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(i)},[]);
+  
+  async function advanceHole(g){
+    if(busyId)return;
+    const next=(g.current_hole||0)+1;
+    if(next>18){window.__toast?.("Ya terminó la ronda","info");return}
+    setBusyId(g.booking_id);
+    const{data:r,error}=await sb.rpc("mark_group_hole",{p_booking_id:g.booking_id,p_hole_number:next});
+    setBusyId(null);
+    if(error){window.__toast?.(error.message,"error");return}
+    if(!r?.ok){window.__toast?.(r?.reason||"Error","warn");return}
+    window.__toast?.("✓ Hoyo "+next,"success");
+    load();
+  }
+  
+  async function rewindHole(g){
+    if(busyId)return;
+    const last=g.current_hole;
+    if(!last||last<1){return}
+    if(!window.confirm("¿Deshacer hoyo "+last+"?"))return;
+    setBusyId(g.booking_id);
+    await sb.rpc("unmark_group_hole",{p_booking_id:g.booking_id,p_hole_number:last});
+    setBusyId(null);
+    load();
+  }
+  
+  if(ld||!data)return<div style={{padding:30,textAlign:"center",color:C.tm}}>Cargando...</div>;
+  
+  const sum=data.summary||{total:0,in_play:0,slow_or_worse:0,finished:0};
+  const groups=data.groups||[];
+  const fmtTime=(d)=>d.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit",hour12:false});
+  
+  // Pace status visuals
+  const paceVisual=(s)=>{
+    if(s==="very_slow")return{bg:C.acc+"15",bd:C.acc+"70",fg:C.acc,lbl:"MUY LENTO",pulse:true};
+    if(s==="slow")return{bg:C.gld+"15",bd:C.gld+"60",fg:C.gld,lbl:"LENTO",pulse:false};
+    if(s==="on_pace")return{bg:C.grn+"12",bd:C.grn+"40",fg:C.grn,lbl:"EN RITMO",pulse:false};
+    if(s==="ahead")return{bg:"#74b9ff15",bd:"#74b9ff50",fg:"#74b9ff",lbl:"ADELANTE",pulse:false};
+    if(s==="finished")return{bg:C.cd,bd:C.bd,fg:C.tm,lbl:"TERMINADO",pulse:false};
+    if(s==="not_started")return{bg:C.cd,bd:C.bd,fg:C.tm,lbl:"SIN CHECK-IN",pulse:false};
+    if(s==="waiting_tee")return{bg:C.cd,bd:C.bd,fg:C.tm,lbl:"ESPERANDO TEE",pulse:false};
+    return{bg:C.cd,bd:C.bd,fg:C.tm,lbl:"SIN MARCAR",pulse:false};
+  };
+  
+  // Ordenar: very_slow → slow → on_pace → ahead → waiting_tee/not_started → finished
+  const order={very_slow:1,slow:2,on_pace:3,ahead:4,untracked:5,waiting_tee:6,not_started:7,finished:8};
+  const sortedGroups=[...groups].sort((a,b)=>(order[a.pace_status]||9)-(order[b.pace_status]||9));
+  
+  return<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+    {/* Header sticky */}
+    <div style={{position:"sticky",top:0,zIndex:10,background:C.bg,borderBottom:"1px solid "+C.bd,padding:"14px 18px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        <div>
+          <div style={{fontSize:11,color:C.tm,fontWeight:600,letterSpacing:1.5}}>MARSHAL · {course.course_name}</div>
+          <div style={{fontSize:24,fontWeight:900,color:C.txt,marginTop:2,..._s.mono,letterSpacing:"-0.02em"}}>{fmtTime(clock)}</div>
+        </div>
+        <button onClick={onExit} style={{padding:"10px 18px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          <span dangerouslySetInnerHTML={{__html:ic("x",14,C.txt)}}/>
+          Salir
+        </button>
+      </div>
+      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:2}}>
+        <div style={{padding:"8px 14px",background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:12,minWidth:80,flexShrink:0}}>
+          <div style={{fontSize:10,color:C.grn,fontWeight:700,letterSpacing:1}}>EN JUEGO</div>
+          <div style={{fontSize:22,fontWeight:900,color:C.grn,..._s.mono}}>{sum.in_play}<span style={{fontSize:13,color:C.tm,fontWeight:600}}>/{sum.total}</span></div>
+        </div>
+        {sum.slow_or_worse>0&&<div style={{padding:"8px 14px",background:C.acc+"15",border:"1px solid "+C.acc+"60",borderRadius:12,minWidth:80,flexShrink:0,animation:"pulse 2s infinite"}}>
+          <div style={{fontSize:10,color:C.acc,fontWeight:700,letterSpacing:1}}>ATRASADOS</div>
+          <div style={{fontSize:22,fontWeight:900,color:C.acc,..._s.mono}}>{sum.slow_or_worse}</div>
+        </div>}
+        <div style={{padding:"8px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,minWidth:80,flexShrink:0}}>
+          <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1}}>TERMINADOS</div>
+          <div style={{fontSize:22,fontWeight:900,color:C.txt,..._s.mono}}>{sum.finished}</div>
+        </div>
+      </div>
+    </div>
+    
+    {/* Lista de grupos */}
+    <div style={{padding:"16px 14px",display:"flex",flexDirection:"column",gap:10}}>
+      {sortedGroups.length===0?
+        <div style={{textAlign:"center",padding:60,color:C.tm,fontSize:14}}>Sin reservas confirmadas hoy</div>
+      :sortedGroups.map(g=>{
+        const pv=paceVisual(g.pace_status);
+        const busy=busyId===g.booking_id;
+        const playable=["on_pace","slow","very_slow","ahead","untracked","waiting_tee"].includes(g.pace_status);
+        return<div key={g.booking_id} style={{background:pv.bg,border:"2px solid "+pv.bd,borderRadius:16,padding:14,...(pv.pulse?{animation:"pulse 2s infinite"}:{})}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            {/* Tee time + jugador */}
+            <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:10}}>
+              {g.player_avatar_url?
+                <img src={g.player_avatar_url} style={{width:44,height:44,borderRadius:22,objectFit:"cover",flexShrink:0,border:"1px solid "+pv.bd}} alt=""/>
+              :
+                <div style={{width:44,height:44,borderRadius:22,background:pv.fg+"25",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("user",20,pv.fg)}}/>
+              }
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:15,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.player_name}</div>
+                <div style={{fontSize:11,color:C.tm,marginTop:2,display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:13,fontWeight:700,color:pv.fg,..._s.mono}}>{g.booking_time?.slice(0,5)}</span>
+                  <span><b style={{color:C.txt,fontSize:12}}>{g.party_size}</b> jug</span>
+                </div>
+              </div>
+            </div>
+            {/* Hoyos */}
+            <div style={{textAlign:"center",minWidth:90,flexShrink:0}}>
+              <div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:1}}>HOYO</div>
+              <div style={{fontSize:34,fontWeight:900,color:pv.fg,..._s.mono,lineHeight:1,letterSpacing:"-0.04em"}}>
+                {g.current_hole||"—"}
+                {g.expected_hole>0&&g.current_hole<g.expected_hole&&<span style={{fontSize:14,color:C.tm,fontWeight:600,marginLeft:4}}>/{g.expected_hole}</span>}
+              </div>
+              <div style={{fontSize:9,color:pv.fg,fontWeight:700,letterSpacing:1,marginTop:2}}>{pv.lbl}</div>
+            </div>
+          </div>
+          
+          {/* Action row */}
+          {playable&&<div style={{display:"flex",gap:8,marginTop:10,paddingTop:10,borderTop:"1px solid "+pv.bd}}>
+            {g.current_hole>0&&<button onClick={()=>rewindHole(g)} disabled={busy} title="Deshacer último hoyo" style={{width:44,padding:"10px 0",background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:C.tm,fontSize:14,fontWeight:700,cursor:busy?"wait":"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span dangerouslySetInnerHTML={{__html:ic("left",14,C.tm)}}/>
+            </button>}
+            <button onClick={()=>advanceHole(g)} disabled={busy||g.current_hole>=18} style={{flex:1,padding:"12px 14px",background:g.current_hole>=18?C.cd:`linear-gradient(135deg,${pv.fg},${pv.fg}cc)`,border:"none",borderRadius:10,color:g.current_hole>=18?C.tm:"#fff",fontSize:14,fontWeight:800,cursor:(busy||g.current_hole>=18)?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:g.current_hole>=18?"none":"0 3px 10px "+pv.fg+"30",opacity:busy?.6:1}}>
+              {busy?<div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>:<>
+                <span dangerouslySetInnerHTML={{__html:ic("right",16,g.current_hole>=18?C.tm:"#fff")}}/>
+                {g.current_hole>=18?"Terminado":`Hoyo ${(g.current_hole||0)+1}`}
+              </>}
+            </button>
+            {g.holes_behind>=2&&<button onClick={()=>window.__toast?.("Función 'Avisar' próximamente","info")} title="Notificar al jugador" style={{width:44,padding:"10px 0",background:C.acc+"15",border:"1px solid "+C.acc+"40",borderRadius:10,color:C.acc,fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span dangerouslySetInnerHTML={{__html:ic("phone",16,C.acc)}}/>
+            </button>}
+          </div>}
+        </div>
+      })}
+    </div>
+  </div>
+}
+
+
+function AdminBookings({course}){
+  // v20.28 A.1: Filtros + búsqueda avanzada (Pre-Go-Live Operating polish).
+  // Antes: solo vista de 1 día, sin filtros de status/payment, export CSV no filtrado.
+  // Ahora: quick filter chips (Hoy/Mañana/7d/30d/Pasadas/Custom), filtros locales por
+  // status + payment, search por nombre/código/email/player_id, counter "X de Y",
+  // export CSV usa la lista filtrada.
+  // v20.28 A.3: Modo Check-in (tablet) accesible vía botón en header.
+  const today=new Date().toISOString().split("T")[0];
+  const dayOffset=(n)=>{const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split("T")[0]};
+  const[viewMode,setViewMode]=useState("day");      // "day" | "range"
+  const[selDate,setSelDate]=useState(today);
+  const[rangeFrom,setRangeFrom]=useState(today);
+  const[checkinOpen,setCheckinOpen]=useState(false);
+  const[marshalOpen,setMarshalOpen]=useState(false);
+  const[rosterOpen,setRosterOpen]=useState(false);
+  const[rangeTo,setRangeTo]=useState(dayOffset(7));
+  const[quickFilter,setQuickFilter]=useState("today"); // today|tomorrow|next7|next30|past7|custom
+  const[statusFilter,setStatusFilter]=useState("all");
+  const[paymentFilter,setPaymentFilter]=useState("all");
+  const[bkSearch,setBkSearch]=useState("");
+  const[bks,setBks]=useState([]);
+  const[ld,setLd]=useState(true);
+  const[det,setDet]=useState(null);
+  const[cust360,setCust360]=useState(null);
+  
+  // Apply quick filter → adjusts viewMode + dates
+  const applyQuick=(qf)=>{
+    setQuickFilter(qf);setDet(null);
+    if(qf==="today"){setViewMode("day");setSelDate(today)}
+    else if(qf==="tomorrow"){setViewMode("day");setSelDate(dayOffset(1))}
+    else if(qf==="next7"){setViewMode("range");setRangeFrom(today);setRangeTo(dayOffset(7))}
+    else if(qf==="next30"){setViewMode("range");setRangeFrom(today);setRangeTo(dayOffset(30))}
+    else if(qf==="past7"){setViewMode("range");setRangeFrom(dayOffset(-7));setRangeTo(today)}
+    // "custom" se maneja por inputs de fecha visibles
+  };
+  
+  useEffect(()=>{load()},[viewMode,selDate,rangeFrom,rangeTo,course.id]);
+  async function load(){
+    setLd(true);
+    let q=sb.from("bookings").select("*,user_profiles!inner(full_name,email,phone,player_id)").eq("course_id",course.id);
+    if(viewMode==="day")q=q.eq("booking_date",selDate);
+    else q=q.gte("booking_date",rangeFrom).lte("booking_date",rangeTo);
+    const{data}=await q.order("booking_date").order("booking_time");
+    setBks(data||[]);setLd(false)
+  }
+  
+  // Filtros locales
+  const filtered=bks.filter(b=>{
+    if(statusFilter!=="all"&&b.status!==statusFilter)return false;
+    if(paymentFilter!=="all"&&b.payment_status!==paymentFilter)return false;
+    if(bkSearch){
+      const q=bkSearch.toLowerCase();
+      const up=b.user_profiles;
+      if(!((up?.full_name||"").toLowerCase().includes(q)
+        ||(b.booking_code||"").toLowerCase().includes(q)
+        ||(up?.email||"").toLowerCase().includes(q)
+        ||(up?.phone||"").includes(q)
+        ||(up?.player_id||"").toLowerCase().includes(q)))return false;
+    }
+    return true;
+  });
+  
+  const stc={confirmed:{l:t("Confirmada"),c:C.grn},cancelled:{l:t("Cancelada"),c:C.acc},pending:{l:t("Pendiente"),c:C.gld},no_show:{l:"No-show",c:C.acc}};
+  const DN_local=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+  const dayLabel=(d)=>{const dt=new Date(d+"T12:00:00");return DN_local[dt.getDay()]+" "+dt.getDate()+" "+dt.toLocaleDateString("es-MX",{month:"short"})};
+  const navDay=(d)=>{const dt=new Date(selDate+"T12:00:00");dt.setDate(dt.getDate()+d);setSelDate(dt.toISOString().split("T")[0]);setQuickFilter("custom")};
+  
+  // Stats agregados sobre filtered (no sobre bks crudo)
+  const confirmedFilt=filtered.filter(b=>b.status==="confirmed");
+  const totalRev=confirmedFilt.reduce((s,b)=>s+Number(b.total_cost||0),0);
+  const totalPax=confirmedFilt.reduce((s,b)=>s+(b.party_size||0),0);
+  
+  const QUICK_CHIPS=[
+    {k:"today",l:"Hoy"},
+    {k:"tomorrow",l:"Mañana"},
+    {k:"next7",l:"Próx. 7d"},
+    {k:"next30",l:"Próx. 30d"},
+    {k:"past7",l:"Pasadas 7d"},
+    {k:"custom",l:"Custom"}
+  ];
+  
+  const exportCSV=()=>{
+    const header="Fecha,Hora,Jugador,Email,Tel,Player ID,Jugadores,Total,Status,Pago,Código,Promo,Descuento";
+    const rows=filtered.map(b=>{
+      const up=b.user_profiles||{};
+      return[b.booking_date,b.booking_time?.slice(0,5)||"",up.full_name||"",up.email||"",up.phone||"",up.player_id||"",b.party_size,b.total_cost,b.status,b.payment_status,b.booking_code||"",b.promo_code||"",b.discount_amount||0]
+        .map(v=>typeof v==="string"&&v.includes(",")?'"'+v.replace(/"/g,'""')+'"':v).join(",");
+    });
+    const csv=header+"\n"+rows.join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+    a.download="reservas_"+(viewMode==="day"?selDate:rangeFrom+"_a_"+rangeTo)+".csv";a.click()
+  };
+  
+  const inpSm={padding:"6px 10px",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:12,outline:"none"};
+  
+  // v20.28 A.3 / v20.29 E.3 / v20.29 E.1: Render fullscreen views
+  if(checkinOpen)return<CheckinTablet course={course} date={today} onExit={()=>setCheckinOpen(false)}/>;
+  if(marshalOpen)return<MarshalView course={course} date={today} onExit={()=>setMarshalOpen(false)}/>;
+  if(rosterOpen)return<AdminRoster course={course} onExit={()=>setRosterOpen(false)}/>;
+  
   return<div className="fi">
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><button onClick={()=>navDay(-1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/><div style={{textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>{selDate===today&&<div style={{fontSize:10,color:C.acc,fontWeight:600}}>HOY</div>}<input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} style={{marginTop:4,background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"center"}}/></div><button onClick={()=>navDay(1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>
-    <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{bks.length}</div><div className="l">{t("Reservas")}</div></div><div className="sc"><div className="n" style={{color:C.grn,fontSize:15}}>${fm(totalRev)}</div><div className="l">{t("Ingresos")}</div></div><div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{totalPax}</div><div className="l">{t("Jugadores")}</div></div></div>
-    {/* v20.23: Walk-ins card colapsable */}
+    {/* Header: Operating modes CTAs — Check-in + Marshal (day-of) + Roster (persistente) */}
+    {selDate===today&&viewMode==="day"&&
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
+        <button onClick={()=>setCheckinOpen(true)} style={{padding:"11px 6px",background:`linear-gradient(135deg,${C.grn}18,${C.gld}12)`,border:"1px solid "+C.grn+"40",borderRadius:12,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+          <span dangerouslySetInnerHTML={{__html:ic("check",13,C.grn)}}/>
+          Check-in
+        </button>
+        <button onClick={()=>setMarshalOpen(true)} style={{padding:"11px 6px",background:`linear-gradient(135deg,${C.acc}15,${C.gld}12)`,border:"1px solid "+C.acc+"40",borderRadius:12,color:C.acc,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+          <span style={{fontSize:12}}>⛳</span>
+          Marshal
+        </button>
+        <button onClick={()=>setRosterOpen(true)} style={{padding:"11px 6px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+          <span dangerouslySetInnerHTML={{__html:ic("user",13,C.txt)}}/>
+          Roster
+        </button>
+      </div>
+    }
+    
+    {/* Quick filter chips */}
+    <div style={{display:"flex",gap:6,marginBottom:10,overflowX:"auto",paddingBottom:4,WebkitOverflowScrolling:"touch"}}>
+      {QUICK_CHIPS.map(q=>(<button key={q.k} onClick={()=>applyQuick(q.k)} style={{padding:"7px 14px",background:quickFilter===q.k?C.acc+"20":C.cd,border:"1px solid "+(quickFilter===q.k?C.acc:C.bd),borderRadius:14,color:quickFilter===q.k?C.acc:C.txt,fontSize:12,fontWeight:quickFilter===q.k?700:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{q.l}</button>))}
+    </div>
+    
+    {/* Date controls — adapt según viewMode */}
+    {viewMode==="day"?
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <button onClick={()=>navDay(-1)} style={{width:34,height:34,borderRadius:18,border:"1px solid "+C.bd,background:C.cd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>
+          {selDate===today&&<div style={{fontSize:9,color:C.acc,fontWeight:700,letterSpacing:1}}>HOY</div>}
+          <input type="date" value={selDate} onChange={e=>{setSelDate(e.target.value);setQuickFilter("custom")}} style={{marginTop:3,background:"transparent",border:"none",color:C.tm,fontSize:10,textAlign:"center"}}/>
+        </div>
+        <button onClick={()=>navDay(1)} style={{width:34,height:34,borderRadius:18,border:"1px solid "+C.bd,background:C.cd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/>
+      </div>
+    :
+      <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12,padding:10,background:C.cd,borderRadius:10,border:"1px solid "+C.bd}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:9,color:C.tm,fontWeight:600,marginBottom:3,letterSpacing:1}}>DESDE</div>
+          <input type="date" value={rangeFrom} onChange={e=>{setRangeFrom(e.target.value);setQuickFilter("custom")}} style={{...inpSm,width:"100%"}}/>
+        </div>
+        <div style={{fontSize:14,color:C.tm,marginTop:14}}>→</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:9,color:C.tm,fontWeight:600,marginBottom:3,letterSpacing:1}}>HASTA</div>
+          <input type="date" value={rangeTo} onChange={e=>{setRangeTo(e.target.value);setQuickFilter("custom")}} style={{...inpSm,width:"100%"}}/>
+        </div>
+      </div>
+    }
+    
+    {/* Stats agregados sobre filtered */}
+    <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+      <div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{confirmedFilt.length}</div><div className="l">{t("Confirmadas")}</div></div>
+      <div className="sc"><div className="n" style={{color:C.grn,fontSize:15}}>${fm(totalRev)}</div><div className="l">{t("Ingresos")}</div></div>
+      <div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{totalPax}</div><div className="l">{t("Jugadores")}</div></div>
+    </div>
+    
+    {/* Walk-ins card (mantiene) */}
     <AdminWalkInsCard course={course}/>
-    {ld?<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>:bks.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>Sin reservas para {dayLabel(selDate)}</div>:bks.filter(b=>{if(!bkSearch)return true;const q=bkSearch.toLowerCase();return(b.user_profiles?.full_name||"").toLowerCase().includes(q)||(b.booking_code||"").toLowerCase().includes(q)||(b.user_profiles?.email||"").toLowerCase().includes(q)}).map(b=>{const st=stc[b.status]||stc.pending;const up=b.user_profiles;return<div key={b.id} className="ar" style={{flexDirection:"column",gap:6}}>
-      <div style={{..._s.flexB,width:"100%"}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:16,fontWeight:800,color:C.txt}}>{b.booking_time?.slice(0,5)}</div><div style={{width:4,height:4,borderRadius:2,background:C.tm}}/><span style={{fontSize:13,fontWeight:600,color:C.txt}}>{b.party_size} jug</span></div><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"2px 8px",borderRadius:6}}>{st.l}</span></div>
-      {b.booking_code&&<div style={{fontSize:11,..._s.mono,color:C.gld,letterSpacing:1,fontWeight:700}}>{b.booking_code}</div>}
-      {up&&<div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{width:28,height:28,borderRadius:14,background:C.grn+"25",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("user",14,C.grn)}}/><div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.txt}}>{up.full_name||up.email}</div><div style={{fontSize:10,color:C.tm}}>{up.phone||up.email}</div></div><div style={{display:"flex",gap:4}}>{up.phone&&<a href={"tel:"+up.phone} onClick={e=>e.stopPropagation()} style={{width:28,height:28,borderRadius:14,background:C.grn+"15",border:"1px solid "+C.grn+"30",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none"}} dangerouslySetInnerHTML={{__html:ic("phone",12,C.grn)}}/>}{up.email&&<a href={"mailto:"+up.email} onClick={e=>e.stopPropagation()} style={{width:28,height:28,borderRadius:14,background:C.gld+"15",border:"1px solid "+C.gld+"30",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none"}} dangerouslySetInnerHTML={{__html:ic("mail",12,C.gld)}}/>}</div></div>}
-      <div style={{..._s.flexB,width:"100%"}}><div style={{fontSize:14,fontWeight:700,color:C.grn}}>${fm(b.total_cost)} MXN</div>{b.settlement_status&&<span style={{fontSize:9,fontWeight:700,color:b.settlement_status==="settled"?C.grn:b.settlement_status==="cancelled"?C.acc:C.gld,background:(b.settlement_status==="settled"?C.grn:b.settlement_status==="cancelled"?C.acc:C.gld)+"12",padding:"2px 6px",borderRadius:5}}>{b.settlement_status==="settled"?t("Liquidado"):b.settlement_status==="scheduled"?t("Por liquidar"):t("Cancelado")}</span>}</div>
-      <button onClick={e=>{e.stopPropagation();setDet(det===b.id?null:b.id)}} style={{background:"none",border:"none",color:C.tm,fontSize:10,cursor:"pointer",padding:0}}>{det===b.id?"▲ Menos":"▼ Detalle"}</button>
-      {det===b.id&&<div style={{width:"100%",padding:"10px 0",borderTop:"1px solid "+C.bd,marginTop:4,display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
-        <div><span style={{color:C.tm}}>Pago:</span> <span style={{color:b.payment_status==="paid"?C.grn:b.payment_status==="refunded"||b.payment_status==="no_show_fee"?C.acc:C.gld,fontWeight:600}}>{b.payment_status==="paid"?t("Cobrado"):b.payment_status==="refunded"?t("Reembolsado"):b.payment_status==="no_show_fee"?"No-Show Fee":b.payment_status==="free"?t("Gratis"):t("Pendiente")}</span></div>
-        <div><span style={{color:C.tm}}>Extras:</span> <span style={{color:C.txt,fontWeight:600}}>${fm(b.extras_total||0)}</span></div>
-        {b.promo_code&&<div><span style={{color:C.tm}}>Promo:</span> <span style={{color:C.gld,fontWeight:600}}>{b.promo_code}</span></div>}
-        {b.discount_amount>0&&<div><span style={{color:C.tm}}>Descuento:</span> <span style={{color:C.acc,fontWeight:600}}>-${fm(b.discount_amount)}</span></div>}
-        {b.settlement_date&&<div><span style={{color:C.tm}}>Liquidación:</span> <span style={{color:C.txt,fontWeight:600}}>{b.settlement_date}</span></div>}
-        {b.settlement_amount>0&&<div><span style={{color:C.tm}}>Monto campo:</span> <span style={{color:C.grn,fontWeight:600}}>${fm(b.settlement_amount)}</span></div>}
-        {up?.player_id&&<div><span style={{color:C.tm}}>Player ID:</span> <span style={{color:C.gld,fontWeight:600,..._s.mono}}>{up.player_id}</span></div>}
-        {up?.email&&<div style={{gridColumn:"span 2"}}><span style={{color:C.tm}}>Email:</span> <span style={{color:C.txt}}>{up.email}</span></div>}
-        {/* v19.72: botón Customer 360 */}
-        {b.user_id&&<button onClick={e=>{e.stopPropagation();setCust360(b.user_id)}} style={{gridColumn:"span 2",marginTop:6,padding:10,background:`linear-gradient(135deg,${C.grn}15,${C.gld}15)`,border:"1px solid "+C.grn+"30",borderRadius:10,color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("user",13,C.grn)+" Ver perfil completo del jugador"}}/>}
-      </div>}
-    </div>})}
-    {/* Search + Export */}
-    <div style={{display:"flex",gap:8,marginBottom:10}}><div style={{flex:1,position:"relative"}}><input placeholder={t("Buscar nombre o código...")} value={bkSearch||""} onChange={e=>setBkSearch(e.target.value)} style={{...inp0,paddingLeft:32,fontSize:12}}/><span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}} dangerouslySetInnerHTML={{__html:ic("search",13,C.tm)}}/></div><button onClick={()=>{const csv="Hora,Jugador,Email,Tel,Jugadores,Total,Status,Código\n"+bks.map(b=>[b.booking_time?.slice(0,5),b.user_profiles?.full_name||"",b.user_profiles?.email||"",b.user_profiles?.phone||"",b.party_size,b.total_cost,b.status,b.booking_code||""].join(",")).join("\n");const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="reservas_"+selDate+".csv";a.click()}} style={{width:36,height:36,borderRadius:10,border:"1px solid "+C.bd,background:C.cd,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("download",14,C.txt)}}/></div>
-    {selDate!==today&&<button onClick={()=>setSelDate(today)} style={{width:"100%",padding:10,marginTop:10,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>Ir a hoy</button>}
-    {/* v19.72: Customer 360 modal — overlay activado desde botón "Ver perfil completo" en cada booking */}
+    
+    {/* Filtros + search bar */}
+    <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+      <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{...inpSm,flex:"1 1 100px",minWidth:90}}>
+        <option value="all">Todos status</option>
+        <option value="confirmed">{t("Confirmada")}</option>
+        <option value="cancelled">{t("Cancelada")}</option>
+        <option value="no_show">No-show</option>
+        <option value="pending">{t("Pendiente")}</option>
+      </select>
+      <select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} style={{...inpSm,flex:"1 1 100px",minWidth:90}}>
+        <option value="all">Todo pago</option>
+        <option value="paid">{t("Cobrado")}</option>
+        <option value="refunded">{t("Reembolsado")}</option>
+        <option value="no_show_fee">No-show Fee</option>
+        <option value="free">{t("Gratis")}</option>
+      </select>
+    </div>
+    
+    <div style={{display:"flex",gap:8,marginBottom:8}}>
+      <div style={{flex:1,position:"relative"}}>
+        <input placeholder="Nombre, código, email, teléfono, Player ID..." value={bkSearch} onChange={e=>setBkSearch(e.target.value)} style={{...inpSm,paddingLeft:32,width:"100%",fontSize:12}}/>
+        <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}} dangerouslySetInnerHTML={{__html:ic("search",13,C.tm)}}/>
+      </div>
+      <button onClick={exportCSV} disabled={filtered.length===0} title="Export CSV" style={{width:34,height:34,borderRadius:8,border:"1px solid "+C.bd,background:filtered.length===0?C.cd+"50":C.cd,display:"flex",alignItems:"center",justifyContent:"center",cursor:filtered.length===0?"default":"pointer",flexShrink:0,opacity:filtered.length===0?.4:1}} dangerouslySetInnerHTML={{__html:ic("download",14,C.txt)}}/>
+    </div>
+    
+    {/* Counter */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"4px 2px"}}>
+      <div style={{fontSize:11,color:C.tm,fontWeight:600}}>Mostrando <span style={{color:C.txt,fontWeight:800}}>{filtered.length}</span> de <span style={{color:C.txt,fontWeight:800}}>{bks.length}</span> reservas</div>
+      {(statusFilter!=="all"||paymentFilter!=="all"||bkSearch)&&<button onClick={()=>{setStatusFilter("all");setPaymentFilter("all");setBkSearch("")}} style={{background:"none",border:"none",color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t("Borrar todo")}</button>}
+    </div>
+    
+    {/* Lista */}
+    {ld?<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>
+      :filtered.length===0?
+        <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:12}}>{bks.length===0?"Sin reservas en este rango":"Sin resultados con los filtros aplicados"}</div>
+      :filtered.map(b=>{const st=stc[b.status]||stc.pending;const up=b.user_profiles;return<div key={b.id} className="ar" style={{flexDirection:"column",gap:6}}>
+        <div style={{..._s.flexB,width:"100%"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {viewMode==="range"&&<div style={{fontSize:10,color:C.gld,fontWeight:700,..._s.mono}}>{b.booking_date?.slice(5)}</div>}
+            <div style={{fontSize:16,fontWeight:800,color:C.txt}}>{b.booking_time?.slice(0,5)}</div>
+            <div style={{width:4,height:4,borderRadius:2,background:C.tm}}/>
+            <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{b.party_size} jug</span>
+          </div>
+          <span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"2px 8px",borderRadius:6}}>{st.l}</span>
+        </div>
+        {b.booking_code&&<div style={{fontSize:11,..._s.mono,color:C.gld,letterSpacing:1,fontWeight:700}}>{b.booking_code}</div>}
+        {up&&<div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{width:28,height:28,borderRadius:14,background:C.grn+"25",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("user",14,C.grn)}}/>
+          <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.txt}}>{up.full_name||up.email}</div><div style={{fontSize:10,color:C.tm}}>{up.phone||up.email}</div></div>
+          <div style={{display:"flex",gap:4}}>
+            {up.phone&&<a href={"tel:"+up.phone} onClick={e=>e.stopPropagation()} style={{width:28,height:28,borderRadius:14,background:C.grn+"15",border:"1px solid "+C.grn+"30",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none"}} dangerouslySetInnerHTML={{__html:ic("phone",12,C.grn)}}/>}
+            {up.email&&<a href={"mailto:"+up.email} onClick={e=>e.stopPropagation()} style={{width:28,height:28,borderRadius:14,background:C.gld+"15",border:"1px solid "+C.gld+"30",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none"}} dangerouslySetInnerHTML={{__html:ic("mail",12,C.gld)}}/>}
+          </div>
+        </div>}
+        <div style={{..._s.flexB,width:"100%"}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.grn}}>${fm(b.total_cost)} MXN</div>
+          {b.settlement_status&&<span style={{fontSize:9,fontWeight:700,color:b.settlement_status==="settled"?C.grn:b.settlement_status==="cancelled"?C.acc:C.gld,background:(b.settlement_status==="settled"?C.grn:b.settlement_status==="cancelled"?C.acc:C.gld)+"12",padding:"2px 6px",borderRadius:5}}>{b.settlement_status==="settled"?t("Liquidado"):b.settlement_status==="scheduled"?t("Por liquidar"):t("Cancelado")}</span>}
+        </div>
+        <button onClick={e=>{e.stopPropagation();setDet(det===b.id?null:b.id)}} style={{background:"none",border:"none",color:C.tm,fontSize:10,cursor:"pointer",padding:0}}>{det===b.id?"▲ Menos":"▼ Detalle"}</button>
+        {det===b.id&&<div style={{width:"100%",padding:"10px 0",borderTop:"1px solid "+C.bd,marginTop:4,display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
+          <div><span style={{color:C.tm}}>Pago:</span> <span style={{color:b.payment_status==="paid"?C.grn:b.payment_status==="refunded"||b.payment_status==="no_show_fee"?C.acc:C.gld,fontWeight:600}}>{b.payment_status==="paid"?t("Cobrado"):b.payment_status==="refunded"?t("Reembolsado"):b.payment_status==="no_show_fee"?"No-Show Fee":b.payment_status==="free"?t("Gratis"):t("Pendiente")}</span></div>
+          <div><span style={{color:C.tm}}>Extras:</span> <span style={{color:C.txt,fontWeight:600}}>${fm(b.extras_total||0)}</span></div>
+          {b.promo_code&&<div><span style={{color:C.tm}}>Promo:</span> <span style={{color:C.gld,fontWeight:600}}>{b.promo_code}</span></div>}
+          {b.discount_amount>0&&<div><span style={{color:C.tm}}>Descuento:</span> <span style={{color:C.acc,fontWeight:600}}>-${fm(b.discount_amount)}</span></div>}
+          {b.settlement_date&&<div><span style={{color:C.tm}}>Liquidación:</span> <span style={{color:C.txt,fontWeight:600}}>{b.settlement_date}</span></div>}
+          {b.settlement_amount>0&&<div><span style={{color:C.tm}}>Monto campo:</span> <span style={{color:C.grn,fontWeight:600}}>${fm(b.settlement_amount)}</span></div>}
+          {up?.player_id&&<div><span style={{color:C.tm}}>Player ID:</span> <span style={{color:C.gld,fontWeight:600,..._s.mono}}>{up.player_id}</span></div>}
+          {up?.email&&<div style={{gridColumn:"span 2"}}><span style={{color:C.tm}}>Email:</span> <span style={{color:C.txt}}>{up.email}</span></div>}
+          {b.user_id&&<button onClick={e=>{e.stopPropagation();setCust360(b.user_id)}} style={{gridColumn:"span 2",marginTop:6,padding:10,background:`linear-gradient(135deg,${C.grn}15,${C.gld}15)`,border:"1px solid "+C.grn+"30",borderRadius:10,color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("user",13,C.grn)+" Ver perfil completo del jugador"}}/>}
+        </div>}
+      </div>})}
+    
     {cust360&&<Customer360 course={course} userId={cust360} onClose={()=>setCust360(null)}/>}
-  </div>}
+  </div>
+}
 
 // v20.15: AutomationHealthCard — estado en vivo de las 3 automations para el course-admin.
 // 3 rows con badge por status (fresh/recent/stale/never).
@@ -7561,7 +8482,7 @@ function PremiumInsights({course}){const{s}=useA();const{sub,isPremium}=usePremi
     const hourData=Object.entries(byHour).map(([h,d])=>({hour:parseInt(h),occ:d.t?Math.round(d.b/d.t*100):0,rev:d.rev})).sort((a,b)=>a.hour-b.hour);
     const myBench=benchmarks.find(b=>b.course_type===course.course_type&&b.facility_type===(course.facility_type||"campo"))||benchmarks[0];
     setBench(myBench);setMySt({rev,avgTicket,occ,bks:bks.length,hourData,feeMin:course.green_fee_min,feeMax:course.green_fee_max});setLd(false)}
-  async function activatePlan(plan,promo){const price=promo&&promo.discount_type==="free"?0:PLANS[plan].price;if(price===0){const exp=new Date();plan==="annual"?exp.setFullYear(exp.getFullYear()+1):exp.setMonth(exp.getMonth()+1);await sb.from("admin_subscriptions").upsert({user_id:s.user.id,plan,status:"active",price_mxn:0,started_at:new Date().toISOString(),expires_at:exp.toISOString()},{onConflict:"user_id"});await sb.from("user_profiles").update({subscription_plan:plan}).eq("id",s.user.id);if(promo)await redeemPromo(promo.id,s.user.id,"premium",null,PLANS[plan].price);setShowPricing(false);location.reload();return}const sr=await stripeCheckout({type:"premium",plan,user_email:s.user.email});if(sr.error)window.__toast?.(sr.error,"error");setShowPricing(false)}
+  async function activatePlan(plan,promo){const price=promo&&promo.discount_type==="free"?0:PLANS[plan].price;if(price===0){const exp=new Date();plan==="annual"?exp.setFullYear(exp.getFullYear()+1):exp.setMonth(exp.getMonth()+1);await sb.from("admin_subscriptions").upsert({user_id:s.user.id,plan,status:"active",price_mxn:0,started_at:new Date().toISOString(),expires_at:exp.toISOString()},{onConflict:"user_id"});await sb.from("user_profiles").update({subscription_plan:plan}).eq("id",s.user.id);if(promo)await redeemPromo(promo.id,s.user.id,"premium",null,PLANS[plan].price,promo.code);setShowPricing(false);location.reload();return}const sr=await stripeCheckout({type:"premium",plan,user_email:s.user.email});if(sr.error)window.__toast?.(sr.error,"error");setShowPricing(false)}
   if(ld)return<Skeleton w="100%" h={50}/>;const m=mySt;const b=bench;const mktOcc=b&&(b.booked_slots_7d+b.available_slots_7d)>0?Math.round(b.booked_slots_7d/(b.booked_slots_7d+b.available_slots_7d)*100):0;
   return<div className="fi">
     {showPricing&&<PricingModal onClose={()=>setShowPricing(false)} onSelect={activatePlan} userId={s?.user?.id}/>}
@@ -10755,15 +11676,42 @@ function PlatformCourseDetail({course,onClose,onRefresh,adminId}){const[counts,s
   },[course.id]);
   const comp=getCourseCompleteness(course,counts);const lst=course.listing_status||"draft";
   const STAT_CFG={draft:{l:t("Borrador"),c:C.acc},pending_review:{l:t("Pendiente"),c:C.gld},active:{l:t("Activo"),c:C.grn},suspended:{l:t("Suspendido"),c:C.acc}};const cfg=STAT_CFG[lst];
-  async function doAction(){setBusy(true);const upd={};let emailType=null;
-    if(action==="approve"){upd.listing_status="active";upd.approved_at=new Date().toISOString();upd.approved_by=adminId||null;upd.suspension_reason=null;emailType="course_approved"}
-    else if(action==="reject"){upd.listing_status="draft";upd.suspension_reason=reason||"Requiere mejoras adicionales";emailType="course_rejected"}
-    else if(action==="suspend"){if(!reason)return window.__toast?.(t("Razón requerida"),"warn")||setBusy(false);upd.listing_status="suspended";upd.suspension_reason=reason;emailType="course_suspended"}
-    else if(action==="reactivate"){upd.listing_status="active";upd.suspension_reason=null;emailType="course_reactivated"}
-    const{error}=await sb.from("golf_courses").update(upd).eq("id",course.id);
+  async function doAction(){if(busy)return;
+    // v20.27.3 #8 fix (QA pt.19): usa RPCs server-side con audit trail.
+    // Antes hacía UPDATE directo a golf_courses sin auth check de platform_admin
+    // (RLS lo protegía pero sin auditoría: aprobaciones no quedaban registradas en
+    // approved_at/approved_by ni se generaban notifs al course_admin).
+    setBusy(true);
+    let rpcName=null,rpcArgs={};
+    if(action==="approve"){rpcName="approve_course";rpcArgs={p_course_id:course.id,p_review_notes:reason||null}}
+    else if(action==="reject"){
+      if(!reason||reason.trim().length<10){window.__toast?.(t("Razón requerida (min 10 chars)"),"warn");setBusy(false);return}
+      rpcName="reject_course";rpcArgs={p_course_id:course.id,p_rejection_reason:reason,p_review_notes:null}
+    }
+    else if(action==="suspend"){
+      if(!reason||reason.trim().length<10){window.__toast?.(t("Razón requerida (min 10 chars)"),"warn");setBusy(false);return}
+      rpcName="suspend_course";rpcArgs={p_course_id:course.id,p_suspension_reason:reason}
+    }
+    else if(action==="reactivate"){rpcName="approve_course";rpcArgs={p_course_id:course.id,p_review_notes:"Reactivado"}}
+    if(!rpcName){setBusy(false);return}
+    const{data,error}=await sb.rpc(rpcName,rpcArgs);
     if(error){window.__toast?.(error.message,"error");setBusy(false);return}
+    if(!data?.ok){
+      const reasonMap={
+        no_auth:t("Inicia sesión para continuar."),
+        not_platform_admin:t("No tienes permisos de admin de plataforma"),
+        course_not_found:t("Curso no encontrado"),
+        invalid_transition:t("Transición inválida desde el estado actual"),
+        reason_too_short:t("La razón debe tener al menos 10 caracteres")
+      };
+      window.__toast?.(reasonMap[data?.reason]||data?.message||t("Error al aplicar acción"),"warn");
+      setBusy(false);return;
+    }
+    // Email opcional (la notif interna ya la generó el RPC)
+    const emailMap={approve:"course_approved",reject:"course_rejected",suspend:"course_suspended",reactivate:"course_reactivated"};
+    const emailType=emailMap[action];
     if(owner?.email&&emailType)fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:emailType,to:owner.email,data:{name:owner.full_name,course_name:course.course_name,reason:reason||null}})}).catch(()=>{});
-    window.__toast?.("Aplicado","success");setBusy(false);onRefresh()
+    window.__toast?.(t("Aplicado"),"success");setBusy(false);onRefresh()
   }
   return<div className="modal-bg" onClick={onClose}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:480,maxHeight:"85vh",overflowY:"auto"}}>
     <div style={{..._s.flexB,marginBottom:14}}>
