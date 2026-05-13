@@ -3666,10 +3666,11 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
     if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
   };
   // v19.30: convertPartida también extraída a nivel componente (para Opción C colapsable)
+  // v20.30 Fase A: dispatch ahora apunta a "matches" (Partidas), antes "torneos" colisionaba con tab real Torneos
   const convertPartida=()=>{
     if(!detail)return;
     window.__createMatchFromBooking={id:detail.id,course_id:detail.course_id,course_name:detail.course_name,date:detail.booking_date,time:detail.booking_time};
-    window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));
+    window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"matches"}}));
     window.__navigate?.("tab:2");
   };
   if(detail){return<div className="fi" style={{paddingBottom:20}}>
@@ -3983,8 +3984,8 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       </div>
       <span style={{color:C.tm}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
     </div>
-    {/* v20.4: CTA banner — Torneos */}
-    <div onClick={()=>setShowTournaments(true)} style={{padding:"10px 14px",background:openTournamentsCount>0?`linear-gradient(135deg,${C.acc}20,#d63d5512)`:`linear-gradient(135deg,${C.acc}10,#d63d5505)`,border:"1px solid "+(openTournamentsCount>0?C.acc+"50":C.acc+"30"),borderRadius:12,marginBottom:12,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
+    {/* v20.4: CTA banner — Torneos · v20.30 Fase A: navega a VersusTab/Torneos en vez de overlay fullscreen */}
+    <div onClick={()=>{window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));window.__navigate?.("tab:2")}} style={{padding:"10px 14px",background:openTournamentsCount>0?`linear-gradient(135deg,${C.acc}20,#d63d5512)`:`linear-gradient(135deg,${C.acc}10,#d63d5505)`,border:"1px solid "+(openTournamentsCount>0?C.acc+"50":C.acc+"30"),borderRadius:12,marginBottom:12,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
       <div style={{fontSize:22}}>🏆</div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>Torneos públicos {openTournamentsCount>0&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:C.acc,padding:"2px 6px",borderRadius:4,marginLeft:6,letterSpacing:.4}}>{openTournamentsCount} abierto{openTournamentsCount===1?"":"s"}</span>}</div>
@@ -4874,12 +4875,25 @@ function TourneoTab(){
   </TintSection>;
 }
 
+// v20.30 Fase A · VersusTab refactor: 3 sub-tabs (Torneos · Partidas · Grupos)
+// Antes: vTab="torneos" mostraba TourneoTab (Partidas), confusión histórica desde v20.4.1
+// Ahora: vTab="torneos" = Torneos REALES (TournamentsScreen embedded · público)
+//        vTab="matches" = Partidas Versus (TourneoTab)
+//        vTab="grupos"  = Grupos sociales (MatchScreen embedded)
 function VersusTab(){const[vTab,setVTab]=useState("torneos");const{s,p}=useA();useEffect(()=>{const h=(e)=>{if(e.detail?.tab)setVTab(e.detail.tab)};window.addEventListener("partee:vtab",h);return()=>window.removeEventListener("partee:vtab",h)},[]);
+  const subTabs=[
+    {k:"torneos",l:ic("trophy",16)+" "+t("Torneos"),hint:"🏆 "+t("Inscríbete a torneos oficiales del campo y compite por la bolsa")},
+    {k:"matches",l:ic("swords",16)+" "+t("Partidas"),hint:"⛳ "+t("Juega versus tus amigos y compite por el ranking")},
+    {k:"grupos",l:ic("group",16)+" "+t("Grupos"),hint:"🤝 "+t("Conoce nuevos jugadores y amplía tu red de golf")}
+  ];
+  const activeHint=subTabs.find(x=>x.k===vTab)?.hint||subTabs[0].hint;
   return<div>
     {/* v19.58: sección 'Retos Pendientes' eliminada — feature retirado */}
-    <div style={{display:"flex",gap:8,padding:"12px 20px 0"}}>{[{k:"torneos",l:ic("trophy",16)+" "+t("Partidas")},{k:"match",l:ic("group",16)+" "+t("Grupos")}].map(tb=><button key={tb.k} onClick={()=>setVTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:vTab===tb.k?"none":"1px solid "+C.bd,background:vTab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:vTab===tb.k?"#fff":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:vTab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}} dangerouslySetInnerHTML={{__html:tb.l}}/>)}</div>
-    <div style={{padding:"8px 20px 0",fontSize:11,color:C.tm,lineHeight:1.4,fontStyle:"italic"}}>{vTab==="torneos"?"⛳ "+t("Juega con tus amigos y compite por el ranking"):"🤝 "+t("Conoce nuevos jugadores y amplía tu red de golf")}</div>
-    {vTab==="torneos"&&<TourneoTab/>}{vTab==="match"&&<MatchScreen embedded/>}</div>}
+    <div style={{display:"flex",gap:6,padding:"12px 20px 0"}}>{subTabs.map(tb=><button key={tb.k} onClick={()=>setVTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:vTab===tb.k?"none":"1px solid "+C.bd,background:vTab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:vTab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:vTab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}} dangerouslySetInnerHTML={{__html:tb.l}}/>)}</div>
+    <div style={{padding:"8px 20px 0",fontSize:11,color:C.tm,lineHeight:1.4,fontStyle:"italic"}}>{activeHint}</div>
+    {vTab==="torneos"&&<TournamentsScreen/>}
+    {vTab==="matches"&&<TourneoTab/>}
+    {vTab==="grupos"&&<MatchScreen embedded/>}</div>}
 
 function RankingScreen({onBack}){
   const{s,p}=useA();const[ld,setLd]=useState(true);const[tab,setTab]=useState("national");
@@ -8390,7 +8404,7 @@ const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);
     {/* v18.4.3: botón "Crear Partida" visible para creator + miembros aceptados (consistente con RPC convert_group_to_tournament que ahora permite ambos). */}
     {/* v19.39: si hay invitados manuales con status='invited' en booking_participants (no en match_members), bloquear el botón hasta que confirmen o cancelen. Evita crear una partida que excluya a jugadores que luego se sumen vía aceptación de invitación. */}
     {(isCreator||myMemberships[detail.id]==="accepted")&&detail.status!=="closed"&&!detail.tournament_id&&(
-      hasPendingInvitees?<div style={{marginBottom:14,padding:14,background:C.gld+"08",border:"1px dashed "+C.gld+"40",borderRadius:14}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span dangerouslySetInnerHTML={{__html:ic("clock",14,C.gld)}}/><div style={{fontSize:12,fontWeight:700,color:C.gld}}>Esperando respuesta de {pendingInvitees.length} {pendingInvitees.length===1?"invitado":"invitados"}</div></div><div style={{fontSize:11,color:C.ts,lineHeight:1.4}}>No se puede crear la partida hasta que {pendingInvitees.length===1?"el invitado pendiente confirme o cancele":"los invitados pendientes confirmen o cancelen"} su lugar en la reservación.</div></div>:members.length>=2?<div style={{marginBottom:14}}><button onClick={()=>{window.__createMatchFromGroup={id:detail.id,course_id:detail.course_id,course_name:detail.course_name,group_name:detail.name||null,date:detail.play_date,time:detail.play_time&&detail.play_time!=="flexible"?detail.play_time:null,game_mode:detail.game_mode||null,game_format:detail.game_format||null,max_players:members.length,members:members.map(m=>({id:m.user_id,name:m.player_name||m.user?.nickname||m.user?.full_name,player_pid:m.player_pid||m.user?.player_id||null}))};window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));window.__navigate?.("tab:2")}} style={{width:"100%",padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:14,boxShadow:C.shGrn||"0 4px 15px rgba(0,184,148,.3)"}}>⚔️ {t("Crear Partida con este Grupo")} ({members.length} {members.length===1?t("jugador"):t("jugadores")})</button></div>:isCreator?<div style={{marginBottom:14,padding:14,background:C.cd,border:"1px dashed "+C.bd,borderRadius:14}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span dangerouslySetInnerHTML={{__html:ic("clock",14,C.tm)}}/><div style={{fontSize:12,fontWeight:700,color:C.tm}}>{t("Necesitas al menos 2 jugadores")}</div></div><div style={{fontSize:11,color:C.ts,lineHeight:1.4}}>{t("Acepta solicitudes para poder crear la partida")} · {members.length}/{detail.max_players} {t("aceptados")}</div></div>:null
+      hasPendingInvitees?<div style={{marginBottom:14,padding:14,background:C.gld+"08",border:"1px dashed "+C.gld+"40",borderRadius:14}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span dangerouslySetInnerHTML={{__html:ic("clock",14,C.gld)}}/><div style={{fontSize:12,fontWeight:700,color:C.gld}}>Esperando respuesta de {pendingInvitees.length} {pendingInvitees.length===1?"invitado":"invitados"}</div></div><div style={{fontSize:11,color:C.ts,lineHeight:1.4}}>No se puede crear la partida hasta que {pendingInvitees.length===1?"el invitado pendiente confirme o cancele":"los invitados pendientes confirmen o cancelen"} su lugar en la reservación.</div></div>:members.length>=2?<div style={{marginBottom:14}}><button onClick={()=>{window.__createMatchFromGroup={id:detail.id,course_id:detail.course_id,course_name:detail.course_name,group_name:detail.name||null,date:detail.play_date,time:detail.play_time&&detail.play_time!=="flexible"?detail.play_time:null,game_mode:detail.game_mode||null,game_format:detail.game_format||null,max_players:members.length,members:members.map(m=>({id:m.user_id,name:m.player_name||m.user?.nickname||m.user?.full_name,player_pid:m.player_pid||m.user?.player_id||null}))};window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"matches"}}));window.__navigate?.("tab:2")}} style={{width:"100%",padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:14,boxShadow:C.shGrn||"0 4px 15px rgba(0,184,148,.3)"}}>⚔️ {t("Crear Partida con este Grupo")} ({members.length} {members.length===1?t("jugador"):t("jugadores")})</button></div>:isCreator?<div style={{marginBottom:14,padding:14,background:C.cd,border:"1px dashed "+C.bd,borderRadius:14}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span dangerouslySetInnerHTML={{__html:ic("clock",14,C.tm)}}/><div style={{fontSize:12,fontWeight:700,color:C.tm}}>{t("Necesitas al menos 2 jugadores")}</div></div><div style={{fontSize:11,color:C.ts,lineHeight:1.4}}>{t("Acepta solicitudes para poder crear la partida")} · {members.length}/{detail.max_players} {t("aceptados")}</div></div>:null
     )}
     {detail.tournament_id&&<div style={{marginBottom:14,padding:12,background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:12,display:"flex",alignItems:"center",gap:10}}><span dangerouslySetInnerHTML={{__html:ic("check",18,C.gld)}}/><div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:C.gld}}>{t("Grupo cerrado")}</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>{t("Partida ya creada desde este grupo")}</div></div></div>}
     {/* v19.39: lista combinada — match_members + booking_participants invited/accepted no-en-mm. Badges: amarillo "Pendiente" para invited, verde "Aceptado" para accepted. Etiqueta "Creador" para detail.creator_id. */}
