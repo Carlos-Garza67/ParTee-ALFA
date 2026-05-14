@@ -8,6 +8,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.32 (Memoria de Grupos — auto-sugiere amigos frecuentes en Confirm)","color:#00cec9;font-weight:bold;font-size:13px");
+// v20.32 — Memoria de Grupos (Vision Doc §7.5). Capa Customer / Lock-in player.
+//   Backend: RPC get_user_frequent_partners(p_user_id, p_limit=5, p_months=6, p_min_co_bookings=3)
+//     SECURITY DEFINER, search_path=public,pg_temp, GRANT authenticated.
+//     Lógica: UNION de bookings creator + bookings participant accepted en ventana p_months →
+//     co_players con DISTINCT booking_id → filter status='accepted' en friends bidireccional →
+//     ranked por co_bookings DESC, last_together DESC. Returns jsonb array.
+//   Frontend: card "Compañeros habituales" en Confirm cuando n>1 + freqPartners.length>0.
+//     Chips horizontales scrolleables con avatar + nickname/name + "X veces · hace Y días".
+//     Click toggle del partner en selectedFriends (mismo state que panel completo).
+//     Smoke real con Carlos: 2 partners (Pipo 5x, El Pitayas 3x) ✅.
+// v20.31 — Customer360 conectado en 5 puntos de entrada (today_bookings, atRisk VIPs, top_spenders,
+//   AdminBookings player profile, "Ver perfil completo" button). Ya en producción commit 54ae612.
+// v20.30 — Admin Premium reorganization (7 fases).
 console.log("%c[Partee] Build v20.29 (Admin OS Operating Layer extra: E.1+E.2+E.3)","color:#fdcb6e;font-weight:bold;font-size:13px");
 // v20.29 — Operating Layer extra (Pace of Play + Roster).
 //   E.1 Roster operativo:
@@ -1942,6 +1956,9 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
   const cardOk=!!(pr?.card_last4);
   useEffect(()=>{sb.from("extras_catalog").select("*").eq("is_active",true).order("sort_order").then(({data})=>setExtras(data||[]))},[]);
   useEffect(()=>{if(!s?.user?.id)return;sb.from("friends").select("*,friend:friend_id(id,full_name,nickname,player_id)").eq("user_id",s.user.id).eq("status","accepted").then(({data})=>setFriendsList(data||[]))},[s?.user?.id]);
+  // v20.32 Memoria de Grupos: frequent partners (≥3 co-bookings, 6m, solo friends accepted). Solo carga cuando n>1.
+  const[freqPartners,setFreqPartners]=useState([]);
+  useEffect(()=>{if(!s?.user?.id||n<=1){setFreqPartners([]);return}let cancelled=false;sb.rpc("get_user_frequent_partners",{p_user_id:s.user.id}).then(({data,error})=>{if(cancelled)return;if(error){console.warn("[v20.32] freq partners err:",error);setFreqPartners([])}else{setFreqPartners(Array.isArray(data)?data:[])}});return()=>{cancelled=true}},[s?.user?.id,n]);
   useEffect(()=>{if(n<=1){setSelectedFriends([]);setPaymentMode("compartir")}else if(selectedFriends.length>n-1){setSelectedFriends(prev=>prev.slice(0,n-1))}},[n]);
   const price=Number(sl.price);const gT=price*n;const eT=Object.entries(cart).reduce((s,[eid,q])=>{const ex=extras.find(e=>e.id===eid);return s+(ex?Number(ex.price)*q:0)},0);const discount=appliedPromo?appliedPromo.discount_type==="percent"?Math.round(gT*appliedPromo.discount_value/100):appliedPromo.discount_type==="fixed"?Math.min(appliedPromo.discount_value,gT):gT:0;
   // v20.3.1: cargar preview de membresía cuando course/gT/n cambian. Solo Path 1 (n=1).
@@ -2115,6 +2132,27 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
           <div style={{fontSize:10,color:C.tm,marginTop:2}}>{t("Los invitados solo aceptan la invitación")}</div>
         </div>}
       </div>
+      {/* v20.32 Memoria de Grupos: chips de partners frecuentes. Solo visible cuando n>1 y RPC devolvió >=1. */}
+      {freqPartners.length>0&&<div style={{background:`linear-gradient(135deg,${C.gld}10,${C.grn}06)`,borderRadius:14,padding:12,border:"1px solid "+C.gld+"30",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <span dangerouslySetInnerHTML={{__html:ic("star",14,C.gld)}}/>
+          <span style={{fontSize:12,fontWeight:700,color:C.txt}}>{t("Compañeros habituales")}</span>
+          <span style={{fontSize:10,color:C.tm,marginLeft:"auto"}}>{t("Click para invitar")}</span>
+        </div>
+        <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
+          {freqPartners.map(p=>{const sel=selectedFriends.includes(p.partner_id);const atLimit=!sel&&selectedFriends.length>=n-1;const dispName=p.nickname||p.full_name||"Jugador";const recency=p.recency_days===0?t("hoy"):p.recency_days===1?t("hace 1 día"):t("hace ")+p.recency_days+t(" días");
+            return<button key={p.partner_id} disabled={atLimit} onClick={()=>{if(atLimit){window.__toast?.(t("Solo puedes invitar a ")+(n-1)+t(" amigos"),"warn");return}setSelectedFriends(prev=>sel?prev.filter(x=>x!==p.partner_id):[...prev,p.partner_id])}} style={{flexShrink:0,minWidth:140,padding:"10px 12px",background:sel?C.grn+"15":C.bg,border:"1px solid "+(sel?C.grn+"55":C.bd),borderRadius:12,cursor:atLimit?"not-allowed":"pointer",opacity:atLimit?.45:1,textAlign:"left",transition:"all .15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <div style={{width:26,height:26,borderRadius:13,background:sel?C.grn+"30":C.cd,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+                  {p.avatar_url?<img src={p.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span dangerouslySetInnerHTML={{__html:ic(sel?"check":"user",13,sel?C.grn:C.tm)}}/>}
+                </div>
+                <div style={{fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>{dispName}</div>
+              </div>
+              <div style={{fontSize:10,color:sel?C.grn:C.tm,fontWeight:600}}>{p.co_bookings} {t("veces")} · {recency}</div>
+            </button>
+          })}
+        </div>
+      </div>}
       <div onClick={()=>setFriendsOpen(!friendsOpen)} style={{..._s.flexB,cursor:"pointer",padding:"10px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginBottom:10}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <span dangerouslySetInnerHTML={{__html:ic("users",15,C.txt)}}/>
