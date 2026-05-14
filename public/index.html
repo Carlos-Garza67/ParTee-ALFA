@@ -6058,12 +6058,12 @@ function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);cons
           <span dangerouslySetInnerHTML={{__html:ic(atRiskOpen?"up":"down",16,C.acc)}}/>
         </div>
         {atRiskOpen&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid "+C.acc+"20",display:"flex",flexDirection:"column",gap:8}} onClick={e=>e.stopPropagation()}>
-          {st.atRisk.slice(0,10).map(r=><div key={r.uid} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:C.cd,borderRadius:10}}>
+          {st.atRisk.slice(0,10).map(r=><div key={r.uid} onClick={()=>setCust360(r.uid)} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:C.cd,borderRadius:10,cursor:"pointer",transition:"background .15s"}} onMouseEnter={e=>e.currentTarget.style.background=C.bd} onMouseLeave={e=>e.currentTarget.style.background=C.cd}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:12,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.profile.nickname||r.profile.full_name||"Sin nombre"}</div>
               <div style={{fontSize:10,color:C.ts}}>{r.cnt} reservas · última hace {r.daysSince}d</div>
             </div>
-            {r.profile.email&&<a href={"mailto:"+r.profile.email+"?subject=Te extrañamos en "+course.course_name+"&body=Hola, hace tiempo que no te vemos. Tenemos novedades — ¿agendamos tu próximo round?"} target="_blank" rel="noopener" style={{padding:"6px 12px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:8,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"none"}}>Email</a>}
+            {r.profile.email&&<a href={"mailto:"+r.profile.email+"?subject=Te extrañamos en "+course.course_name+"&body=Hola, hace tiempo que no te vemos. Tenemos novedades — ¿agendamos tu próximo round?"} target="_blank" rel="noopener" onClick={e=>e.stopPropagation()} style={{padding:"6px 12px",background:C.grn+"15",border:"1px solid "+C.grn+"30",borderRadius:8,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"none"}}>Email</a>}
           </div>)}
           {st.atRisk.length>10&&<div style={{fontSize:11,color:C.ts,textAlign:"center",marginTop:4}}>+{st.atRisk.length-10} más</div>}
         </div>}
@@ -7009,7 +7009,7 @@ function AdminBookings({course}){
           <span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"2px 8px",borderRadius:6}}>{st.l}</span>
         </div>
         {b.booking_code&&<div style={{fontSize:11,..._s.mono,color:C.gld,letterSpacing:1,fontWeight:700}}>{b.booking_code}</div>}
-        {up&&<div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {up&&<div onClick={e=>{e.stopPropagation();if(b.user_id)setCust360(b.user_id)}} style={{display:"flex",gap:8,alignItems:"center",cursor:b.user_id?"pointer":"default",padding:4,margin:-4,borderRadius:8,transition:"background .15s"}} onMouseEnter={e=>{if(b.user_id)e.currentTarget.style.background=C.bd+"50"}} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
           <div style={{width:28,height:28,borderRadius:14,background:C.grn+"25",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("user",14,C.grn)}}/>
           <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.txt}}>{up.full_name||up.email}</div><div style={{fontSize:10,color:C.tm}}>{up.phone||up.email}</div></div>
           <div style={{display:"flex",gap:4}}>
