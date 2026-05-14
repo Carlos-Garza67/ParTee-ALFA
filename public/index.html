@@ -5405,8 +5405,10 @@ function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=us
   const comp=getCourseCompleteness(course,counts);
   // v20.2: Mapa actualizado tras agregar tab "Extras" (idx 4). Perfil ahora es tab 7.
   // Slots sigue siendo tab 2 (no se desplazó).
-  const REQ_NAV={photos:{tab:7,edit:false,field:"photos"},desc:{tab:7,edit:true,field:"desc"},fees:{tab:7,edit:true,field:"fees"},phone:{tab:7,edit:true,field:"phone"},hours:{tab:7,edit:true,field:"hours"},days:{tab:7,edit:true,field:"days"},addr:{tab:7,edit:true,field:"addr"},holes:{tab:7,edit:false,field:"holes"},slots:{tab:2,edit:false,field:null}};
-  const goToReq=(k)=>{const n=REQ_NAV[k];if(!n||!navTo)return;navTo(n.tab,{autoEdit:n.edit,focusField:n.field})};
+  // v20.30 Fase B+C · Tab renumeration: 0=Hoy(Dash) 1=TeeTime 2=Ventas 3=Insights 4=Campo
+  // Most fields live in AdminProfile inside AdminCampo (sub=perfil). Slots config inside AdminTeeTime (sub=slots).
+  const REQ_NAV={photos:{tab:4,edit:false,field:"photos",sub:"perfil"},desc:{tab:4,edit:true,field:"desc",sub:"perfil"},fees:{tab:4,edit:true,field:"fees",sub:"perfil"},phone:{tab:4,edit:true,field:"phone",sub:"perfil"},hours:{tab:4,edit:true,field:"hours",sub:"perfil"},days:{tab:4,edit:true,field:"days",sub:"perfil"},addr:{tab:4,edit:true,field:"addr",sub:"perfil"},holes:{tab:4,edit:false,field:"holes",sub:"perfil"},slots:{tab:1,edit:false,field:null,sub:"slots"}};
+  const goToReq=(k)=>{const n=REQ_NAV[k];if(!n||!navTo)return;navTo(n.tab,{autoEdit:n.edit,focusField:n.field,sub:n.sub})};
   async function submitReview(){if(submitting)return;setSubmitting(true);
     // v20.27.3 #8 fix (QA pt.19): usa RPC server-side. Antes hacía UPDATE directo
     // a golf_courses (bypassed validation). El RPC valida ownership + requisitos
@@ -9411,18 +9413,110 @@ function AdminInventory({course}){const[items,setItems]=useState([]);const[catal
   </div>
 }
 
+// ============================================================================
+// v20.30 Fase B+C · Premium Admin Architecture · 5 tabs con verbo mental único
+// Hoy (VER) · Tee Time (HACER) · Ventas (LANZAR) · Insights (DECIDIR) · Campo (CONFIGURAR)
+// Cada wrapper envuelve componentes existentes sin tocar sus internals → migración de bajo riesgo
+// ============================================================================
+
+// Shared helper: page header consistente arriba de cada tab
+function AdminPageHeader({title,question}){
+  return<div style={{padding:"4px 0 14px",marginBottom:4}}>
+    <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>{title}</div>
+    <div style={{fontSize:20,fontWeight:800,color:C.txt,letterSpacing:"-.02em",lineHeight:1.15}}>{question}</div>
+  </div>
+}
+
+// Shared helper: segmented control para sub-tabs internos
+function AdminSubNav({items,active,onChange}){
+  return<div style={{display:"flex",gap:4,background:(C.glass||C.w04),border:"1px solid "+C.bd,borderRadius:10,padding:4,marginBottom:14,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+    {items.map(it=><button key={it.k} onClick={()=>onChange(it.k)} style={{padding:"8px 14px",borderRadius:8,border:"none",background:active===it.k?C.grn:"transparent",color:active===it.k?"#0E1A1F":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",boxShadow:active===it.k?"0 4px 12px rgba(0,184,148,.25)":"none"}}>{it.l}</button>)}
+  </div>
+}
+
+// Tab 1 · TEE TIME — Operación diaria del campo (verbo: HACER)
+function AdminTeeTime({course,initialSub}){
+  const[sub,setSub]=useState(initialSub||"reservas");
+  // Consumir initialSub cuando cambia desde navTo externo
+  useEffect(()=>{if(initialSub)setSub(initialSub)},[initialSub]);
+  const items=[
+    {k:"reservas",l:t("Reservas")},
+    {k:"slots",l:t("Calendario")},
+    {k:"bloqueos",l:t("Bloqueos")},
+    {k:"roster",l:t("Roster")}
+  ];
+  return<div className="fi">
+    <AdminPageHeader title={"TEE TIME · "+t("EN EL CAMPO AHORA")} question={t("¿Qué pasa hoy?")}/>
+    <AdminSubNav items={items} active={sub} onChange={setSub}/>
+    {sub==="reservas"&&<AdminBookings course={course}/>}
+    {sub==="slots"&&<AdminSlots course={course}/>}
+    {sub==="bloqueos"&&<AdminBlockManager course={course}/>}
+    {sub==="roster"&&<AdminRoster course={course} onExit={()=>setSub("reservas")}/>}
+  </div>
+}
+
+// Tab 2 · VENTAS — Genera más ingreso (verbo: LANZAR)
+function AdminVentas({course}){
+  const[sub,setSub]=useState("promos");
+  const items=[
+    {k:"promos",l:t("Promos")},
+    {k:"pricing",l:t("Pricing")},
+    {k:"memberships",l:t("Membresías")},
+    {k:"tournaments",l:t("Torneos")},
+    {k:"extras",l:t("Extras")},
+    {k:"campaigns",l:t("Campañas")}
+  ];
+  return<div className="fi">
+    <AdminPageHeader title={"VENTAS · "+t("GENERA MÁS INGRESO")} question={t("¿Cómo gano más esta semana?")}/>
+    <AdminSubNav items={items} active={sub} onChange={setSub}/>
+    {sub==="promos"&&<AdminPromos course={course}/>}
+    {sub==="pricing"&&<AdminPricingRules course={course}/>}
+    {sub==="memberships"&&<AdminMembershipTiers course={course}/>}
+    {sub==="tournaments"&&<AdminTournaments course={course}/>}
+    {sub==="extras"&&<AdminInventory course={course}/>}
+    {sub==="campaigns"&&<AdminCampaignsCard course={course}/>}
+  </div>
+}
+
+// Tab 3 · INSIGHTS — Decisiones basadas en data (verbo: DECIDIR)
+// v20.30 Fase B+C: contenedor base. Próxima iteración (Fase D) consolidará YieldHeatmap+Churn+AI Weekly desde AdminDash.
+function AdminInsights({course}){
+  return<div className="fi">
+    <AdminPageHeader title={"INSIGHTS · "+t("DECISIONES POR DATA")} question={t("¿Qué debo cambiar este mes?")}/>
+    <PremiumInsights course={course}/>
+  </div>
+}
+
+// Tab 4 · CAMPO — Configuración del campo + cuenta (verbo: CONFIGURAR)
+function AdminCampo({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed,initialSub}){
+  const[sub,setSub]=useState(initialSub||"perfil");
+  useEffect(()=>{if(initialSub)setSub(initialSub)},[initialSub]);
+  const items=[
+    {k:"perfil",l:t("Perfil")},
+    {k:"finanzas",l:t("Finanzas")}
+  ];
+  return<div className="fi">
+    <AdminPageHeader title={"CAMPO · "+t("TU CONFIGURACIÓN")} question={t("Mis datos y mi cuenta")}/>
+    <AdminSubNav items={items} active={sub} onChange={setSub}/>
+    {sub==="perfil"&&<AdminProfile course={course} onOut={onOut} onRefresh={onRefresh} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={onAutoEditConsumed}/>}
+    {sub==="finanzas"&&<AdminPayouts course={course} onRefresh={onRefresh}/>}
+  </div>
+}
+
 function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);
   const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).single().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
   useEffect(()=>{loadC()},[p]);const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};
-  const navTo=(t,opts={})=>{setTab(t);setAutoEdit(!!opts.autoEdit);setFocusField(opts.focusField||null)};
+  const navTo=(t,opts={})=>{setTab(t);setAutoEdit(!!opts.autoEdit);setFocusField(opts.focusField||null);if(opts.sub)setNavSub({t,sub:opts.sub})};
+  const[navSub,setNavSub]=useState(null); // v20.30 Fase B+C: para que CourseStatusBanner pueda abrir sub-segment específico dentro de wrapper
   const clearAutoEdit=()=>{setAutoEdit(false);setFocusField(null)};
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Cerrar Sesión")}</button></div></div>;
-  const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Dashboard"},{i:ic("calendar",20,C.txt),l:"Reservas"},{i:ic("clock",20,C.txt),l:"Slots"},{i:ic("tag",20,C.txt),l:"Promos"},{i:ic("hamburger",20,C.txt)||ic("plus",20,C.txt),l:"Extras"},{i:ic("dollar",20,C.txt),l:"Pagos"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Perfil"}];
+  // v20.30 Fase B+C: 8 tabs → 5 tabs con verbo mental único. Antes: Dashboard/Reservas/Slots/Promos/Extras/Pagos/Insights/Perfil
+  const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Hoy"},{i:ic("clock",20,C.txt),l:"Tee Time"},{i:ic("dollar",20,C.txt),l:"Ventas"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Campo"}];
   const lst=course.listing_status||"draft";const LST={draft:{l:"BORRADOR",c:C.acc},pending_review:{l:"EN REVISIÓN",c:C.gld},active:{l:"PUBLICADO",c:C.grn},suspended:{l:"SUSPENDIDO",c:C.acc}}[lst]||{l:"BORRADOR",c:C.acc};
   return<div className="admin-container" style={{background:C.bg}}>
     <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div onClick={()=>setTab(0)} style={{padding:"3px 9px",borderRadius:7,background:LST.c+"15",border:"1px solid "+LST.c+"35",cursor:lst==="active"?"default":"pointer"}} title={lst==="active"?"":"Ver detalles en Dashboard"}><span style={{fontSize:9,fontWeight:700,color:LST.c,letterSpacing:".05em"}}>{LST.l}</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
-    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminBookings course={course}/>}{tab===2&&<AdminSlots course={course}/>}{tab===3&&<AdminPromos course={course}/>}{tab===4&&<AdminInventory course={course}/>}{tab===5&&<AdminPayouts course={course} onRefresh={loadC}/>}{tab===6&&<PremiumInsights course={course}/>}{tab===7&&<AdminProfile course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit}/>}</div>
+    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminTeeTime course={course} initialSub={navSub?.t===1?navSub.sub:null}/>}{tab===2&&<AdminVentas course={course}/>}{tab===3&&<AdminInsights course={course}/>}{tab===4&&<AdminCampo course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit} initialSub={navSub?.t===4?navSub.sub:null}/>}</div>
     <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
   </div>}
 
