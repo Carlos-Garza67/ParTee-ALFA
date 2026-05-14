@@ -763,6 +763,8 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 .skeleton{background:linear-gradient(90deg,var(--bd) 25%,var(--txt-m) 50%,var(--bd) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;opacity:.25}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .btn-pulse{animation:pulse 2s infinite}@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(233,69,96,.4)}70%{box-shadow:0 0 0 12px rgba(233,69,96,0)}}
+@keyframes parteePulseGrn{0%,100%{box-shadow:0 0 0 0 rgba(0,184,148,.5)}50%{box-shadow:0 0 0 6px rgba(0,184,148,0)}}
+@keyframes parteePulseGld{0%,100%{box-shadow:0 0 0 0 rgba(253,203,110,.5)}50%{box-shadow:0 0 0 6px rgba(253,203,110,0)}}
 @keyframes hintBounce{0%,100%{transform:translateY(-50%) translateX(0)}50%{transform:translateY(-50%) translateX(-4px)}}
 .no-sb::-webkit-scrollbar{display:none}.no-sb{scrollbar-width:none;-ms-overflow-style:none}
 .fav-bounce{animation:fav-pop .4s cubic-bezier(.34,1.56,.64,1)}@keyframes fav-pop{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
@@ -5960,6 +5962,8 @@ function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);cons
   };
   return<div className="fi">
     <CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/>
+    {/* v20.30 Fase D.3: LowActivityBanner — empty state contextual para campos activos con baja actividad */}
+    <LowActivityBanner course={course} st={st} navTo={navTo}/>
     {/* v20.26: AI Concierge entry CTA */}
     <div onClick={()=>setConcierge(true)} style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.grn}15,#00cec908)`,border:"1px solid "+C.grn+"40",borderRadius:14,marginBottom:14,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
       <div style={{fontSize:26,flexShrink:0}}>🤖</div>
@@ -6092,33 +6096,9 @@ function AdminDash({course,onRefresh,navTo}){const[st,setSt]=useState(null);cons
       <DailyPulseCard course={course}/>
     </div>
 
-    {/* v20.10: ADMIN CAMPAIGNS — Email/WhatsApp con targeting por segmento. */}
-    <div style={{marginTop:18}}>
-      <AdminCampaignsCard course={course}/>
-    </div>
-
-    {/* v20.5: YIELD HEATMAP — grid 7×N días×horas con drill-down y Hot Deal shortcut. */}
-    <div style={{marginTop:18}}>
-      <YieldHeatmap course={course}/>
-    </div>
-
-    {/* v20.7: WEEKLY INSIGHT — narrativa AI/template del rendimiento de la semana pasada.
-         Posicionado entre Yield Heatmap y Intelligence Panel para visibilidad alta. */}
-    <div style={{marginTop:18}}>
-      <WeeklyInsightCard course={course}/>
-    </div>
-
-    {/* v20.8: CHURN RISK PANEL — detecta jugadores at-risk + win-back messages.
-         Acción inmediata para retention. */}
-    <div style={{marginTop:18}}>
-      <ChurnRiskPanel course={course}/>
-    </div>
-
-    {/* v20.6: INTELLIGENCE PANEL — Cohort retention + LTV + Player segments.
-         Capa de inteligencia post-Yield. Le dice al admin quién se queda, quién vale más y quién se está yendo. */}
-    <div style={{marginTop:18}}>
-      <IntelligencePanel course={course}/>
-    </div>
+    {/* v20.30 Fase D.1: AdminCampaignsCard, YieldHeatmap, WeeklyInsightCard, ChurnRiskPanel,
+        IntelligencePanel movidos a AdminInsights (tab 3). AdminCampaignsCard también vive en
+        AdminVentas/Campañas. AdminDash (Hoy) ahora solo muestra señales operacionales del día. */}
 
     {/* v19.72: TOP SPENDERS (last 90 days, click → Customer 360) */}
     {dashV2?.top_spenders?.length>0&&<div style={{marginTop:18}}>
@@ -7332,29 +7312,9 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     <button onClick={()=>setLyIsDefault(!lyIsDefault)} style={{width:"100%",padding:10,marginBottom:14,borderRadius:10,border:"1px solid "+(lyIsDefault?C.grn:C.bd),background:lyIsDefault?C.grn+"15":C.cd,cursor:"pointer",fontSize:12,fontWeight:600,color:lyIsDefault?C.grn:C.tm,textAlign:"left"}}>{lyIsDefault?"✓ ":""}{t("Marcar como layout default")}{lyIsDefault?"":""}<div style={{fontSize:10,fontWeight:400,color:C.ts,marginTop:2}}>{t("Es el layout que se usa por defecto al subir scorecards y mostrar al jugador")}</div></button>
     <div style={{display:"flex",gap:8}}><button onClick={saveLayout} disabled={lySaving} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:lySaving?"wait":"pointer",opacity:lySaving?.6:1}}>{lySaving?"...":t("Guardar")}</button><button onClick={closeLayoutEditor} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
 
-    {/* v20.3: Membresías del campo — CRUD tiers + dashboard */}
-    <div style={{marginTop:24,marginBottom:14,padding:16,background:`linear-gradient(135deg,${C.gld}08,${C.grn}05)`,border:"1px solid "+C.gld+"30",borderRadius:14}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-        <span style={{fontSize:18}}>💎</span>
-        <div style={{flex:1}}>
-          <h3 style={{margin:0,fontSize:15,fontWeight:800,color:C.txt}}>Membresías</h3>
-          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Convierte jugadores recurrentes en miembros. MRR predictible.</div>
-        </div>
-      </div>
-      <AdminMembershipTiers course={course}/>
-    </div>
-
-    {/* v20.4: Torneos públicos del campo — CRUD + lifecycle */}
-    {course?.facility_type==="campo"&&<div style={{marginBottom:14,padding:16,background:`linear-gradient(135deg,${C.acc}08,#d63d5505)`,border:"1px solid "+C.acc+"30",borderRadius:14}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-        <span style={{fontSize:18}}>🏆</span>
-        <div style={{flex:1}}>
-          <h3 style={{margin:0,fontSize:15,fontWeight:800,color:C.txt}}>Torneos públicos</h3>
-          <div style={{fontSize:10,color:C.tm,marginTop:1}}>Vende inscripciones y organiza eventos con bolsa de premios.</div>
-        </div>
-      </div>
-      <AdminTournaments course={course}/>
-    </div>}
+    {/* v20.30 Fase D.2: Membresías + Torneos públicos eliminados de AdminProfile.
+        Ahora viven exclusivamente en AdminVentas (tab Ventas → sub-segments Membresías + Torneos) como destino dedicado.
+        Eliminada duplicación visual que confundía al usuario. */}
 
     <ThemeToggle/><LangToggle/><button onClick={()=>{
       // v19.64: alineado con el patrón robusto del Player Profile (línea 4177).
@@ -7721,10 +7681,9 @@ function AdminPromos({course}){const[promos,setPromos]=useState([]);const[ld,set
     <div style={{display:"flex",gap:6,marginBottom:12}}>{Object.entries(PL).map(([k,l])=><button key={k} onClick={()=>setPType(k)} style={{flex:1,padding:8,borderRadius:10,border:"2px solid "+(pType===k?C.acc:C.bd),background:pType===k?C.acc+"15":C.cd,color:pType===k?C.acc:C.ts,fontSize:11,fontWeight:700,cursor:"pointer"}}>{l}</button>)}</div>
     <div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>VALOR*</label><input value={pVal} onChange={e=>setPVal(e.target.value)} type="number" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>{t("MÍN JUG")}</label><input value={pMin} onChange={e=>setPMin(e.target.value)} type="number" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>DESDE*</label><input type="date" value={pFrom} onChange={e=>setPFrom(e.target.value)} style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>HASTA*</label><input type="date" value={pUntil} onChange={e=>setPUntil(e.target.value)} style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>{t("HORA INI")}</label><input type="time" value={pTStart} onChange={e=>setPTStart(e.target.value)} style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>{t("HORA FIN")}</label><input type="time" value={pTEnd} onChange={e=>setPTEnd(e.target.value)} style={{...inp0,marginTop:4}}/></div></div>
     <div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>MÁX USOS</label><input value={pMaxUses} onChange={e=>setPMaxUses(e.target.value)} type="number" placeholder="∞" style={{...inp0,marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>DESCRIPCIÓN</label><input value={pDesc} onChange={e=>setPDesc(e.target.value)} placeholder={t("Opcional")} style={{...inp0,marginTop:4}}/></div></div><button onClick={createPromo} style={{width:"100%",padding:14,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{editId?"Guardar":"Crear"}</button></div>;
-  return<div className="fi"><div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}> Promos & Pricing</h3><button onClick={()=>setCreate(true)} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.grn},#55efc4)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ {t("Crear")}</button></div>
+  return<div className="fi"><div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}> Promos</h3><button onClick={()=>setCreate(true)} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.grn},#55efc4)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ {t("Crear")}</button></div>
 
-    {/* v20.22: Dynamic Pricing Rules — Yield engine que ajusta precios automáticamente */}
-    <AdminPricingRules course={course}/>
+    {/* v20.30 Fase D.2: AdminPricingRules removido de aquí — vive en AdminVentas/Pricing como sub-tab dedicado. */}
 
     {/* v20.0: SMART PROMOTIONS — Sugerencias inteligentes basadas en slots subutilizados */}
     <div style={{background:`linear-gradient(135deg,${C.gld}10,${C.acc}08)`,border:"1px solid "+C.gld+"30",borderRadius:16,padding:14,marginBottom:16}}>
@@ -9419,6 +9378,42 @@ function AdminInventory({course}){const[items,setItems]=useState([]);const[catal
 // Cada wrapper envuelve componentes existentes sin tocar sus internals → migración de bajo riesgo
 // ============================================================================
 
+// v20.30 Fase D.3 · LowActivityBanner — empty state contextual para campos recién publicados (caso Vidanta)
+// Aparece solo si listing_status==='active' AND bookings totales < 10. Dismissible con localStorage por curso.
+function LowActivityBanner({course,st,navTo}){
+  const[dismissed,setDismissed]=useState(()=>{try{return localStorage.getItem("partee_lab_"+course.id)==="1"}catch(e){return false}});
+  const lst=course.listing_status||"draft";
+  const totalBookings=st?.bookings||0;
+  const isLowActivity=lst==="active"&&totalBookings<10;
+  if(!isLowActivity||dismissed)return null;
+  const dismiss=()=>{setDismissed(true);try{localStorage.setItem("partee_lab_"+course.id,"1")}catch(e){}};
+  const copyLink=()=>{const url="https://partee.com.mx/curso/"+course.id;if(navigator.clipboard){navigator.clipboard.writeText(url).then(()=>window.__toast?.(t("Link copiado al portapapeles"),"success")).catch(()=>window.__toast?.(t("No se pudo copiar"),"warn"))}else window.__toast?.(t("Tu navegador no soporta copiar"),"warn")};
+  const hasPhotos=(course.photo_urls||[]).length>=3;
+  const hasLogo=!!course.logo_url;
+  const hasAmenities=(course.amenities||[]).length>0;
+  const profileComplete=hasPhotos&&hasLogo&&hasAmenities;
+  const tips=[
+    {icon:"📤",title:t("Comparte tu link Partee"),sub:t("Cópialo y mándalo a tus jugadores conocidos"),onClick:copyLink},
+    ...(!profileComplete?[{icon:"📸",title:t("Completa tu perfil del campo"),sub:!hasPhotos?t("Sube al menos 3 fotos para tu listing público"):!hasLogo?t("Falta logo del campo"):t("Selecciona tus amenities"),onClick:()=>navTo?.(4,{sub:"perfil"})}]:[]),
+    {icon:"🎯",title:t("Lanza tu primera promo"),sub:t("Bienvenida con -15% o usa Smart Promotions con IA"),onClick:()=>navTo?.(2)}
+  ];
+  return<div style={{background:`linear-gradient(135deg,${C.gld}15,${C.grn}08)`,border:"1px solid "+C.gld+"40",borderRadius:14,padding:16,marginBottom:14,position:"relative"}}>
+    <button onClick={dismiss} title={t("Ocultar")} style={{position:"absolute",top:6,right:8,background:"transparent",border:"none",color:C.tm,fontSize:22,cursor:"pointer",padding:4,lineHeight:1,fontWeight:300}}>×</button>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,paddingRight:24}}>
+      <div style={{fontSize:24,flexShrink:0}}>🚀</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:800,color:C.txt,letterSpacing:"-.01em"}}>{t("Tu campo está recién publicado")}</div>
+        <div style={{fontSize:11,color:C.tm,marginTop:2}}>{tips.length} {t("acciones rápidas para acelerar tu primer mes")}</div>
+      </div>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>{tips.map((tip,i)=><div key={i} onClick={tip.onClick} style={{padding:"10px 12px",background:C.cd,border:"1px solid "+C.bd,borderRadius:10,cursor:"pointer",display:"flex",alignItems:"center",gap:10,transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background=C.gld+"08"}} onMouseLeave={e=>{e.currentTarget.style.background=C.cd}}>
+      <div style={{fontSize:16,flexShrink:0}}>{tip.icon}</div>
+      <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:700,color:C.txt}}>{tip.title}</div><div style={{fontSize:10,color:C.tm,marginTop:1}}>{tip.sub}</div></div>
+      <span style={{color:C.gld,fontSize:14,flexShrink:0}}>›</span>
+    </div>)}</div>
+  </div>
+}
+
 // Shared helper: page header consistente arriba de cada tab
 function AdminPageHeader({title,question}){
   return<div style={{padding:"4px 0 14px",marginBottom:4}}>
@@ -9427,10 +9422,10 @@ function AdminPageHeader({title,question}){
   </div>
 }
 
-// Shared helper: segmented control para sub-tabs internos
+// Shared helper: segmented control para sub-tabs internos · v20.30 Fase E.2 polish
 function AdminSubNav({items,active,onChange}){
   return<div style={{display:"flex",gap:4,background:(C.glass||C.w04),border:"1px solid "+C.bd,borderRadius:10,padding:4,marginBottom:14,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-    {items.map(it=><button key={it.k} onClick={()=>onChange(it.k)} style={{padding:"8px 14px",borderRadius:8,border:"none",background:active===it.k?C.grn:"transparent",color:active===it.k?"#0E1A1F":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",boxShadow:active===it.k?"0 4px 12px rgba(0,184,148,.25)":"none"}}>{it.l}</button>)}
+    {items.map(it=>{const isActive=active===it.k;return<button key={it.k} onClick={()=>onChange(it.k)} onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background=(C.w04||"rgba(255,255,255,.04)")}} onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent"}} style={{padding:"8px 14px",borderRadius:8,border:"none",background:isActive?C.grn:"transparent",color:isActive?"#0E1A1F":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all .2s ease",transform:isActive?"scale(1.02)":"scale(1)",boxShadow:isActive?"0 4px 14px rgba(0,184,148,.35),inset 0 1px 0 rgba(255,255,255,.15)":"none"}}>{it.l}</button>;})}
   </div>
 }
 
@@ -9448,10 +9443,13 @@ function AdminTeeTime({course,initialSub}){
   return<div className="fi">
     <AdminPageHeader title={"TEE TIME · "+t("EN EL CAMPO AHORA")} question={t("¿Qué pasa hoy?")}/>
     <AdminSubNav items={items} active={sub} onChange={setSub}/>
+    {/* v20.30 Fase E.2: key={sub} dispara fade-in al cambiar sub-tab */}
+    <div key={sub} className="fi">
     {sub==="reservas"&&<AdminBookings course={course}/>}
     {sub==="slots"&&<AdminSlots course={course}/>}
     {sub==="bloqueos"&&<AdminBlockManager course={course}/>}
     {sub==="roster"&&<AdminRoster course={course} onExit={()=>setSub("reservas")}/>}
+    </div>
   </div>
 }
 
@@ -9469,21 +9467,59 @@ function AdminVentas({course}){
   return<div className="fi">
     <AdminPageHeader title={"VENTAS · "+t("GENERA MÁS INGRESO")} question={t("¿Cómo gano más esta semana?")}/>
     <AdminSubNav items={items} active={sub} onChange={setSub}/>
+    <div key={sub} className="fi">
     {sub==="promos"&&<AdminPromos course={course}/>}
     {sub==="pricing"&&<AdminPricingRules course={course}/>}
     {sub==="memberships"&&<AdminMembershipTiers course={course}/>}
     {sub==="tournaments"&&<AdminTournaments course={course}/>}
     {sub==="extras"&&<AdminInventory course={course}/>}
     {sub==="campaigns"&&<AdminCampaignsCard course={course}/>}
+    </div>
   </div>
 }
 
 // Tab 3 · INSIGHTS — Decisiones basadas en data (verbo: DECIDIR)
-// v20.30 Fase B+C: contenedor base. Próxima iteración (Fase D) consolidará YieldHeatmap+Churn+AI Weekly desde AdminDash.
+// v20.30 Fase D.1: consolida YieldHeatmap + WeeklyInsightCard + ChurnRiskPanel + IntelligencePanel
+// movidos desde AdminDash. AdminDash (Hoy) mantiene DailyPulseCard (anomalías de hoy).
 function AdminInsights({course}){
+  const[concierge,setConcierge]=useState(false);
   return<div className="fi">
     <AdminPageHeader title={"INSIGHTS · "+t("DECISIONES POR DATA")} question={t("¿Qué debo cambiar este mes?")}/>
-    <PremiumInsights course={course}/>
+
+    {/* AI Concierge CTA — pregunta natural sobre cualquier métrica */}
+    <div onClick={()=>setConcierge(true)} style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.grn}15,#00cec908)`,border:"1px solid "+C.grn+"40",borderRadius:14,marginBottom:14,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+      <div style={{fontSize:24}}>🤖</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-.01em"}}>{t("Pregúntale a Claude")} <span style={{fontSize:9,fontWeight:800,color:C.grn,marginLeft:4,letterSpacing:.5}}>BETA</span></div>
+        <div style={{fontSize:11,color:C.tm,marginTop:2}}>{t("Tu AI Concierge — métricas, sugerencias, análisis en lenguaje natural")}</div>
+      </div>
+      <span style={{color:C.grn,fontSize:18,fontWeight:800}}>›</span>
+    </div>
+
+    {/* AI Weekly Insight — hero narrativa semanal */}
+    <WeeklyInsightCard course={course}/>
+
+    {/* Yield Heatmap — patrones 7×N de ocupación */}
+    <div style={{marginTop:18}}>
+      <YieldHeatmap course={course}/>
+    </div>
+
+    {/* Churn Risk — jugadores at-risk + win-back */}
+    <div style={{marginTop:18}}>
+      <ChurnRiskPanel course={course}/>
+    </div>
+
+    {/* Intelligence Panel — Cohort retention + LTV + Segments */}
+    <div style={{marginTop:18}}>
+      <IntelligencePanel course={course}/>
+    </div>
+
+    {/* PremiumInsights — benchmarking peer-anonymized + extras */}
+    <div style={{marginTop:18}}>
+      <PremiumInsights course={course}/>
+    </div>
+
+    {concierge&&<AdminConciergeChat course={course} onClose={()=>setConcierge(false)}/>}
   </div>
 }
 
@@ -9498,14 +9534,28 @@ function AdminCampo({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsum
   return<div className="fi">
     <AdminPageHeader title={"CAMPO · "+t("TU CONFIGURACIÓN")} question={t("Mis datos y mi cuenta")}/>
     <AdminSubNav items={items} active={sub} onChange={setSub}/>
+    <div key={sub} className="fi">
     {sub==="perfil"&&<AdminProfile course={course} onOut={onOut} onRefresh={onRefresh} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={onAutoEditConsumed}/>}
     {sub==="finanzas"&&<AdminPayouts course={course} onRefresh={onRefresh}/>}
+    </div>
   </div>
 }
 
 function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);
   const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).single().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
   useEffect(()=>{loadC()},[p]);const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};
+  // v20.30 Fase E.5: keyboard shortcuts 1-5 para tabs (Notion/Linear vibe). Respeta inputs y modifier keys.
+  useEffect(()=>{
+    const handler=(e)=>{
+      const tag=e.target?.tagName;
+      if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||e.target?.isContentEditable)return;
+      if(e.metaKey||e.ctrlKey||e.altKey)return;
+      const n=parseInt(e.key,10);
+      if(n>=1&&n<=5){e.preventDefault();setTab(n-1);window.__toast?.("→ "+["Hoy","Tee Time","Ventas","Insights","Campo"][n-1],"info")}
+    };
+    document.addEventListener("keydown",handler);
+    return()=>document.removeEventListener("keydown",handler);
+  },[]);
   const navTo=(t,opts={})=>{setTab(t);setAutoEdit(!!opts.autoEdit);setFocusField(opts.focusField||null);if(opts.sub)setNavSub({t,sub:opts.sub})};
   const[navSub,setNavSub]=useState(null); // v20.30 Fase B+C: para que CourseStatusBanner pueda abrir sub-segment específico dentro de wrapper
   const clearAutoEdit=()=>{setAutoEdit(false);setFocusField(null)};
@@ -9515,9 +9565,13 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
   const ft=course.facility_type||"campo";const tabs=[{i:ic("chart",20,C.txt),l:"Hoy"},{i:ic("clock",20,C.txt),l:"Tee Time"},{i:ic("dollar",20,C.txt),l:"Ventas"},{i:ic("gem",20,C.txt),l:"Insights"},{i:ic("user",20,C.txt),l:"Campo"}];
   const lst=course.listing_status||"draft";const LST={draft:{l:"BORRADOR",c:C.acc},pending_review:{l:"EN REVISIÓN",c:C.gld},active:{l:"PUBLICADO",c:C.grn},suspended:{l:"SUSPENDIDO",c:C.acc}}[lst]||{l:"BORRADOR",c:C.acc};
   return<div className="admin-container" style={{background:C.bg}}>
-    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><ParteeMark size={24} color={C.grn}/><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div onClick={()=>setTab(0)} style={{padding:"3px 9px",borderRadius:7,background:LST.c+"15",border:"1px solid "+LST.c+"35",cursor:lst==="active"?"default":"pointer"}} title={lst==="active"?"":"Ver detalles en Dashboard"}><span style={{fontSize:9,fontWeight:700,color:LST.c,letterSpacing:".05em"}}>{LST.l}</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
+    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{position:"relative",display:"flex",alignItems:"center"}}><ParteeMark size={24} color={C.grn}/>{/* v20.30 Fase E.3: status dot animado junto al logo, color por listing_status */}<div style={{position:"absolute",right:-2,bottom:-2,width:9,height:9,borderRadius:"50%",background:LST.c,border:"2px solid "+C.bg,boxShadow:"0 0 0 0 "+LST.c+"60",animation:lst==="active"?"parteePulseGrn 2.5s infinite":lst==="pending_review"?"parteePulseGld 2s infinite":"none"}}/></div><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div onClick={()=>setTab(0)} style={{padding:"3px 9px",borderRadius:7,background:LST.c+"15",border:"1px solid "+LST.c+"35",cursor:lst==="active"?"default":"pointer"}} title={lst==="active"?"":"Ver detalles en Dashboard"}><span style={{fontSize:9,fontWeight:700,color:LST.c,letterSpacing:".05em"}}>{LST.l}</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
     <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminTeeTime course={course} initialSub={navSub?.t===1?navSub.sub:null}/>}{tab===2&&<AdminVentas course={course}/>}{tab===3&&<AdminInsights course={course}/>}{tab===4&&<AdminCampo course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit} initialSub={navSub?.t===4?navSub.sub:null}/>}</div>
-    <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=><div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}</div>)}</div>
+    <div className="bnav admin-bnav" role="navigation">{tabs.map((tb,i)=>{
+      // v20.30 Fase E.1: Counter badges. Campo tab muestra "!" cuando course no está active.
+      const badge=i===4?(lst!=="active"?"!":null):null;
+      return<div key={i} onClick={()=>setTab(i)} style={{background:tab===i?(C.grn+"12"):"transparent",opacity:tab===i?1:.5,position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:tab===i?(C.grn+"10"):"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===i?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:tb.i}}/></div><div style={{fontSize:9,fontWeight:tab===i?700:400,color:tab===i?C.grn:C.tm,marginTop:2}}>{tb.l}</div>{tab===i&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}{badge!==null&&<div style={{position:"absolute",top:0,right:"22%",minWidth:14,height:14,borderRadius:7,background:C.acc,color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",border:"1.5px solid "+C.bg,boxShadow:"0 2px 6px "+C.acc+"40"}}>{badge}</div>}</div>;
+    })}</div>
   </div>}
 
 // v20.3: MembershipsScreen — Player UI para explorar tiers, comprar y ver mis membresías activas.
