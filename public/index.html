@@ -3572,20 +3572,14 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
   const[showMemberships,setShowMemberships]=useState(false);
   const[hasActiveMembership,setHasActiveMembership]=useState(false);
   // v20.4: Tournaments overlay
-  const[showTournaments,setShowTournaments]=useState(false);
-  const[openTournamentsCount,setOpenTournamentsCount]=useState(0);
+  // v20.30 Fase A.1: showTournaments + openTournamentsCount eliminados — Torneos ahora vive en VersusTab/Torneos sub-tab
   useEffect(()=>{// v20.3: detectar si tengo alguna membresía activa para mostrar badge
     sb.rpc("get_my_memberships").then(({data})=>{
       const active=(data?.memberships||[]).some(m=>m.status==="active");
       setHasActiveMembership(active);
     }).catch(()=>{});
   },[s?.user?.id]);
-  // v20.4: contar torneos públicos abiertos para mostrar badge
-  useEffect(()=>{
-    sb.rpc("get_public_tournaments",{p_course_id:null}).then(({data})=>{
-      setOpenTournamentsCount((data?.tournaments||[]).filter(t=>t.status==="registration_open").length);
-    }).catch(()=>{});
-  },[s?.user?.id]);
+  // v20.30 Fase A.1: useEffect contador torneos eliminado — el conteo ahora se hace dentro de TournamentsScreen
   // v20.2: F&B + Equipment cross-sell
   const[extrasSheet,setExtrasSheet]=useState(false);const[extrasCatalog,setExtrasCatalog]=useState([]);const[extrasLd,setExtrasLd]=useState(false);const[extrasQty,setExtrasQty]=useState({}); // {extra_id: quantity}
   const[savingExtras,setSavingExtras]=useState(false);const[removingExtra,setRemovingExtra]=useState(null);
@@ -3968,13 +3962,8 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       // refresh hasActiveMembership status on close
       sb.rpc("get_my_memberships").then(({data})=>{setHasActiveMembership((data?.memberships||[]).some(m=>m.status==="active"))}).catch(()=>{});
     }}/>}
-    {/* v20.4: Tournaments entry — full screen overlay */}
-    {showTournaments&&<TournamentsScreen onBack={()=>{setShowTournaments(false);
-      sb.rpc("get_public_tournaments",{p_course_id:null}).then(({data})=>{
-        setOpenTournamentsCount((data?.tournaments||[]).filter(t=>t.status==="registration_open").length);
-      }).catch(()=>{});
-    }}/>}
-    {!showMemberships&&!showTournaments&&<>
+    {/* v20.30 Fase A.1: TournamentsScreen overlay eliminado — Torneos vive en VersusTab/Torneos */}
+    {!showMemberships&&<>
     {/* v20.3: CTA banner — Membresías */}
     <div onClick={()=>setShowMemberships(true)} style={{padding:"10px 14px",background:hasActiveMembership?`linear-gradient(135deg,${C.gld}25,${C.grn}15)`:`linear-gradient(135deg,${C.gld}18,#fbbf2410)`,border:"1px solid "+(hasActiveMembership?C.gld+"50":C.gld+"35"),borderRadius:12,marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
       <div style={{fontSize:22}}>{hasActiveMembership?"💎":"⭐"}</div>
@@ -3984,15 +3973,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       </div>
       <span style={{color:C.tm}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
     </div>
-    {/* v20.4: CTA banner — Torneos · v20.30 Fase A: navega a VersusTab/Torneos en vez de overlay fullscreen */}
-    <div onClick={()=>{window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"torneos"}}));window.__navigate?.("tab:2")}} style={{padding:"10px 14px",background:openTournamentsCount>0?`linear-gradient(135deg,${C.acc}20,#d63d5512)`:`linear-gradient(135deg,${C.acc}10,#d63d5505)`,border:"1px solid "+(openTournamentsCount>0?C.acc+"50":C.acc+"30"),borderRadius:12,marginBottom:12,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
-      <div style={{fontSize:22}}>🏆</div>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>Torneos públicos {openTournamentsCount>0&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:C.acc,padding:"2px 6px",borderRadius:4,marginLeft:6,letterSpacing:.4}}>{openTournamentsCount} abierto{openTournamentsCount===1?"":"s"}</span>}</div>
-        <div style={{fontSize:10,color:C.tm,marginTop:1}}>{openTournamentsCount>0?"Inscríbete y compite por la bolsa":"Próximamente — los campos publicarán torneos aquí"}</div>
-      </div>
-      <span style={{color:C.tm}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
-    </div>
+    {/* v20.30 Fase A.1: Banner Torneos eliminado — Torneos vive en VersusTab/Torneos sub-tab como destino dedicado */}
     {/* v20.23: MyStandbysCard — solo aparece si hay lista de espera activa */}
     <MyStandbysCard/>
     <div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"up",l:t("Próximas")},{k:"past",l:t("Anteriores")},{k:"requests",l:t("Invitaciones")+(invitations.length>0?" ("+invitations.length+")":"")}].map(tb=><button key={tb.k} onClick={()=>setTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:tab===tb.k?"none":"1px solid "+C.bd,background:tab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:tab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:tab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}}>{tb.l}</button>)}</div>
