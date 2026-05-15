@@ -8,7 +8,40 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v20.32 (Memoria de Grupos — auto-sugiere amigos frecuentes en Confirm)","color:#00cec9;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.35 (Directorio alfabético en FriendsTab — headers sticky + jumper A-Z lateral)","color:#74b9ff;font-weight:bold;font-size:13px");
+// v20.35 — UX polish FriendsTab. Reportado por Carlos: con muchos amigos guardados se vuelve
+//   complicado buscarlos. La lista ya estaba pre-ordenada alfabéticamente (línea 4136 localeCompare)
+//   pero no había separadores visuales ni navegación rápida.
+//   Cambios línea 4159:
+//     (1) Agrupa amigos por inicial. Normaliza tildes (NFD + strip diacritics). Nombres con
+//         caracteres no-alfa van al bucket "#" al final.
+//     (2) Headers sticky tipo iOS Contacts: position:sticky top:0 z-index:5, fontSize:11 gold
+//         letterSpacing:.1em, padding 8/4/6, border-bottom, contador del grupo a la derecha.
+//     (3) Jumper lateral A-Z a la derecha (solo si hay 2+ grupos): position:absolute right:0
+//         con buttons fontSize:9 gold, click → scrollIntoView({behavior:smooth}) del header.
+//     (4) Card del amigo idéntica al diseño previo: glass + barra verde 4px + avatar + nombre +
+//         player_id + city + chevron. CERO cambios en estilo del item.
+//   196 JSX stmts idéntico v20.34. Solo cambios estilo + JS para agrupación.
+// v20.34 — UI polish CTA Membresías en BkTab (gradient gold + glow + barra lateral + icono SVG).
+//   al mismo nivel premium del resto de elementos (cards de reservas, MyStandbysCard, membresía
+//   en Confirm flow). Antes: padding 10×14, borderRadius 12, sin shadow, emoji ⭐/💎,
+//   subtítulo fontSize:10. Ahora: borderRadius 16 + boxShadow elevado (glow gold si activa) +
+//   barra de color izquierda 4px (gradient gold→green si activa / gold→amber si CTA) +
+//   icono SVG en círculo con gradient (gem si activa, star si CTA, 42×42 con shadow) +
+//   chip "ACTIVA" verde cuando aplica + subtítulo fontSize:11 fontWeight:500 +
+//   padding 14 + transition .2s. Consistente con cards de reservas línea 4049.
+//   196 JSX stmts idéntico v20.33. Solo cambios estilo en BkTab línea 4020-onwards.
+// v20.33 — UI polish bug fix en Explorar Card badges (FT 20px desbordaba, contenedor chocaba con heart).
+//   (1) badge "Plataforma" con un círculo blanco extra superpuesto, y (2) badge "Semi" cortado.
+//   Causa raíz: el badge facility_type usaba FT[ft] = ic("target",20) — SVG de 20×20px dentro de
+//   un span con fontSize:9 padding:3px-8px (altura ~18px). El SVG desbordaba verticalmente y al
+//   ser "target" un bullseye circular se veía como "círculo extra". Además, el contenedor absolute
+//   top:8 left:8 no tenía right: ni flexWrap, así que chocaba con el heart button en cards estrechas.
+//   Fix: nueva const FTS con iconos 11px blanco (FT se conserva para chips de filtro grandes 20px).
+//   Contenedor badges: right:44 (reserva 28+16 px al heart), flexWrap:wrap, pointerEvents:none.
+//   Badge facility: display:inline-flex, alignItems:center, gap:4, lineHeight:1.3, whiteSpace:nowrap,
+//   con icono y texto en dos hijos separados (no más concatenación HTML inline).
+//   196 JSX stmts idéntico v20.32. Solo cambios estilo, cero schema/RPC changes.
 // v20.32 — Memoria de Grupos (Vision Doc §7.5). Capa Customer / Lock-in player.
 //   Backend: RPC get_user_frequent_partners(p_user_id, p_limit=5, p_months=6, p_min_co_bookings=3)
 //     SECURITY DEFINER, search_path=public,pg_temp, GRANT authenticated.
@@ -1669,11 +1702,13 @@ function Home({onPick}){const{s,p}=useA();const[cs,setCs]=useState([]);const[ld,
   const mQ=c=>!q||[c.course_name,c.city,c.state].some(v=>(v||"").toLowerCase().includes(q.toLowerCase()));
   const mF=c=>{const locOk=fLoc==="all"||(c.facility_type||"campo")===fLoc;const accOk=fAcc==="all"||c.course_type===fAcc;const dealOk=!fDeal||offers.includes(c.course_name);const geoOk=!geoOn||distMap[c.id]!=null;return locOk&&accOk&&dealOk&&geoOk&&mQ(c)};
   const FT={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};const FL={campo:t("Campo"),plataforma:t("Plataforma"),simulador:t("Simulador")};
+  // v20.33 UI polish: iconos chicos (11px, blanco) para badges absolutos sobre la foto. FT (20px) se mantiene para chips de filtro grandes.
+  const FTS={campo:ic("golf",11,"#fff"),plataforma:ic("target",11,"#fff"),simulador:ic("smartphone",11,"#fff")};
   const feat=cs.filter(c=>c.is_featured&&mF(c)).map(enrichC);const ofC=cs.filter(c=>offers.includes(c.course_name)&&mF(c)).map(enrichC);const reC=cs.filter(c=>rebook.includes(c.id)&&mF(c)).map(enrichC);const all=cs.filter(mF).map(enrichC);
   // v19.0: Lista "Cerca de ti" — courses dentro del radio, ordenados por distancia. Respeta filtros activos.
   const near=geoOn?nearbyList.map(n=>{const c=cs.find(x=>x.id===n.id);return c?{...enrichC(c),_dist:n.distance_km}:null}).filter(c=>c&&mF(c)):[];
   useAS(fR,feat);useAS(oR,ofC);useAS(aR,all);useAS(nR,near);
-  const Card=({c,w,h})=>{const ft=c.facility_type||"campo";return<div onClick={()=>onPick(c)} style={{width:w,background:C.glass||"rgba(255,255,255,.04)",borderRadius:16,overflow:"hidden",border:"1px solid "+(C.glassBd||"rgba(255,255,255,.06)"),cursor:"pointer",position:"relative",boxShadow:C.shCard||"0 2px 8px rgba(0,0,0,.3)"}}><Img imgs={c.photo_urls} h={h}/><button onClick={ev=>tF(c.id,ev)} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,.5)",border:"none",borderRadius:14,width:28,height:28,cursor:"pointer",fontSize:13,color:favIds.has(c.id)?C.acc:C.txt,display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,backdropFilter:"blur(8px)"}}><span dangerouslySetInnerHTML={{__html:favIds.has(c.id)?ic("heart",14,C.acc):ic("heart",14,"#fff")}}/></button><div style={{position:"absolute",top:8,left:8,display:"flex",gap:4,zIndex:2}}><span style={{background:TC[c.course_type],color:"#fff",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6}}>{TL[c.course_type]}</span>{ft!=="campo"&&<span style={{background:"#6c5ce7",color:"#fff",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6}} dangerouslySetInnerHTML={{__html:FT[ft]+" "+FL[ft]}}/>}</div><div style={{padding:10}}><h4 style={{margin:0,fontSize:w>250?15:13,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.course_name}</h4><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:C.ts,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>{c.city}{c._dist!=null?" · "+(c._dist<1?Math.round(c._dist*1000)+" m":Math.round(c._dist)+" km"):""}</span><span style={{fontSize:12,fontWeight:800,color:C.grn,marginLeft:6,flexShrink:0}}>${fm(c.green_fee_min)}</span></div>{c._avg>0&&<div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}><span style={{color:C.gld,fontSize:11}} dangerouslySetInnerHTML={{__html:ic("star",11,C.gld)}}/><span style={{fontSize:11,fontWeight:700,color:C.gld}}>{c._avg}</span><span style={{fontSize:10,color:C.tm}}>({c._cnt})</span></div>}{ft==="plataforma"&&c.stations_count>0&&<div style={{fontSize:10,color:"#6c5ce7",marginTop:3}}>{c.stations_count} bahias</div>}{ft==="simulador"&&<div style={{fontSize:10,color:"#6c5ce7",marginTop:3}}>{c.cabins_count||0} cabinas{c.simulator_brand?" · "+c.simulator_brand:""}</div>}</div></div>};
+  const Card=({c,w,h})=>{const ft=c.facility_type||"campo";return<div onClick={()=>onPick(c)} style={{width:w,background:C.glass||"rgba(255,255,255,.04)",borderRadius:16,overflow:"hidden",border:"1px solid "+(C.glassBd||"rgba(255,255,255,.06)"),cursor:"pointer",position:"relative",boxShadow:C.shCard||"0 2px 8px rgba(0,0,0,.3)"}}><Img imgs={c.photo_urls} h={h}/><button onClick={ev=>tF(c.id,ev)} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,.5)",border:"none",borderRadius:14,width:28,height:28,cursor:"pointer",fontSize:13,color:favIds.has(c.id)?C.acc:C.txt,display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,backdropFilter:"blur(8px)"}}><span dangerouslySetInnerHTML={{__html:favIds.has(c.id)?ic("heart",14,C.acc):ic("heart",14,"#fff")}}/></button><div style={{position:"absolute",top:8,left:8,right:44,display:"flex",gap:4,flexWrap:"wrap",zIndex:2,pointerEvents:"none"}}><span style={{background:TC[c.course_type],color:"#fff",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6,lineHeight:1.3,whiteSpace:"nowrap"}}>{TL[c.course_type]}</span>{ft!=="campo"&&<span style={{background:"#6c5ce7",color:"#fff",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6,lineHeight:1.3,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:4}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:FTS[ft]}}/>{FL[ft]}</span>}</div><div style={{padding:10}}><h4 style={{margin:0,fontSize:w>250?15:13,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.course_name}</h4><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:C.ts,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>{c.city}{c._dist!=null?" · "+(c._dist<1?Math.round(c._dist*1000)+" m":Math.round(c._dist)+" km"):""}</span><span style={{fontSize:12,fontWeight:800,color:C.grn,marginLeft:6,flexShrink:0}}>${fm(c.green_fee_min)}</span></div>{c._avg>0&&<div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}><span style={{color:C.gld,fontSize:11}} dangerouslySetInnerHTML={{__html:ic("star",11,C.gld)}}/><span style={{fontSize:11,fontWeight:700,color:C.gld}}>{c._avg}</span><span style={{fontSize:10,color:C.tm}}>({c._cnt})</span></div>}{ft==="plataforma"&&c.stations_count>0&&<div style={{fontSize:10,color:"#6c5ce7",marginTop:3}}>{c.stations_count} bahias</div>}{ft==="simulador"&&<div style={{fontSize:10,color:"#6c5ce7",marginTop:3}}>{c.cabins_count||0} cabinas{c.simulator_brand?" · "+c.simulator_brand:""}</div>}</div></div>};
   const chipS=(a)=>({border:a?"none":"1px solid "+C.bd,background:a?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.cd,color:a?"#fff":C.ts,fontWeight:600,cursor:"pointer",boxShadow:a?(C.shAcc||"none"):(C.shCard||"none")});
   if(ld)return<div style={{display:"flex",flexDirection:"column",gap:16,padding:20}}><div style={{display:"flex",gap:14}}><CardSkeleton/><CardSkeleton/></div><Skeleton w="40%" h={20}/><div style={{display:"flex",gap:14}}><CardSkeleton/><CardSkeleton/><CardSkeleton/></div></div>;
   return<div style={{paddingTop:12,paddingBottom:8}}>
@@ -4004,14 +4039,24 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
     }}/>}
     {/* v20.30 Fase A.1: TournamentsScreen overlay eliminado — Torneos vive en VersusTab/Torneos */}
     {!showMemberships&&<>
-    {/* v20.3: CTA banner — Membresías */}
-    <div onClick={()=>setShowMemberships(true)} style={{padding:"10px 14px",background:hasActiveMembership?`linear-gradient(135deg,${C.gld}25,${C.grn}15)`:`linear-gradient(135deg,${C.gld}18,#fbbf2410)`,border:"1px solid "+(hasActiveMembership?C.gld+"50":C.gld+"35"),borderRadius:12,marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
-      <div style={{fontSize:22}}>{hasActiveMembership?"💎":"⭐"}</div>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>{hasActiveMembership?"Mis membresías":"Membresías Partee"}</div>
-        <div style={{fontSize:10,color:C.tm,marginTop:1}}>{hasActiveMembership?"Ver beneficios y vencimientos":"Ahorra en cada ronda · beneficios exclusivos"}</div>
+    {/* v20.34 UI polish: CTA Membresías rediseñado con lenguaje premium del resto del SPA.
+        Cambios vs v20.3: borderRadius 16, boxShadow elevado (glow gold si activa), barra de color
+        izquierda 4px (gradient gold→green si activa / gold→amber si CTA), icono SVG en círculo
+        con gradient (gem si activa, star si CTA), chip "ACTIVA" verde cuando aplica, subtítulo 11px,
+        padding 14, transition .2s. Consistente con cards de reservas (línea 4049) y MyStandbysCard. */}
+    <div onClick={()=>setShowMemberships(true)} style={{background:hasActiveMembership?`linear-gradient(135deg,${C.gld}1f 0%,${C.gld}10 50%,${C.grn}12 100%)`:`linear-gradient(135deg,${C.gld}18 0%,${C.gld}0c 60%,transparent 100%)`,border:"1px solid "+(hasActiveMembership?C.gld+"60":C.gld+"38"),borderRadius:16,marginBottom:12,cursor:"pointer",display:"flex",overflow:"hidden",position:"relative",boxShadow:hasActiveMembership?"0 4px 20px "+C.gld+"30, "+(C.shCard||"0 2px 8px rgba(0,0,0,.3)"):(C.shCard||"0 2px 8px rgba(0,0,0,.3)"),transition:"all .2s ease"}}>
+      <div style={{width:4,background:hasActiveMembership?`linear-gradient(180deg,${C.gld},${C.grn})`:`linear-gradient(180deg,${C.gld},#f59e0b)`,flexShrink:0}}/>
+      <div style={{flex:1,minWidth:0,padding:"14px 14px 14px 12px",display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:42,height:42,borderRadius:14,flexShrink:0,background:hasActiveMembership?`linear-gradient(135deg,${C.gld},#d4a017)`:`linear-gradient(135deg,${C.gld}35,${C.gld}12)`,border:"1px solid "+(hasActiveMembership?C.gld+"80":C.gld+"40"),display:"flex",alignItems:"center",justifyContent:"center",boxShadow:hasActiveMembership?"0 4px 12px "+C.gld+"40":"none"}} dangerouslySetInnerHTML={{__html:ic(hasActiveMembership?"gem":"star",22,hasActiveMembership?"#fff":C.gld)}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+            <div style={{fontSize:14,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{hasActiveMembership?"Mis membresías":"Membresías Partee"}</div>
+            {hasActiveMembership&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:C.grn,padding:"2px 6px",borderRadius:4,letterSpacing:.4,flexShrink:0}}>ACTIVA</span>}
+          </div>
+          <div style={{fontSize:11,color:C.ts,fontWeight:500}}>{hasActiveMembership?"Ver beneficios y vencimientos":"Ahorra en cada ronda · beneficios exclusivos"}</div>
+        </div>
+        <span style={{flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("right",16,C.gld)}}/>
       </div>
-      <span style={{color:C.tm}} dangerouslySetInnerHTML={{__html:ic("right",16,C.tm)}}/>
     </div>
     {/* v20.30 Fase A.1: Banner Torneos eliminado — Torneos vive en VersusTab/Torneos sub-tab como destino dedicado */}
     {/* v20.23: MyStandbysCard — solo aparece si hay lista de espera activa */}
@@ -4124,7 +4169,29 @@ function FriendsTab(){const{s,p}=useA();const[friends,setFriends]=useState([]);c
     {results.map(u=><div key={u.id} style={{display:"flex",alignItems:"center",gap:10,background:C.cd,borderRadius:10,padding:12,marginBottom:6,border:"1px solid "+C.bd}}><div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{u.nickname?<>{u.full_name} <span style={{color:C.gld}}>"{u.nickname}"</span></>:u.full_name}</div><div style={{color:C.gld,fontSize:11,..._s.mono}}>{u.player_id}</div></div><button onClick={()=>addF(u.id)} style={{padding:"6px 12px",background:C.grn+"30",border:"none",borderRadius:10,color:C.grn,fontSize:12,fontWeight:600,cursor:"pointer"}}>+</button></div>)}
     {received.length>0&&<><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:10}}><span style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:".08em"}}>{t("SOLICITUDES")}</span><span style={{background:C.acc,color:"#fff",fontSize:8,fontWeight:800,padding:"1px 6px",borderRadius:7}}>{received.length}</span></div>{received.map(r=><div key={r.id} style={{display:"flex",alignItems:"center",gap:10,background:C.cd,borderRadius:10,padding:12,marginBottom:6,border:"1px solid "+C.gld+"40"}}><div style={{flex:1,color:C.txt,fontSize:13}}>{r.user?.full_name} <span style={{color:C.gld,fontSize:11}}>{r.user?.player_id}</span></div><button onClick={()=>acceptF(r.id,r.user_id)} style={{padding:"6px 12px",background:C.grn+"30",border:"none",borderRadius:10,color:C.grn,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t("Aceptar")}</button><button onClick={()=>rejectF(r.id,r.user_id)} style={{padding:"6px 12px",background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t("Rechazar")}</button></div>)}</>}
     </div><div style={{background:"transparent",marginLeft:-16,marginRight:-16,padding:"6px 20px 0",borderRadius:0,flex:1}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><span style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>{t("AMIGOS")} <span style={{color:C.tm,fontWeight:500}}>· {friends.filter(f=>f.status!=="blocked").length}</span></span></div>
-    {friends.length===0?<EmptyState icon="users" iconColor={C.grn} title={t("Agrega amigos")} sub={t("Busca por nombre, email o Player ID")}/>:friends.filter(f=>f.status!=="blocked").map(f=><div key={f.id} onClick={()=>openProfile(f.friend)} style={{display:"flex",overflow:"hidden",background:C.glass||C.w04,borderRadius:16,marginBottom:10,border:"1px solid "+(C.glassBd||C.bd),boxShadow:C.shCard||"none",cursor:"pointer",transition:"transform .15s"}}><div style={{width:4,background:C.grn,flexShrink:0,borderRadius:"16px 0 0 16px"}}/><div style={{display:"flex",alignItems:"center",gap:12,flex:1,padding:"14px 16px"}}><div style={{width:38,height:38,borderRadius:"50%",background:C.grn+"10",border:"1px solid "+C.grn+"25",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("user",16,C.grn)}}/><div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:700}}>{displayName(f.friend)}</div><div style={{display:"flex",gap:6,marginTop:3}}><span style={{color:C.gld,fontSize:10,..._s.mono,fontWeight:600}}>{f.friend?.player_id}</span>{f.friend?.city&&<span style={{color:C.tm,fontSize:10}}>· {f.friend?.city}</span>}</div></div><span dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div></div>)}
+    {/* v20.35 Directorio alfabético: agrupa amigos por inicial (normaliza tildes; no-alfa → bucket "#"),
+        renderiza headers sticky tipo iOS Contacts y jumper lateral A-Z scrollIntoView. Card del amigo idéntica
+        al diseño previo: glass + barra verde 4px + avatar + nombre/player_id/city + chevron. */}
+    {friends.length===0?<EmptyState icon="users" iconColor={C.grn} title={t("Agrega amigos")} sub={t("Busca por nombre, email o Player ID")}/>:(()=>{
+      const active=friends.filter(f=>f.status!=="blocked");
+      if(active.length===0)return null;
+      const norm=str=>(str||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
+      const buckets={};
+      active.forEach(f=>{const first=norm(f.friend?.full_name).charAt(0).toUpperCase();const letter=/[A-Z]/.test(first)?first:"#";if(!buckets[letter])buckets[letter]=[];buckets[letter].push(f)});
+      const letters=Object.keys(buckets).sort((a,b)=>a==="#"?1:b==="#"?-1:a.localeCompare(b));
+      const jumpTo=L=>{const el=document.getElementById("flsec-"+L);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})};
+      return<div style={{position:"relative"}}>
+        <div style={{paddingRight:letters.length>1?22:0}}>
+          {letters.map((L,Li)=><div key={L}>
+            <div id={"flsec-"+L} style={{position:"sticky",top:0,zIndex:5,background:C.bg,fontSize:11,fontWeight:800,color:C.gld,letterSpacing:".1em",padding:"8px 4px 6px",marginTop:Li===0?0:6,borderBottom:"1px solid "+C.bd,marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}><span>{L}</span><span style={{color:C.tm,fontWeight:600,fontSize:10}}>{buckets[L].length}</span></div>
+            {buckets[L].map(f=><div key={f.id} onClick={()=>openProfile(f.friend)} style={{display:"flex",overflow:"hidden",background:C.glass||C.w04,borderRadius:16,marginBottom:10,border:"1px solid "+(C.glassBd||C.bd),boxShadow:C.shCard||"none",cursor:"pointer",transition:"transform .15s"}}><div style={{width:4,background:C.grn,flexShrink:0,borderRadius:"16px 0 0 16px"}}/><div style={{display:"flex",alignItems:"center",gap:12,flex:1,padding:"14px 16px"}}><div style={{width:38,height:38,borderRadius:"50%",background:C.grn+"10",border:"1px solid "+C.grn+"25",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("user",16,C.grn)}}/><div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:700}}>{displayName(f.friend)}</div><div style={{display:"flex",gap:6,marginTop:3}}><span style={{color:C.gld,fontSize:10,..._s.mono,fontWeight:600}}>{f.friend?.player_id}</span>{f.friend?.city&&<span style={{color:C.tm,fontSize:10}}>· {f.friend?.city}</span>}</div></div><span dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div></div>)}
+          </div>)}
+        </div>
+        {letters.length>1&&<div style={{position:"absolute",top:0,right:0,bottom:0,width:20,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",gap:1,paddingTop:8,paddingBottom:20,userSelect:"none",pointerEvents:"none"}}>
+          {letters.map(L=><button key={L} onClick={()=>jumpTo(L)} style={{fontSize:9,fontWeight:800,color:C.gld,background:"transparent",border:"none",padding:"2px 4px",cursor:"pointer",lineHeight:1.3,pointerEvents:"auto",fontFamily:"inherit"}}>{L}</button>)}
+        </div>}
+      </div>;
+    })()}
     {vp&&<div className="modal-bg" onClick={()=>{setVp(null);setVpStats(null)}}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{maxHeight:"calc(100vh - 40px)",overflowY:"auto",background:C.cd,border:"1px solid "+C.bd}}>
       <div className="player-card" style={{marginBottom:14}}><div style={{display:"flex",alignItems:"center",gap:14,position:"relative",zIndex:1}}><div style={{width:50,height:50,borderRadius:20,background:`linear-gradient(135deg,${C.grn},#55efc4)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}} dangerouslySetInnerHTML={{__html:ic("user",20,"#fff")}}/><div><h2 style={{fontSize:15,fontWeight:800,color:C.txt,margin:0}}>{displayName(vp)}</h2><p style={{fontSize:11,color:C.gld,..._s.mono,marginTop:3}}>{vp.player_id}</p>{calcAge(vp.birth_date)!=null&&<p style={{fontSize:11,color:C.ts,marginTop:2}}>{calcAge(vp.birth_date)} años</p>}</div></div>
         <div style={{display:"flex",gap:8,marginTop:12}}>{[{v:"#"+(vp.ranking_position||"--"),l:"Rank"},{v:vp.points||0,l:"Pts"},{v:vp.handicap!=null?vp.handicap:"--",l:"HCP"},{v:vpStats?.tournaments||0,l:t("Partidas")}].map((x,i)=><div key={i} style={{flex:1,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:12,padding:10,textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:C.txt,..._s.mono}}>{x.v}</div><div style={{fontSize:9,color:C.ts,fontWeight:600,marginTop:2}}>{x.l}</div></div>)}</div>{!isBlocked(vp?.id)&&vpH2h&&vpH2h.total>0&&<div style={{display:"flex",gap:8,margin:"12px 0",justifyContent:"center"}}><div style={{textAlign:"center",padding:"6px 14px",background:C.grn+"10",borderRadius:8}}><div style={{fontSize:16,fontWeight:900,color:C.grn}}>{vpH2h.wins}</div><div style={{fontSize:9,color:C.ts}}>Victorias</div></div><div style={{textAlign:"center",padding:"6px 14px"}}><div style={{fontSize:16,fontWeight:900,color:C.tm}}>{vpH2h.total-vpH2h.wins-vpH2h.losses}</div><div style={{fontSize:9,color:C.ts}}>Empates</div></div><div style={{textAlign:"center",padding:"6px 14px",background:C.acc+"10",borderRadius:8}}><div style={{fontSize:16,fontWeight:900,color:C.acc}}>{vpH2h.losses}</div><div style={{fontSize:9,color:C.ts}}>Derrotas</div></div></div>}</div>
