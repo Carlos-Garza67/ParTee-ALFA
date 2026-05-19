@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.45 (EARLY CAPTURE de tokens OAuth en head script — bypass timing)","color:#000;background:#0f0;font-weight:bold;font-size:14px;padding:4px 8px");
 console.log("%c[Partee] Build v20.44 (TITULO ROJO/AMARILLO VISIBLE — confirmar deploy CDN)","color:#ff0;background:#f00;font-weight:bold;font-size:14px;padding:4px 8px");
 console.log("%c[Partee] Build v20.43 (Bypass /auth/v1/user 403 con refreshSession + detectSessionInUrl:false)","color:#e84393;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.42 (Debug overlay on-screen para diagnóstico iOS Safari)","color:#fdcb6e;font-weight:bold;font-size:13px");
@@ -64,8 +65,8 @@ console.log("%c[Partee] Build v20.35 (Directorio alfabético en FriendsTab — h
       const header=document.createElement("div");
       header.style.cssText="padding:6px 8px;background:#000;border-bottom:1px solid #0f0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0";
       const title=document.createElement("span");
-      title.style.cssText="color:#ff0;font-weight:bold;font-size:14px;background:#f00;padding:4px 8px;border-radius:4px";
-      title.textContent="PARTEE DEBUG v20.44 — SI VES ESTO EL DEPLOY FUNCIONA";
+      title.style.cssText="color:#000;font-weight:bold;font-size:14px;background:#0f0;padding:4px 8px;border-radius:4px";
+      title.textContent="PARTEE DEBUG v20.45 — EARLY CAPTURE";
       const closeBtn=document.createElement("button");
       closeBtn.textContent="×";
       closeBtn.style.cssText="background:none;border:1px solid #f00;color:#f00;width:24px;height:24px;font-size:14px;font-weight:bold;cursor:pointer;border-radius:4px";
@@ -85,6 +86,20 @@ console.log("%c[Partee] Build v20.35 (Directorio alfabético en FriendsTab — h
     append("URL: "+url.substring(0,200));
     append("hash.length: "+window.location.hash.length+" search.length: "+window.location.search.length);
     append("hasOAuth: "+hasOAuth);
+    // v20.45: Capturar tokens OAuth AHORA (síncrono, antes que nada los limpie)
+    if(hasOAuth&&window.location.hash.includes("access_token")){
+      try{
+        const p=new URLSearchParams(window.location.hash.substring(1));
+        const at=p.get("access_token");
+        const rt=p.get("refresh_token");
+        if(at&&rt){
+          window.__partee_oauth_tokens={access_token:at,refresh_token:rt,expires_in:p.get("expires_in"),provider_token:p.get("provider_token"),token_type:p.get("token_type")};
+          append("[auth] EARLY CAPTURE · tokens stored (at.len="+at.length+" rt.len="+rt.length+")","#0f0");
+        }else{
+          append("[auth] EARLY CAPTURE · hash present pero no at/rt","#f00");
+        }
+      }catch(e){append("[auth] EARLY CAPTURE error: "+e.message,"#f00")}
+    }
     append("UA: "+navigator.userAgent.substring(0,100));
     append("standalone (PWA): "+(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches));
     try{
@@ -1514,47 +1529,34 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     console.log("[auth] mount · hasOAuthTokens="+hasOAuthTokens+" earlyFlag="+earlyFlag);
     window.__al&&window.__al("[auth] mount · hasOAuthTokens="+hasOAuthTokens+" earlyFlag="+earlyFlag,"#0ff");
 
-    // v20.43: parseo manual del hash OAuth + refreshSession() para bypass del bug iOS Safari.
-    // Confirmado en logs API: GET /auth/v1/user devuelve 403 al iPhone (200 al desktop),
-    // lo que hace que supabase-js descarte los tokens. POST /auth/v1/token (usado por
-    // refreshSession) no es bloqueado y funciona. Como cambiamos detectSessionInUrl:false,
-    // somos responsables de procesar el hash nosotros.
-    if(hasOAuthTokens&&window.location.hash.includes("access_token")&&!recoveryRef.current){
-      try{
-        const params=new URLSearchParams(window.location.hash.substring(1));
-        const at=params.get("access_token");
-        const rt=params.get("refresh_token");
-        if(at&&rt){
-          window.__al&&window.__al("[auth] MANUAL HASH PARSE · refreshSession()","#0ff");
-          // Limpiar el hash de la URL para que el listener vea hasOAuthTokens=false en eventos futuros
-          try{const clean=window.location.origin+window.location.pathname;window.history.replaceState(null,"",clean)}catch(e){}
-          // refreshSession llama POST /auth/v1/token, no GET /auth/v1/user.
-          // Si exitoso, dispara automáticamente SIGNED_IN y handleSignedIn corre normalmente.
-          sb.auth.refreshSession({refresh_token:rt}).then(({data,error})=>{
-            if(error){
-              console.error("[auth] refreshSession error:",error);
-              window.__al&&window.__al("[auth] refreshSession ERROR: "+(error.message||error)+" status="+(error.status||"?"),"#f00");
-              if(mounted){setLd(false)}
-            }else if(data&&data.session){
-              console.log("[auth] refreshSession OK, listener takes over");
-              window.__al&&window.__al("[auth] refreshSession OK · listener taking over","#0f0");
-              // SIGNED_IN será disparado por el listener automáticamente
-            }else{
-              window.__al&&window.__al("[auth] refreshSession returned no session and no error","#f00");
-              if(mounted){setLd(false)}
-            }
-          }).catch(err=>{
-            console.error("[auth] refreshSession exception:",err);
-            window.__al&&window.__al("[auth] refreshSession EXCEPTION: "+(err.message||err),"#f00");
-            if(mounted){setLd(false)}
-          });
+    // v20.45: usar tokens capturados por el setup overlay en el HEAD (antes que algo pueda limpiar el hash).
+    // El bug de v20.43/44 era que cuando el Auth component montaba, hasOAuthTokens ya era false
+    // porque algo (supabase-js ignorando detectSessionInUrl:false?) limpiaba el hash en los 2s entre
+    // setup overlay y mount. Ahora capturamos los tokens síncronamente en el head, antes que cualquier
+    // otro código pueda interferir.
+    if(window.__partee_oauth_tokens&&window.__partee_oauth_tokens.refresh_token&&!recoveryRef.current){
+      const earlyTokens=window.__partee_oauth_tokens;
+      window.__partee_oauth_tokens=null; // evitar re-procesamiento
+      window.__al&&window.__al("[auth] FROM EARLY CAPTURE · refreshSession()","#0ff");
+      // Limpiar hash si todavía está presente
+      try{if(window.location.hash.includes("access_token")){const clean=window.location.origin+window.location.pathname;window.history.replaceState(null,"",clean)}}catch(e){}
+      sb.auth.refreshSession({refresh_token:earlyTokens.refresh_token}).then(({data,error})=>{
+        if(error){
+          console.error("[auth] refreshSession error:",error);
+          window.__al&&window.__al("[auth] refreshSession ERROR: "+(error.message||error)+" status="+(error.status||"?"),"#f00");
+          if(mounted){setLd(false)}
+        }else if(data&&data.session){
+          console.log("[auth] refreshSession OK, listener takes over");
+          window.__al&&window.__al("[auth] refreshSession OK · uid="+(data.session.user&&data.session.user.id||"?").substring(0,8),"#0f0");
         }else{
-          window.__al&&window.__al("[auth] hash present but no access_token/refresh_token params","#f00");
+          window.__al&&window.__al("[auth] refreshSession returned no session and no error","#f00");
+          if(mounted){setLd(false)}
         }
-      }catch(e){
-        console.error("[auth] hash parse error:",e);
-        window.__al&&window.__al("[auth] hash parse EXCEPTION: "+e.message,"#f00");
-      }
+      }).catch(err=>{
+        console.error("[auth] refreshSession exception:",err);
+        window.__al&&window.__al("[auth] refreshSession EXCEPTION: "+(err.message||err),"#f00");
+        if(mounted){setLd(false)}
+      });
     }
 
     // Handler unificado para SIGNED_IN (OAuth callback + restore de sesión existente).
