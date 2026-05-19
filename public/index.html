@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.40 (Fix Google OAuth 2FA en iOS Safari · maneja INITIAL_SESSION con hash)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.39 (VersusTab hints rediseñados — glass card + SVG icon, sin emojis ni cursiva)","color:#74b9ff;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.35 (Directorio alfabético en FriendsTab — headers sticky + jumper A-Z lateral)","color:#74b9ff;font-weight:bold;font-size:13px");
 // v20.35 — UX polish FriendsTab. Reportado por Carlos: con muchos amigos guardados se vuelve
@@ -1464,6 +1465,12 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
       if(recoveryRef.current){setS(ss);if(ss)setLd(false);return}
       if(event==="SIGNED_OUT"){if(mounted){setS(null);setP(null);setLd(false)}return}
       if(event==="SIGNED_IN"&&ss){await handleSignedIn(ss);return}
+      // v20.40: iOS Safari + Google OAuth 2FA fix · supabase-js a veces emite
+      // INITIAL_SESSION (con sesión válida parseada del hash #access_token) en lugar
+      // de SIGNED_IN cuando el usuario tomó tiempo en 2FA y la página ya se asentó.
+      // Sin este branch, handleSignedIn nunca corre → ensure_user_profile nunca se
+      // llama → loading infinito. Idempotente: oauthInFlight previene doble exec.
+      if(event==="INITIAL_SESSION"&&ss&&hasOAuthTokens&&!oauthInFlight){await handleSignedIn(ss);return}
       // TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION sin nuevo SIGNED_IN: solo refrescar session
       if(ss&&mounted)setS(ss);
     });
