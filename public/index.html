@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.43 (Bypass /auth/v1/user 403 con refreshSession + detectSessionInUrl:false)","color:#e84393;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.42 (Debug overlay on-screen para diagnóstico iOS Safari)","color:#fdcb6e;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.41 (OAuth fix robusto · safety-net + 30s timeout + logging diagnóstico)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.40 (Fix Google OAuth 2FA en iOS Safari · maneja INITIAL_SESSION con hash)","color:#00b894;font-weight:bold;font-size:13px");
@@ -1157,7 +1158,7 @@ window.onerror=function(m,s,l,c,e){
 <script type="text/plain" id="jsx-source">
 const{useState,useEffect,useRef,createContext,useContext}=React;
 window.__PARTEE_RECOVERY=window.location.hash.includes("type=recovery");
-const sb=window.supabase.createClient("https://yuyifyflsnxnwasobnqg.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1eWlmeWZsc254bndhc29ibnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjUyNzIsImV4cCI6MjA4NDk0MTI3Mn0.oDg7kKn_eQp19_3X256v9mS0gIB14vaIGKgMR-hL3ZE");
+const sb=window.supabase.createClient("https://yuyifyflsnxnwasobnqg.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1eWlmeWZsc254bndhc29ibnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjUyNzIsImV4cCI6MjA4NDk0MTI3Mn0.oDg7kKn_eQp19_3X256v9mS0gIB14vaIGKgMR-hL3ZE",{auth:{detectSessionInUrl:false,persistSession:true,autoRefreshToken:true}});
 const DARK={bg:"#080810",cd:"#12121f",c2:"#1a1a2e",pri:"#0f3460",acc:"#e94560",grn:"#00b894",gld:"#f0c040",txt:"#f4f4f6",ts:"#8b93a7",tm:"#505868",bd:"rgba(255,255,255,.06)",nav:"#0a0a16",w04:"rgba(255,255,255,.04)",w06:"rgba(255,255,255,.06)",w07:"rgba(255,255,255,.07)",w10:"rgba(255,255,255,.10)",w15:"rgba(255,255,255,.15)",w20:"rgba(255,255,255,.20)",lt:"#f8f9fb",ltBd:"rgba(0,0,0,.06)",ltTxt:"#111827",ltSub:"#6b7280",ltMut:"#9ca3af",glass:"rgba(255,255,255,.04)",glassBd:"rgba(255,255,255,.10)",glassG:"rgba(0,184,148,.06)",glassGBd:"rgba(0,184,148,.15)",glassR:"rgba(233,69,96,.08)",glassRBd:"rgba(233,69,96,.20)",ax:"#ffffff",axTxt:"#111827",axSub:"#6b7280",axMut:"#9ca3af",axBd:"rgba(0,0,0,.06)",axCard:"#f8f9fb",shAcc:"0 8px 24px rgba(233,69,96,.35)",shGrn:"0 6px 18px rgba(0,184,148,.2)",shCard:"0 2px 8px rgba(0,0,0,.3)",photo:"linear-gradient(145deg,#0c2d5a,#162544)",el:"#0e0e1c",elBd:"rgba(255,255,255,.04)",elCard:"rgba(255,255,255,.04)",elCardBd:"rgba(255,255,255,.08)",heroGrad:"linear-gradient(160deg,#0f346030,#16213e15,transparent)",secGld:"#f0c040",secBlu:"#5b86e5",secVio:"#a78bfa",secTeal:"#2dd4bf"};
 /* Icon System - Stroke-based SVG, 2px weight, round caps */
 const IC={down:`<polyline points="6 9 12 15 18 9"/>`,group:`<circle cx="9" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M5 21v-2a4 4 0 014-4h2"/><path d="M13 21v-2a4 4 0 014-4h2"/>`,plus:`<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>`,credit:`<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>`,creditcard:`<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>`,up:`<polyline points="18 15 12 9 6 15"/>`,
@@ -1511,6 +1512,49 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     const authTimeout=setTimeout(()=>{if(mounted){console.warn("[auth] timeout 30s · hasOAuthTokens="+hasOAuthTokens+" profileLoaded="+profileLoaded);window.__al&&window.__al("[auth] TIMEOUT 30s · profileLoaded="+profileLoaded,"#f00");setLd(false)}},hasOAuthTokens?30000:8000);
     console.log("[auth] mount · hasOAuthTokens="+hasOAuthTokens+" earlyFlag="+earlyFlag);
     window.__al&&window.__al("[auth] mount · hasOAuthTokens="+hasOAuthTokens+" earlyFlag="+earlyFlag,"#0ff");
+
+    // v20.43: parseo manual del hash OAuth + refreshSession() para bypass del bug iOS Safari.
+    // Confirmado en logs API: GET /auth/v1/user devuelve 403 al iPhone (200 al desktop),
+    // lo que hace que supabase-js descarte los tokens. POST /auth/v1/token (usado por
+    // refreshSession) no es bloqueado y funciona. Como cambiamos detectSessionInUrl:false,
+    // somos responsables de procesar el hash nosotros.
+    if(hasOAuthTokens&&window.location.hash.includes("access_token")&&!recoveryRef.current){
+      try{
+        const params=new URLSearchParams(window.location.hash.substring(1));
+        const at=params.get("access_token");
+        const rt=params.get("refresh_token");
+        if(at&&rt){
+          window.__al&&window.__al("[auth] MANUAL HASH PARSE · refreshSession()","#0ff");
+          // Limpiar el hash de la URL para que el listener vea hasOAuthTokens=false en eventos futuros
+          try{const clean=window.location.origin+window.location.pathname;window.history.replaceState(null,"",clean)}catch(e){}
+          // refreshSession llama POST /auth/v1/token, no GET /auth/v1/user.
+          // Si exitoso, dispara automáticamente SIGNED_IN y handleSignedIn corre normalmente.
+          sb.auth.refreshSession({refresh_token:rt}).then(({data,error})=>{
+            if(error){
+              console.error("[auth] refreshSession error:",error);
+              window.__al&&window.__al("[auth] refreshSession ERROR: "+(error.message||error)+" status="+(error.status||"?"),"#f00");
+              if(mounted){setLd(false)}
+            }else if(data&&data.session){
+              console.log("[auth] refreshSession OK, listener takes over");
+              window.__al&&window.__al("[auth] refreshSession OK · listener taking over","#0f0");
+              // SIGNED_IN será disparado por el listener automáticamente
+            }else{
+              window.__al&&window.__al("[auth] refreshSession returned no session and no error","#f00");
+              if(mounted){setLd(false)}
+            }
+          }).catch(err=>{
+            console.error("[auth] refreshSession exception:",err);
+            window.__al&&window.__al("[auth] refreshSession EXCEPTION: "+(err.message||err),"#f00");
+            if(mounted){setLd(false)}
+          });
+        }else{
+          window.__al&&window.__al("[auth] hash present but no access_token/refresh_token params","#f00");
+        }
+      }catch(e){
+        console.error("[auth] hash parse error:",e);
+        window.__al&&window.__al("[auth] hash parse EXCEPTION: "+e.message,"#f00");
+      }
+    }
 
     // Handler unificado para SIGNED_IN (OAuth callback + restore de sesión existente).
     // No se ejecuta en password recovery — ese path se maneja arriba en el listener.
