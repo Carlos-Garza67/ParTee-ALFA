@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.41 (OAuth fix robusto · safety-net + 30s timeout + logging diagnóstico)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.40 (Fix Google OAuth 2FA en iOS Safari · maneja INITIAL_SESSION con hash)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.39 (VersusTab hints rediseñados — glass card + SVG icon, sin emojis ni cursiva)","color:#74b9ff;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.35 (Directorio alfabético en FriendsTab — headers sticky + jumper A-Z lateral)","color:#74b9ff;font-weight:bold;font-size:13px");
@@ -1396,12 +1397,15 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     // doble ejecución entre INITIAL_SESSION y SIGNED_IN sobre la misma sesión.
     let mounted=true;
     let oauthInFlight=false;
+    let profileLoaded=false;
     const hasOAuthTokens=window.location.hash.includes("access_token")||window.location.search.includes("code=");
     let earlyFlag=window.__PARTEE_RECOVERY===true;
     try{if(sessionStorage.getItem("partee_recovery")==="1")earlyFlag=true}catch(e){}
     try{if(localStorage.getItem("partee_recovery")==="pending"&&hasOAuthTokens)earlyFlag=true}catch(e){}
     if(earlyFlag){recoveryRef.current=true;setRecovery(true)}
-    const authTimeout=setTimeout(()=>{if(mounted){console.warn("Auth timeout");setLd(false)}},hasOAuthTokens?15000:8000);
+    // v20.41: timeout extendido a 30s para tolerar mobile + 2FA + RPC roundtrip lento.
+    const authTimeout=setTimeout(()=>{if(mounted){console.warn("[auth] timeout 30s · hasOAuthTokens="+hasOAuthTokens+" profileLoaded="+profileLoaded);setLd(false)}},hasOAuthTokens?30000:8000);
+    console.log("[auth] mount · hasOAuthTokens="+hasOAuthTokens+" earlyFlag="+earlyFlag);
 
     // Handler unificado para SIGNED_IN (OAuth callback + restore de sesión existente).
     // No se ejecuta en password recovery — ese path se maneja arriba en el listener.
@@ -1450,6 +1454,8 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
         setS(session);
         if(fullProfile)setP(fullProfile);
         setLd(false);
+        profileLoaded=true;
+        console.log("[auth] handleSignedIn OK · user="+session.user.id);
         if(fullProfile?.user_role==="player")initPush(fullProfile.id).catch(()=>{});
       }catch(err){
         console.error("[auth] handleSignedIn error:",err);
@@ -1460,20 +1466,38 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     };
 
     const{data:{subscription}}=sb.auth.onAuthStateChange(async(event,ss)=>{
+      console.log("[auth] event="+event+" hasSession="+!!ss+" inFlight="+oauthInFlight+" profileLoaded="+profileLoaded);
       clearTimeout(authTimeout);
       if(event==="PASSWORD_RECOVERY"&&!recoveryRef.current){recoveryRef.current=true;setRecovery(true)}
       if(recoveryRef.current){setS(ss);if(ss)setLd(false);return}
-      if(event==="SIGNED_OUT"){if(mounted){setS(null);setP(null);setLd(false)}return}
+      if(event==="SIGNED_OUT"){if(mounted){setS(null);setP(null);setLd(false);profileLoaded=false}return}
       if(event==="SIGNED_IN"&&ss){await handleSignedIn(ss);return}
-      // v20.40: iOS Safari + Google OAuth 2FA fix · supabase-js a veces emite
-      // INITIAL_SESSION (con sesión válida parseada del hash #access_token) en lugar
-      // de SIGNED_IN cuando el usuario tomó tiempo en 2FA y la página ya se asentó.
-      // Sin este branch, handleSignedIn nunca corre → ensure_user_profile nunca se
-      // llama → loading infinito. Idempotente: oauthInFlight previene doble exec.
-      if(event==="INITIAL_SESSION"&&ss&&hasOAuthTokens&&!oauthInFlight){await handleSignedIn(ss);return}
-      // TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION sin nuevo SIGNED_IN: solo refrescar session
+      // v20.41: si llega INITIAL_SESSION con sesión válida y aún no hemos cargado profile,
+      // procesar igual que SIGNED_IN. Esto cubre el caso iOS Safari + Google OAuth + 2FA
+      // donde supabase-js emite INITIAL_SESSION en lugar de SIGNED_IN tras el callback.
+      // Idempotente: oauthInFlight previene doble exec, profileLoaded evita re-procesar.
+      if(event==="INITIAL_SESSION"&&ss&&!oauthInFlight&&!profileLoaded){await handleSignedIn(ss);return}
+      // TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION ya procesado: solo refrescar session
       if(ss&&mounted)setS(ss);
     });
+
+    // v20.41: safety-net · si tras 3.5s no se ha procesado SIGNED_IN ni INITIAL_SESSION,
+    // pedir la sesión manualmente y procesarla. Cubre el caso donde supabase-js no emite
+    // ningún evento tras OAuth callback (visto en iOS Safari + 2FA bajo ciertas condiciones).
+    const safetyNet=setTimeout(async()=>{
+      if(!mounted||profileLoaded||oauthInFlight||recoveryRef.current)return;
+      try{
+        console.log("[auth] safety-net · fetching session manually");
+        const{data:{session:ss}}=await sb.auth.getSession();
+        if(!mounted||profileLoaded||oauthInFlight)return;
+        if(ss){
+          console.log("[auth] safety-net · session found, processing");
+          await handleSignedIn(ss);
+        }else{
+          console.log("[auth] safety-net · no session found");
+        }
+      }catch(e){console.warn("[auth] safety-net error:",e.message)}
+    },3500);
 
     // Restore de sesión existente en page-load (cuando NO viene de OAuth callback)
     if(!hasOAuthTokens&&!earlyFlag){
@@ -1485,7 +1509,7 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
       }).catch(()=>{clearTimeout(authTimeout);if(mounted)setLd(false)})
     }
 
-    return()=>{mounted=false;clearTimeout(authTimeout);subscription.unsubscribe()}},[]);
+    return()=>{mounted=false;clearTimeout(authTimeout);clearTimeout(safetyNet);subscription.unsubscribe()}},[]);
   async function lp(uid){try{
     // v18.3.13: BUG FIX CRÍTICO — antes lp() podía PISAR datos correctos del signUp upsert.
     // Si la primera SELECT retornaba null por timing, lp() hacía upsert con email prefix
