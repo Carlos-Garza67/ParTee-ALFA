@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.39 (VersusTab hints rediseñados — glass card + SVG icon, sin emojis ni cursiva)","color:#74b9ff;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.35 (Directorio alfabético en FriendsTab — headers sticky + jumper A-Z lateral)","color:#74b9ff;font-weight:bold;font-size:13px");
 // v20.35 — UX polish FriendsTab. Reportado por Carlos: con muchos amigos guardados se vuelve
 //   complicado buscarlos. La lista ya estaba pre-ordenada alfabéticamente (línea 4136 localeCompare)
@@ -4969,16 +4970,17 @@ function TourneoTab(){
 //        vTab="matches" = Partidas Versus (TourneoTab)
 //        vTab="grupos"  = Grupos sociales (MatchScreen embedded)
 function VersusTab(){const[vTab,setVTab]=useState("torneos");const{s,p}=useA();useEffect(()=>{const h=(e)=>{if(e.detail?.tab)setVTab(e.detail.tab)};window.addEventListener("partee:vtab",h);return()=>window.removeEventListener("partee:vtab",h)},[]);
+  // v20.39 · hints alineados a estética glass+SVG (antes: emojis+italic, fuera de tono).
   const subTabs=[
-    {k:"torneos",l:ic("trophy",16)+" "+t("Torneos"),hint:"🏆 "+t("Inscríbete a torneos oficiales del campo y compite por la bolsa")},
-    {k:"matches",l:ic("swords",16)+" "+t("Partidas"),hint:"⛳ "+t("Juega versus tus amigos y compite por el ranking")},
-    {k:"grupos",l:ic("group",16)+" "+t("Grupos"),hint:"🤝 "+t("Conoce nuevos jugadores y amplía tu red de golf")}
+    {k:"torneos",l:ic("trophy",16)+" "+t("Torneos"),hint:t("Torneos oficiales con bolsa de premios"),icon:"trophy",color:C.gld},
+    {k:"matches",l:ic("swords",16)+" "+t("Partidas"),hint:t("Versus amigos · Resultados a tu handicap"),icon:"swords",color:C.acc},
+    {k:"grupos",l:ic("group",16)+" "+t("Grupos"),hint:t("Encuentra jugadores abiertos a unirse"),icon:"group",color:C.grn}
   ];
-  const activeHint=subTabs.find(x=>x.k===vTab)?.hint||subTabs[0].hint;
+  const activeTab=subTabs.find(x=>x.k===vTab)||subTabs[0];
   return<div>
     {/* v19.58: sección 'Retos Pendientes' eliminada — feature retirado */}
     <div style={{display:"flex",gap:6,padding:"12px 20px 0"}}>{subTabs.map(tb=><button key={tb.k} onClick={()=>setVTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:vTab===tb.k?"none":"1px solid "+C.bd,background:vTab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:vTab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:vTab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}} dangerouslySetInnerHTML={{__html:tb.l}}/>)}</div>
-    <div style={{padding:"8px 20px 0",fontSize:11,color:C.tm,lineHeight:1.4,fontStyle:"italic"}}>{activeHint}</div>
+    <div style={{padding:"10px 20px 0"}}><div style={{display:"flex",alignItems:"center",gap:10,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:12,padding:"10px 12px 10px 14px",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:activeTab.color}}/><span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(activeTab.icon,14,activeTab.color)}}/><div style={{fontSize:11.5,color:C.ts,lineHeight:1.4,fontWeight:500}}>{activeTab.hint}</div></div></div>
     {vTab==="torneos"&&<TournamentsScreen/>}
     {vTab==="matches"&&<TourneoTab/>}
     {vTab==="grupos"&&<MatchScreen embedded/>}</div>}
