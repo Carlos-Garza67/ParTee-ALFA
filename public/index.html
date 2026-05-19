@@ -8,10 +8,114 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.42 (Debug overlay on-screen para diagnóstico iOS Safari)","color:#fdcb6e;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.41 (OAuth fix robusto · safety-net + 30s timeout + logging diagnóstico)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.40 (Fix Google OAuth 2FA en iOS Safari · maneja INITIAL_SESSION con hash)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.39 (VersusTab hints rediseñados — glass card + SVG icon, sin emojis ni cursiva)","color:#74b9ff;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.35 (Directorio alfabético en FriendsTab — headers sticky + jumper A-Z lateral)","color:#74b9ff;font-weight:bold;font-size:13px");
+
+// v20.42 — Debug overlay on-screen. Activación automática cuando hay tokens OAuth en URL,
+// manual cuando hay ?debug=1, o persistente con localStorage.partee_debug=1.
+// Sin dependencias externas, sin librerías. Solo necesita screenshot del iPhone.
+// El helper window.__al(msg, color) escribe a console.log + al overlay en pantalla.
+// Una vez resuelto el bug iOS Safari + 2FA, este bloque puede removerse en una versión futura.
+(function setupDebugOverlay(){
+  try{
+    const url=window.location.href;
+    const hasOAuth=url.includes("#access_token=")||url.includes("?code=")||url.includes("&code=");
+    const hasParam=url.includes("?debug=1")||url.includes("&debug=1");
+    let hasFlag=false;
+    try{hasFlag=localStorage.getItem("partee_debug")==="1"}catch(e){}
+    if(!hasOAuth&&!hasParam&&!hasFlag){
+      window.__al=function(){};
+      return;
+    }
+    const buffer=[];
+    function flushTo(el){
+      buffer.forEach(b=>{
+        const line=document.createElement("div");
+        line.style.color=b.color||"#0f0";
+        line.style.wordBreak="break-all";
+        line.textContent="["+b.time+"] "+b.msg;
+        el.appendChild(line);
+      });
+    }
+    function append(msg,color){
+      const time=new Date().toISOString().split("T")[1].split(".")[0];
+      buffer.push({time:time,msg:String(msg),color:color});
+      const log=document.getElementById("__pdbg_log");
+      if(log){
+        const line=document.createElement("div");
+        line.style.color=color||"#0f0";
+        line.style.wordBreak="break-all";
+        line.textContent="["+time+"] "+msg;
+        log.appendChild(line);
+        log.scrollTop=log.scrollHeight;
+      }
+    }
+    window.__al=append;
+    function mount(){
+      if(document.getElementById("__pdbg"))return;
+      const div=document.createElement("div");
+      div.id="__pdbg";
+      div.style.cssText="position:fixed;bottom:0;left:0;right:0;max-height:55vh;overflow:hidden;background:rgba(0,0,0,.95);color:#0f0;font-family:Menlo,Monaco,monospace;font-size:10px;z-index:99999;border-top:2px solid #0f0;line-height:1.35;display:flex;flex-direction:column";
+      const header=document.createElement("div");
+      header.style.cssText="padding:6px 8px;background:#000;border-bottom:1px solid #0f0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0";
+      const title=document.createElement("span");
+      title.style.cssText="color:#fdcb6e;font-weight:bold;font-size:11px";
+      title.textContent="PARTEE AUTH DEBUG · v20.42 — Toma screenshot";
+      const closeBtn=document.createElement("button");
+      closeBtn.textContent="×";
+      closeBtn.style.cssText="background:none;border:1px solid #f00;color:#f00;width:24px;height:24px;font-size:14px;font-weight:bold;cursor:pointer;border-radius:4px";
+      closeBtn.onclick=()=>{div.remove();try{localStorage.removeItem("partee_debug")}catch(e){}};
+      header.appendChild(title);
+      header.appendChild(closeBtn);
+      const logDiv=document.createElement("div");
+      logDiv.id="__pdbg_log";
+      logDiv.style.cssText="padding:6px 8px;overflow-y:auto;flex:1";
+      div.appendChild(header);
+      div.appendChild(logDiv);
+      document.body.appendChild(div);
+      flushTo(logDiv);
+    }
+    if(document.body){mount()}else{document.addEventListener("DOMContentLoaded",mount)}
+    // Info inicial
+    append("URL: "+url.substring(0,200));
+    append("hash.length: "+window.location.hash.length+" search.length: "+window.location.search.length);
+    append("hasOAuth: "+hasOAuth);
+    append("UA: "+navigator.userAgent.substring(0,100));
+    append("standalone (PWA): "+(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches));
+    try{
+      const lsKeys=Object.keys(localStorage).filter(k=>k.includes("supabase")||k.includes("sb-")||k.includes("partee"));
+      append("LS keys: "+JSON.stringify(lsKeys));
+      lsKeys.forEach(k=>{
+        try{
+          const v=localStorage.getItem(k);
+          if(v){
+            const preview=v.length>120?v.substring(0,120)+"...":v;
+            append("  "+k+": "+preview,"#aaa");
+          }
+        }catch(e){}
+      });
+    }catch(e){append("LS error: "+e.message,"#f00")}
+    try{
+      append("cookies.length: "+document.cookie.length);
+    }catch(e){append("cookie error: "+e.message,"#f00")}
+    // Captura errores globales
+    window.addEventListener("error",e=>{
+      append("JS ERROR: "+e.message+" @ "+(e.filename||"?")+":"+(e.lineno||"?"),"#f00");
+    });
+    window.addEventListener("unhandledrejection",e=>{
+      append("PROMISE REJECT: "+((e.reason&&e.reason.message)||String(e.reason)),"#f00");
+    });
+  }catch(err){
+    console.error("Debug overlay setup error:",err);
+    window.__al=function(){};
+  }
+})();
+</script>
+<script>
+
 // v20.35 — UX polish FriendsTab. Reportado por Carlos: con muchos amigos guardados se vuelve
 //   complicado buscarlos. La lista ya estaba pre-ordenada alfabéticamente (línea 4136 localeCompare)
 //   pero no había separadores visuales ni navegación rápida.
@@ -1404,8 +1508,9 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     try{if(localStorage.getItem("partee_recovery")==="pending"&&hasOAuthTokens)earlyFlag=true}catch(e){}
     if(earlyFlag){recoveryRef.current=true;setRecovery(true)}
     // v20.41: timeout extendido a 30s para tolerar mobile + 2FA + RPC roundtrip lento.
-    const authTimeout=setTimeout(()=>{if(mounted){console.warn("[auth] timeout 30s · hasOAuthTokens="+hasOAuthTokens+" profileLoaded="+profileLoaded);setLd(false)}},hasOAuthTokens?30000:8000);
+    const authTimeout=setTimeout(()=>{if(mounted){console.warn("[auth] timeout 30s · hasOAuthTokens="+hasOAuthTokens+" profileLoaded="+profileLoaded);window.__al&&window.__al("[auth] TIMEOUT 30s · profileLoaded="+profileLoaded,"#f00");setLd(false)}},hasOAuthTokens?30000:8000);
     console.log("[auth] mount · hasOAuthTokens="+hasOAuthTokens+" earlyFlag="+earlyFlag);
+    window.__al&&window.__al("[auth] mount · hasOAuthTokens="+hasOAuthTokens+" earlyFlag="+earlyFlag,"#0ff");
 
     // Handler unificado para SIGNED_IN (OAuth callback + restore de sesión existente).
     // No se ejecuta en password recovery — ese path se maneja arriba en el listener.
@@ -1456,9 +1561,11 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
         setLd(false);
         profileLoaded=true;
         console.log("[auth] handleSignedIn OK · user="+session.user.id);
+        window.__al&&window.__al("[auth] handleSignedIn OK · user="+session.user.id+" role="+(fullProfile&&fullProfile.user_role||"?"),"#0f0");
         if(fullProfile?.user_role==="player")initPush(fullProfile.id).catch(()=>{});
       }catch(err){
         console.error("[auth] handleSignedIn error:",err);
+        window.__al&&window.__al("[auth] handleSignedIn ERROR: "+(err.message||err),"#f00");
         if(mounted)setLd(false);
       }finally{
         oauthInFlight=false;
@@ -1467,6 +1574,7 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
 
     const{data:{subscription}}=sb.auth.onAuthStateChange(async(event,ss)=>{
       console.log("[auth] event="+event+" hasSession="+!!ss+" inFlight="+oauthInFlight+" profileLoaded="+profileLoaded);
+      window.__al&&window.__al("[auth] event="+event+" hasSession="+!!ss+(ss?" uid="+ss.user.id.substring(0,8):"")+" inFlight="+oauthInFlight+" loaded="+profileLoaded,"#ff0");
       clearTimeout(authTimeout);
       if(event==="PASSWORD_RECOVERY"&&!recoveryRef.current){recoveryRef.current=true;setRecovery(true)}
       if(recoveryRef.current){setS(ss);if(ss)setLd(false);return}
@@ -1488,15 +1596,18 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
       if(!mounted||profileLoaded||oauthInFlight||recoveryRef.current)return;
       try{
         console.log("[auth] safety-net · fetching session manually");
+        window.__al&&window.__al("[auth] safety-net · fetching session manually","#0ff");
         const{data:{session:ss}}=await sb.auth.getSession();
         if(!mounted||profileLoaded||oauthInFlight)return;
         if(ss){
           console.log("[auth] safety-net · session found, processing");
+          window.__al&&window.__al("[auth] safety-net · SESSION FOUND uid="+ss.user.id.substring(0,8)+", processing","#0f0");
           await handleSignedIn(ss);
         }else{
           console.log("[auth] safety-net · no session found");
+          window.__al&&window.__al("[auth] safety-net · NO SESSION FOUND (supabase-js no procesó el callback)","#f00");
         }
-      }catch(e){console.warn("[auth] safety-net error:",e.message)}
+      }catch(e){console.warn("[auth] safety-net error:",e.message);window.__al&&window.__al("[auth] safety-net ERROR: "+e.message,"#f00")}
     },3500);
 
     // Restore de sesión existente en page-load (cuando NO viene de OAuth callback)
