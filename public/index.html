@@ -8,128 +8,39 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.46 (Producción — fix iOS Safari + 2FA con EARLY CAPTURE silenciosa)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.45 (EARLY CAPTURE de tokens OAuth en head script — bypass timing)","color:#000;background:#0f0;font-weight:bold;font-size:14px;padding:4px 8px");
-console.log("%c[Partee] Build v20.44 (TITULO ROJO/AMARILLO VISIBLE — confirmar deploy CDN)","color:#ff0;background:#f00;font-weight:bold;font-size:14px;padding:4px 8px");
-console.log("%c[Partee] Build v20.43 (Bypass /auth/v1/user 403 con refreshSession + detectSessionInUrl:false)","color:#e84393;font-weight:bold;font-size:13px");
-console.log("%c[Partee] Build v20.42 (Debug overlay on-screen para diagnóstico iOS Safari)","color:#fdcb6e;font-weight:bold;font-size:13px");
-console.log("%c[Partee] Build v20.41 (OAuth fix robusto · safety-net + 30s timeout + logging diagnóstico)","color:#00b894;font-weight:bold;font-size:13px");
-console.log("%c[Partee] Build v20.40 (Fix Google OAuth 2FA en iOS Safari · maneja INITIAL_SESSION con hash)","color:#00b894;font-weight:bold;font-size:13px");
-console.log("%c[Partee] Build v20.39 (VersusTab hints rediseñados — glass card + SVG icon, sin emojis ni cursiva)","color:#74b9ff;font-weight:bold;font-size:13px");
-console.log("%c[Partee] Build v20.35 (Directorio alfabético en FriendsTab — headers sticky + jumper A-Z lateral)","color:#74b9ff;font-weight:bold;font-size:13px");
 
-// v20.42 — Debug overlay on-screen. Activación automática cuando hay tokens OAuth en URL,
-// manual cuando hay ?debug=1, o persistente con localStorage.partee_debug=1.
-// Sin dependencias externas, sin librerías. Solo necesita screenshot del iPhone.
-// El helper window.__al(msg, color) escribe a console.log + al overlay en pantalla.
-// Una vez resuelto el bug iOS Safari + 2FA, este bloque puede removerse en una versión futura.
-(function setupDebugOverlay(){
+// v20.46 — Captura temprana de tokens OAuth.
+// Bug resuelto: iOS Safari + Google OAuth 2FA recibe 403 al validar con GET /auth/v1/user.
+// Workaround: capturar tokens del hash SÍNCRONAMENTE en el head (antes que algo limpie el hash)
+// y luego usar refreshSession() que va por POST /auth/v1/token (endpoint NO bloqueado).
+// Sin UI visual — la verificación se hace contra logs si es necesario.
+(function captureOAuthTokens(){
   try{
     const url=window.location.href;
-    const hasOAuth=url.includes("#access_token=")||url.includes("?code=")||url.includes("&code=");
-    const hasParam=url.includes("?debug=1")||url.includes("&debug=1");
-    let hasFlag=false;
-    try{hasFlag=localStorage.getItem("partee_debug")==="1"}catch(e){}
-    if(!hasOAuth&&!hasParam&&!hasFlag){
-      window.__al=function(){};
-      return;
-    }
-    const buffer=[];
-    function flushTo(el){
-      buffer.forEach(b=>{
-        const line=document.createElement("div");
-        line.style.color=b.color||"#0f0";
-        line.style.wordBreak="break-all";
-        line.textContent="["+b.time+"] "+b.msg;
-        el.appendChild(line);
-      });
-    }
-    function append(msg,color){
-      const time=new Date().toISOString().split("T")[1].split(".")[0];
-      buffer.push({time:time,msg:String(msg),color:color});
-      const log=document.getElementById("__pdbg_log");
-      if(log){
-        const line=document.createElement("div");
-        line.style.color=color||"#0f0";
-        line.style.wordBreak="break-all";
-        line.textContent="["+time+"] "+msg;
-        log.appendChild(line);
-        log.scrollTop=log.scrollHeight;
+    if(url.includes("#access_token=")){
+      const p=new URLSearchParams(window.location.hash.substring(1));
+      const at=p.get("access_token");
+      const rt=p.get("refresh_token");
+      if(at&&rt){
+        window.__partee_oauth_tokens={
+          access_token:at,
+          refresh_token:rt,
+          expires_in:p.get("expires_in"),
+          provider_token:p.get("provider_token"),
+          token_type:p.get("token_type")
+        };
+        console.log("[Partee] OAuth tokens captured early (at.len="+at.length+")");
       }
     }
-    window.__al=append;
-    function mount(){
-      if(document.getElementById("__pdbg"))return;
-      const div=document.createElement("div");
-      div.id="__pdbg";
-      div.style.cssText="position:fixed;bottom:0;left:0;right:0;max-height:55vh;overflow:hidden;background:rgba(0,0,0,.95);color:#0f0;font-family:Menlo,Monaco,monospace;font-size:10px;z-index:99999;border-top:2px solid #0f0;line-height:1.35;display:flex;flex-direction:column";
-      const header=document.createElement("div");
-      header.style.cssText="padding:6px 8px;background:#000;border-bottom:1px solid #0f0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0";
-      const title=document.createElement("span");
-      title.style.cssText="color:#000;font-weight:bold;font-size:14px;background:#0f0;padding:4px 8px;border-radius:4px";
-      title.textContent="PARTEE DEBUG v20.45 — EARLY CAPTURE";
-      const closeBtn=document.createElement("button");
-      closeBtn.textContent="×";
-      closeBtn.style.cssText="background:none;border:1px solid #f00;color:#f00;width:24px;height:24px;font-size:14px;font-weight:bold;cursor:pointer;border-radius:4px";
-      closeBtn.onclick=()=>{div.remove();try{localStorage.removeItem("partee_debug")}catch(e){}};
-      header.appendChild(title);
-      header.appendChild(closeBtn);
-      const logDiv=document.createElement("div");
-      logDiv.id="__pdbg_log";
-      logDiv.style.cssText="padding:6px 8px;overflow-y:auto;flex:1";
-      div.appendChild(header);
-      div.appendChild(logDiv);
-      document.body.appendChild(div);
-      flushTo(logDiv);
-    }
-    if(document.body){mount()}else{document.addEventListener("DOMContentLoaded",mount)}
-    // Info inicial
-    append("URL: "+url.substring(0,200));
-    append("hash.length: "+window.location.hash.length+" search.length: "+window.location.search.length);
-    append("hasOAuth: "+hasOAuth);
-    // v20.45: Capturar tokens OAuth AHORA (síncrono, antes que nada los limpie)
-    if(hasOAuth&&window.location.hash.includes("access_token")){
-      try{
-        const p=new URLSearchParams(window.location.hash.substring(1));
-        const at=p.get("access_token");
-        const rt=p.get("refresh_token");
-        if(at&&rt){
-          window.__partee_oauth_tokens={access_token:at,refresh_token:rt,expires_in:p.get("expires_in"),provider_token:p.get("provider_token"),token_type:p.get("token_type")};
-          append("[auth] EARLY CAPTURE · tokens stored (at.len="+at.length+" rt.len="+rt.length+")","#0f0");
-        }else{
-          append("[auth] EARLY CAPTURE · hash present pero no at/rt","#f00");
-        }
-      }catch(e){append("[auth] EARLY CAPTURE error: "+e.message,"#f00")}
-    }
-    append("UA: "+navigator.userAgent.substring(0,100));
-    append("standalone (PWA): "+(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches));
-    try{
-      const lsKeys=Object.keys(localStorage).filter(k=>k.includes("supabase")||k.includes("sb-")||k.includes("partee"));
-      append("LS keys: "+JSON.stringify(lsKeys));
-      lsKeys.forEach(k=>{
-        try{
-          const v=localStorage.getItem(k);
-          if(v){
-            const preview=v.length>120?v.substring(0,120)+"...":v;
-            append("  "+k+": "+preview,"#aaa");
-          }
-        }catch(e){}
-      });
-    }catch(e){append("LS error: "+e.message,"#f00")}
-    try{
-      append("cookies.length: "+document.cookie.length);
-    }catch(e){append("cookie error: "+e.message,"#f00")}
-    // Captura errores globales
-    window.addEventListener("error",e=>{
-      append("JS ERROR: "+e.message+" @ "+(e.filename||"?")+":"+(e.lineno||"?"),"#f00");
-    });
-    window.addEventListener("unhandledrejection",e=>{
-      append("PROMISE REJECT: "+((e.reason&&e.reason.message)||String(e.reason)),"#f00");
-    });
-  }catch(err){
-    console.error("Debug overlay setup error:",err);
-    window.__al=function(){};
+  }catch(e){
+    console.error("[Partee] Early token capture error:",e);
   }
 })();
+
+// Stub para compatibilidad con código que aún llama __al (no-op silencioso)
+window.__al=function(){};
 </script>
 <script>
 
