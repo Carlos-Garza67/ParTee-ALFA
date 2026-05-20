@@ -8,9 +8,53 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.47 (Sentry · error monitoring + session replay con privacy LFPDPPP)","color:#7e57c2;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.46 (Producción — fix iOS Safari + 2FA con EARLY CAPTURE silenciosa)","color:#00b894;font-weight:bold;font-size:13px");
-console.log("%c[Partee] Build v20.45 (EARLY CAPTURE de tokens OAuth en head script — bypass timing)","color:#000;background:#0f0;font-weight:bold;font-size:14px;padding:4px 8px");
 
+// v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
+// configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
+// desde el primer instante (incluido el flow OAuth que diagnosticamos antes).
+window.sentryOnLoad=function(){
+  Sentry.init({
+    dsn:"https://8cb035c3b3ff4b9efbbe38231d338c67@o4511419272331264.ingest.us.sentry.io/4511419281375232",
+    environment:(location.hostname==="www.partee.com.mx"||location.hostname==="partee.com.mx")?"production":"preview",
+    release:"partee@v20.47",
+    // Sampling conservador para no quemar el free tier (5k errors/mes, 50 replays/mes)
+    tracesSampleRate:0,            // tracing off por ahora — lo activamos cuando midamos perf
+    replaysSessionSampleRate:0,    // sin replays de sesiones random
+    replaysOnErrorSampleRate:1.0,  // 100% replay cuando hay error real (el feature clave)
+    integrations:[
+      Sentry.replayIntegration({
+        maskAllText:false,         // contenido público golf-courses OK visible
+        maskAllInputs:true,        // inputs SIEMPRE enmascarados (LFPDPPP-compliant)
+        blockAllMedia:false,
+      }),
+    ],
+    // Filtros para no saturar la cuota con ruido conocido
+    beforeSend(event,hint){
+      try{
+        const msg=(event.exception&&event.exception.values&&event.exception.values[0]&&event.exception.values[0].value)||"";
+        // Ignorar errores conocidos de Safari/Chrome no-actionables
+        if(msg.includes("ResizeObserver loop"))return null;
+        if(msg.includes("Non-Error promise rejection captured"))return null;
+        if(msg.includes("Script error.")&&!event.exception.values[0].stacktrace)return null;
+        // Ignorar errores que vienen de extensiones de browser
+        const frames=event.exception&&event.exception.values&&event.exception.values[0]&&event.exception.values[0].stacktrace&&event.exception.values[0].stacktrace.frames;
+        if(frames&&frames.some(f=>f.filename&&(f.filename.includes("extension://")||f.filename.includes("moz-extension://")||f.filename.includes("safari-extension://"))))return null;
+        // Etiquetar errores del OAuth fix (caso conocido) para tracking dedicado
+        if(msg.includes("refreshSession")||msg.includes("/auth/v1/")){
+          event.tags=event.tags||{};
+          event.tags.context="auth_flow";
+        }
+      }catch(e){}
+      return event;
+    },
+  });
+  console.log("[Partee] Sentry init OK · env="+((location.hostname==="www.partee.com.mx"||location.hostname==="partee.com.mx")?"production":"preview"));
+};
+</script>
+<script src="https://js.sentry-cdn.com/8cb035c3b3ff4b9efbbe38231d338c67.min.js" crossorigin="anonymous"></script>
+<script>
 // v20.46 — Captura temprana de tokens OAuth.
 // Bug resuelto: iOS Safari + Google OAuth 2FA recibe 403 al validar con GET /auth/v1/user.
 // Workaround: capturar tokens del hash SÍNCRONAMENTE en el head (antes que algo limpie el hash)
@@ -1455,17 +1499,20 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
         if(error){
           console.error("[auth] refreshSession error:",error);
           window.__al&&window.__al("[auth] refreshSession ERROR: "+(error.message||error)+" status="+(error.status||"?"),"#f00");
+          try{window.Sentry&&Sentry.captureException(new Error("OAuth refreshSession failed: "+(error.message||"unknown")),{tags:{context:"oauth_ios_safari_fix",auth_status:error.status||"unknown"},extra:{error:error,hasEarlyTokens:!!earlyTokens,ua:navigator.userAgent}})}catch(e){}
           if(mounted){setLd(false)}
         }else if(data&&data.session){
           console.log("[auth] refreshSession OK, listener takes over");
           window.__al&&window.__al("[auth] refreshSession OK · uid="+(data.session.user&&data.session.user.id||"?").substring(0,8),"#0f0");
         }else{
           window.__al&&window.__al("[auth] refreshSession returned no session and no error","#f00");
+          try{window.Sentry&&Sentry.captureMessage("OAuth refreshSession returned null without error",{level:"warning",tags:{context:"oauth_ios_safari_fix"}})}catch(e){}
           if(mounted){setLd(false)}
         }
       }).catch(err=>{
         console.error("[auth] refreshSession exception:",err);
         window.__al&&window.__al("[auth] refreshSession EXCEPTION: "+(err.message||err),"#f00");
+        try{window.Sentry&&Sentry.captureException(err,{tags:{context:"oauth_ios_safari_fix",error_phase:"refreshSession_throw"},extra:{ua:navigator.userAgent}})}catch(e){}
         if(mounted){setLd(false)}
       });
     }
@@ -1520,10 +1567,22 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
         profileLoaded=true;
         console.log("[auth] handleSignedIn OK · user="+session.user.id);
         window.__al&&window.__al("[auth] handleSignedIn OK · user="+session.user.id+" role="+(fullProfile&&fullProfile.user_role||"?"),"#0f0");
+        // v20.47: tag al usuario en Sentry para correlacionar errores con cuentas específicas
+        try{
+          if(window.Sentry){
+            Sentry.setUser({
+              id:session.user.id,
+              email:session.user.email,
+              username:fullProfile&&(fullProfile.nickname||fullProfile.full_name)||undefined,
+            });
+            Sentry.setTag("user_role",fullProfile&&fullProfile.user_role||"unknown");
+          }
+        }catch(e){}
         if(fullProfile?.user_role==="player")initPush(fullProfile.id).catch(()=>{});
       }catch(err){
         console.error("[auth] handleSignedIn error:",err);
         window.__al&&window.__al("[auth] handleSignedIn ERROR: "+(err.message||err),"#f00");
+        try{window.Sentry&&Sentry.captureException(err,{tags:{context:"handle_signed_in"},extra:{user_id:session&&session.user&&session.user.id,event_phase:"post_ensure_user_profile"}})}catch(e){}
         if(mounted)setLd(false);
       }finally{
         oauthInFlight=false;
@@ -1536,7 +1595,7 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
       clearTimeout(authTimeout);
       if(event==="PASSWORD_RECOVERY"&&!recoveryRef.current){recoveryRef.current=true;setRecovery(true)}
       if(recoveryRef.current){setS(ss);if(ss)setLd(false);return}
-      if(event==="SIGNED_OUT"){if(mounted){setS(null);setP(null);setLd(false);profileLoaded=false}return}
+      if(event==="SIGNED_OUT"){if(mounted){setS(null);setP(null);setLd(false);profileLoaded=false;try{window.Sentry&&Sentry.setUser(null)}catch(e){}}return}
       if(event==="SIGNED_IN"&&ss){await handleSignedIn(ss);return}
       // v20.41: si llega INITIAL_SESSION con sesión válida y aún no hemos cargado profile,
       // procesar igual que SIGNED_IN. Esto cubre el caso iOS Safari + Google OAuth + 2FA
