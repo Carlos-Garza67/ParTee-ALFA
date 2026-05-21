@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v20.48 (GPS Fase 1 cliente · módulo de tracking foreground + pantalla Mi GPS con consentimiento y borrado LFPDPPP)","color:#00b894;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.48.1 (GPS Fase 1 cliente · fix: estado del toggle Mi GPS persiste al re-entrar — dep por user.id estable, sin parpadeo a off)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.47 (Sentry · error monitoring + session replay con privacy LFPDPPP)","color:#7e57c2;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.46 (Producción — fix iOS Safari + 2FA con EARLY CAPTURE silenciosa)","color:#00b894;font-weight:bold;font-size:13px");
 
@@ -5443,22 +5443,26 @@ function MyGPSSection(){
   const[deleting,setDeleting]=useState(false);
   const[todayBooking,setTodayBooking]=useState(null);
   const[gpsActive,setGpsActive]=useState(false);
+  const uid=s&&s.user&&s.user.id;
   useEffect(()=>{
-    if(!s){setConsent(false);return} // sin sesión: no colgar, mostrar off
-    let done=false;
-    sb.from("player_location_consent").select("granted_at,revoked_at").eq("user_id",s.user.id).maybeSingle().then(({data,error})=>{
-      done=true;
-      if(error){setConsent(false);return}
-      const active=data&&data.granted_at&&(!data.revoked_at||new Date(data.revoked_at)<new Date(data.granted_at));
-      setConsent(!!active);
-    }).catch(()=>{done=true;setConsent(false)});
-    // red de seguridad: si la consulta no resuelve (red inestable / contexto inseguro), no quedar en "Cargando" para siempre
-    const fb=setTimeout(()=>{if(!done)setConsent(c=>c===null?false:c)},6000);
+    if(!uid)return; // sesión aún no lista: esperar (el effect re-corre cuando llega). NO fijar off — evita el parpadeo a apagado al re-entrar.
+    let alive=true;
+    (async()=>{
+      try{
+        const{data,error}=await sb.from("player_location_consent").select("granted_at,revoked_at").eq("user_id",uid).maybeSingle();
+        if(!alive)return;
+        if(error){setConsent(false);return}
+        const active=!!(data&&data.granted_at&&(!data.revoked_at||new Date(data.revoked_at)<new Date(data.granted_at)));
+        setConsent(active);
+      }catch(e){if(alive)setConsent(false)}
+    })();
+    // red de seguridad: si la consulta no resuelve, no quedar en "Cargando" para siempre (cae a off usable)
+    const fb=setTimeout(()=>{if(alive)setConsent(c=>c===null?false:c)},6000);
     const today=new Date().toISOString().split("T")[0];
-    sb.from("bookings").select("id,course_id,course_name,booking_date").eq("user_id",s.user.id).eq("status","confirmed").eq("booking_date",today).limit(1).then(({data})=>{setTodayBooking((data&&data[0])||null)}).catch(()=>{});
-    if(window.__parteeGPS){window.__parteeGPS.onState(st=>setGpsActive(st.active));setGpsActive(window.__parteeGPS.status().active)}
-    return()=>clearTimeout(fb);
-  },[s]);
+    sb.from("bookings").select("id,course_id,course_name,booking_date").eq("user_id",uid).eq("status","confirmed").eq("booking_date",today).limit(1).then(({data})=>{if(alive)setTodayBooking((data&&data[0])||null)}).catch(()=>{});
+    if(window.__parteeGPS){window.__parteeGPS.onState(st=>{if(alive)setGpsActive(st.active)});setGpsActive(window.__parteeGPS.status().active)}
+    return()=>{alive=false;clearTimeout(fb)};
+  },[uid]);
   const toggle=async()=>{
     if(busy||consent===null)return;setBusy(true);
     const next=!consent;
