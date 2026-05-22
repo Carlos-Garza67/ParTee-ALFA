@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.52 (GPS Fase 1 it.2 · Mapa vivo robusto: mapa visible sin esperar posiciones, re-fetch al volver a la pestaña, timeout 10s, auto-encuadre a jugadores)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.51 (GPS Fase 1 it.2 · Mapa vivo del admin: nueva tab En Vivo con Leaflet + satélite Esri, polling 25s de get_live_course_positions)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.50 (GPS Fase 1 it.2 · check-in movido a la tarjeta de Reservas: 'Estoy en el campo' / 'Finalicé el campo', ventana hoy −30min a +6h, solo campos)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.49 (GPS Fase 1 it.2 · check-in manual: Iniciar/Finalizar ronda arranca el tracking apuntando a la reserva del día)","color:#00b894;font-weight:bold;font-size:13px");
@@ -10011,7 +10012,7 @@ function AdminCampo({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsum
 // ===== Mapa vivo del campo (admin) · GPS Fase 1 it.2 =====
 // Leaflet + tiles satelitales de Esri (sin API key). Polling de get_live_course_positions.
 function LiveMap({course}){
-  const mapRef=useRef(null), mapObj=useRef(null), markersRef=useRef({});
+  const mapRef=useRef(null), mapObj=useRef(null), markersRef=useRef({}), fittedRef=useRef(false);
   const[positions,setPositions]=useState([]);
   const[loading,setLoading]=useState(true);
   const[err,setErr]=useState(null);
@@ -10032,13 +10033,15 @@ function LiveMap({course}){
   });
   const fetchPositions=async()=>{
     try{
-      const{data,error}=await sb.rpc("get_live_course_positions",{p_course_id:course.id});
+      const call=sb.rpc("get_live_course_positions",{p_course_id:course.id});
+      const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),10000));
+      const{data,error}=await Promise.race([call,timeout]);
       if(error)throw error;
       setPositions(data||[]);setLastUpdate(new Date());setErr(null);
-    }catch(e){setErr((e&&e.message)||"error")}
+    }catch(e){/* silencioso: el siguiente ciclo o el botón refrescar reintentan; se conserva la última posición conocida */}
   };
   useEffect(()=>{
-    let alive=true,interval=null;
+    let alive=true,interval=null,visHandler=null;
     loadLeaflet().then(()=>{
       if(!alive||!mapRef.current||mapObj.current)return;
       const L=window.L;
@@ -10046,19 +10049,23 @@ function LiveMap({course}){
       const map=L.map(mapRef.current,{zoomControl:true,attributionControl:false}).setView([lat,lng],16);
       L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19}).addTo(map);
       mapObj.current=map;
+      setLoading(false);
       setTimeout(()=>{try{map.invalidateSize()}catch(e){}},250);
-      fetchPositions().finally(()=>{if(alive)setLoading(false)});
+      fetchPositions();
       interval=setInterval(fetchPositions,25000);
+      visHandler=()=>{if(document.visibilityState==="visible")fetchPositions()};
+      document.addEventListener("visibilitychange",visHandler);
     }).catch(()=>{if(alive){setErr(t("No se pudo cargar el mapa"));setLoading(false)}});
-    return()=>{alive=false;if(interval)clearInterval(interval);if(mapObj.current){try{mapObj.current.remove()}catch(e){}mapObj.current=null;markersRef.current={}}};
+    return()=>{alive=false;if(interval)clearInterval(interval);if(visHandler)document.removeEventListener("visibilitychange",visHandler);if(mapObj.current){try{mapObj.current.remove()}catch(e){}mapObj.current=null;markersRef.current={};fittedRef.current=false}};
   },[course.id]);
   useEffect(()=>{
     const map=mapObj.current, L=window.L;
     if(!map||!L)return;
-    const seen=new Set();
+    const seen=new Set(), latlngs=[];
     positions.forEach(p=>{
       if(p.lat==null||p.lng==null)return;
       seen.add(p.player_id);
+      latlngs.push([p.lat,p.lng]);
       const ageMin=Math.round((Date.now()-new Date(p.recorded_at).getTime())/60000);
       const fresh=ageMin<2;
       const color=fresh?"#00b894":"#9aa3ad";
@@ -10070,6 +10077,13 @@ function LiveMap({course}){
       }
     });
     Object.keys(markersRef.current).forEach(pid=>{if(!seen.has(pid)){map.removeLayer(markersRef.current[pid]);delete markersRef.current[pid]}});
+    if(latlngs.length>0&&!fittedRef.current){
+      try{
+        if(latlngs.length===1)map.setView(latlngs[0],17);
+        else map.fitBounds(latlngs,{padding:[50,50],maxZoom:17});
+        fittedRef.current=true;
+      }catch(e){}
+    }
   },[positions]);
   return <div>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,gap:10}}>
