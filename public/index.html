@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.56 (Causa raíz arranque · watchdog de auto-recuperación: si el restore se cuelga 6s, sondea la sesión con refreshSession → reload si es válida, limpia+reload si el token está podrido; flag anti-loop)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.55 (Arranque robusto · splash s&&!p con red de seguridad: si el perfil tarda >7s ofrece Reintentar / Reiniciar sesión, sin quedar colgado ni ir a la consola)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.54 (GPS Fase 1 · Editor de hoyos robusto: guardado con timeout 9s + reintento automático, carga con timeout, el botón nunca queda pegado en Guardando)","color:#00b894;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.53 (GPS Fase 1 · Editor de posiciones de hoyos: admin marca tee/green sobre satélite, RPCs get_holes_geo + set_hole_positions, desbloquea nearest_hole)","color:#00b894;font-weight:bold;font-size:13px");
@@ -1482,6 +1483,7 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
     let mounted=true;
     let oauthInFlight=false;
     let profileLoaded=false;
+    let bootWatchdog=null;
     const hasOAuthTokens=window.location.hash.includes("access_token")||window.location.search.includes("code=");
     let earlyFlag=window.__PARTEE_RECOVERY===true;
     try{if(sessionStorage.getItem("partee_recovery")==="1")earlyFlag=true}catch(e){}
@@ -1572,7 +1574,7 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
         setS(session);
         if(fullProfile)setP(fullProfile);
         setLd(false);
-        profileLoaded=true;
+        profileLoaded=true;try{sessionStorage.removeItem("pt_boot_recovered")}catch(e){}
         console.log("[auth] handleSignedIn OK · user="+session.user.id);
         window.__al&&window.__al("[auth] handleSignedIn OK · user="+session.user.id+" role="+(fullProfile&&fullProfile.user_role||"?"),"#0f0");
         // v20.47: tag al usuario en Sentry para correlacionar errores con cuentas específicas
@@ -1637,15 +1639,34 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
 
     // Restore de sesión existente en page-load (cuando NO viene de OAuth callback)
     if(!hasOAuthTokens&&!earlyFlag){
+      // v20.56: watchdog de auto-recuperación. Causa raíz: al alternar entre cuentas
+      // (admin/jugador) y/o redes, el refresh token rota y queda uno revocado en storage;
+      // con red intermitente el restore se cuelga dejando sesión sin perfil → splash infinito.
+      // Si a los 6s no cargó el perfil, sondeamos la sesión con refreshSession:
+      //   refresh OK  → solo reload (preserva sesión; era red lenta)
+      //   refresh falla/cuelga → token podrido → limpiar storage + reload (lo que el user hacía a mano)
+      // Flag en sessionStorage evita loops: si reincide, BootSplash ofrece los botones.
+      bootWatchdog=setTimeout(()=>{
+        if(!mounted||profileLoaded||recoveryRef.current)return;
+        let tried=false;try{tried=sessionStorage.getItem("pt_boot_recovered")==="1"}catch(e){}
+        if(tried)return;
+        try{sessionStorage.setItem("pt_boot_recovered","1")}catch(e){}
+        console.warn("[auth] boot watchdog · arranque colgado, sondeando sesión");
+        try{window.Sentry&&Sentry.captureMessage("Boot watchdog auto-recovery",{level:"warning",tags:{context:"boot_watchdog"}})}catch(e){}
+        const wipe=()=>{try{Object.keys(localStorage).forEach(k=>{if(k.startsWith("sb-")||k==="supabase.auth.token")localStorage.removeItem(k)})}catch(e){}try{location.replace(location.origin+"/")}catch(e){try{location.reload()}catch(e2){}}};
+        const justReload=()=>{try{location.reload()}catch(e){}};
+        Promise.race([sb.auth.refreshSession(),new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),3500))])
+          .then(r=>{(r&&r.error)?wipe():justReload()}).catch(()=>wipe());
+      },6000);
       sb.auth.getSession().then(async({data:{session}})=>{
         if(recoveryRef.current||!mounted)return;
         clearTimeout(authTimeout);
         if(session){await handleSignedIn(session)}
-        else{setLd(false)}
+        else{clearTimeout(bootWatchdog);setLd(false)}
       }).catch(()=>{clearTimeout(authTimeout);if(mounted)setLd(false)})
     }
 
-    return()=>{mounted=false;clearTimeout(authTimeout);clearTimeout(safetyNet);subscription.unsubscribe()}},[]);
+    return()=>{mounted=false;clearTimeout(authTimeout);clearTimeout(safetyNet);clearTimeout(bootWatchdog);subscription.unsubscribe()}},[]);
   async function lp(uid){try{
     // v18.3.13: BUG FIX CRÍTICO — antes lp() podía PISAR datos correctos del signUp upsert.
     // Si la primera SELECT retornaba null por timing, lp() hacía upsert con email prefix
@@ -1673,7 +1694,7 @@ function Auth({children}){const[s,setS]=useState(null);const[p,setP]=useState(nu
       await sb.from("user_profiles").upsert({id:uid,email:u?.user?.email||"",full_name:gName,avatar_url:gAvatar,user_role:"pending"},{onConflict:"id",ignoreDuplicates:true});
       ({data}=await sb.from("user_profiles").select("*").eq("id",uid).maybeSingle())
     }
-    if(data)setP(data);
+    if(data){setP(data);try{sessionStorage.removeItem("pt_boot_recovered")}catch(e){}}
     setLd(false);
     if(data?.user_role==="player")initPush(data.id).catch(()=>{})
   }catch(e){console.error("Profile load error:",e);setLd(false)}}
