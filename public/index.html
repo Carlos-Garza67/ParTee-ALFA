@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.67 (Fix course onboarding · doRegLoc reordenado: signUp PRIMERO, luego INSERT a golf_courses (antes iba al reves y fallaba por RLS porque auth.uid() era NULL al momento del insert). Linkeo de managed_course_id al perfil ahora va despues del insert. Sin esto, ningun nuevo course admin podia darse de alta. Detectado en QA por Carlos)","color:#e94560;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.66 (Pro Marketplace MVP · 'Instructores' en Perfil: self-serve + leads. Cualquiera crea su perfil de instructor (upsert_my_pro_profile) y aparece en el directorio (list_pros, filtro ciudad/búsqueda); jugadores ven el detalle (get_pro_profile) y envían solicitudes de clase (request_lesson) — el pro acepta/rechaza (respond_lesson_request) con notif. Sin pagos: lead-gen, pago directo con el pro (in-app cuando Stripe live). Backend: 2 tablas RLS + 7 RPCs DEFINER con grants. Cross-venue. Notifs best-effort)","color:#f0c040;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.65 (Referral · 'Invita y gana': cada jugador tiene un código compartible que ES una fila promo_codes (15% off para el referido); el referido lo teclea en el campo de promo existente — cero cambios de ese lado. Al convertir (uso en promo_code_uses) un trigger BLINDADO (EXCEPTION WHEN OTHERS, jamás rompe la redención/booking) premia al referrer con su propio código 15% off 90d + notif. Sección ReferralSection en Perfil con código, compartir y stats. Backend: 2 tablas RLS + 2 RPCs DEFINER + trigger. % tunable. Cross-venue)","color:#f0c040;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.64 (Stripe live · prep de código: key publishable de-hardcodeada → STRIPE_PK_TEST/STRIPE_PK_LIVE + STRIPE_MODE (flip de 2 líneas para go-live) + guard si live mal configurado; comportamiento IDÉNTICO en test. NO activa live: eso es secret del backend + webhooks + Connect onboarding, parte de Carlos)","color:#00b894;font-weight:bold;font-size:13px");
@@ -845,7 +846,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.66">
+<meta name="version" content="20.67">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1815,11 +1816,18 @@ function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[p
     setTimeout(()=>setBusy(false),6000);
   }
   async function doRegLoc(){setBusy(true);setMsg("");
+    // v20.67 QA fix: signUp PRIMERO para que auth.uid() este set al insertar golf_courses.
+    // Policy courses_insert exige created_by = auth.uid(); antes el insert iba primero
+    // y fallaba por RLS porque no habia sesion (auth.uid() = NULL).
+    const{error:eSU}=await signUp(e,pw,nm,"course_admin",null);
+    if(eSU){setMsg(eSU.message);setBusy(false);return}
     const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:e,course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().single();
     if(ne){setMsg(ne.message);setBusy(false);return}
-    const{error}=await signUp(e,pw,nm,"course_admin",nc.id);
-    if(!error){await sb.from("user_profiles").update({admin_facility_type:facType}).eq("email",e)}
-    if(error)setMsg(error.message);else{setMsg("OK:"+t("Confirma tu email"));fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_welcome",to:e,data:{name:nm,course_name:locName,facility_type:facType,city:locCity,state:locState}})}).catch(()=>{})}setBusy(false)}
+    await sb.from("user_profiles").update({managed_course_id:nc.id,admin_facility_type:facType}).eq("email",e);
+    setMsg("OK:"+t("Confirma tu email"));
+    fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_welcome",to:e,data:{name:nm,course_name:locName,facility_type:facType,city:locCity,state:locState}})}).catch(()=>{});
+    setBusy(false)
+  }
   const prevMode=()=>{if(mode==="locOnboarding")setMode("pickFacType");else if(mode==="pickFacType")setMode("role");else setMode("register");setMsg("")};
   const inp={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"14px 16px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12};
   const inpSm={...inp,fontSize:13,padding:"12px 14px",marginBottom:10};
