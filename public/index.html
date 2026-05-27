@@ -8,6 +8,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.70 (AdminCampo IA refactor · merge tabs Identidad+Operacion en un solo tab 'Informacion' (la separacion era arbitraria, todo es info del campo); rename 'Cuenta' a 'Ajustes' (convencion mas estandar). S helper acepta info como union de identidad+operacion para no romper render. Deep-links de CourseStatusBanner (REQ_NAV) migrados al nuevo key. Normalizacion de legacy initialSub values para backward compat. De 5 tabs a 4)","color:#0984e3;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.69 (Fix critico RLS UPDATE golf_courses · backend: policy golf_courses_update_authorized usaba course_administrators (tabla VACIA) + platform_admin como unicas vias, asi que ningun course_admin podia guardar cambios a su campo. Ahora autoriza correctamente por user_profiles.managed_course_id (el patron real de Partee). Sintoma engañoso: el await no fallaba, solo updateaba 0 rows silenciosamente. Frontend: rename tab 'Operación' a 'Información')","color:#e94560;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.68 (Fix UI staleness post-onboarding · doRegLoc ahora hace window.location.reload() despues de update de user_profiles, para que el parent re-fetche el profile y vea managed_course_id antes de renderizar AdminDashboard. Sin esto, el auto-login disparado por signUp leia el profile con managed_course_id=null y mostraba 'Sin locacion' aunque la BD estuviera correcta. Reload es heavy-handed pero infalible)","color:#e94560;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.67 (Fix course onboarding · doRegLoc reordenado: signUp PRIMERO, luego INSERT a golf_courses (antes iba al reves y fallaba por RLS porque auth.uid() era NULL al momento del insert). Linkeo de managed_course_id al perfil ahora va despues del insert. Sin esto, ningun nuevo course admin podia darse de alta. Detectado en QA por Carlos)","color:#e94560;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.66 (Pro Marketplace MVP · 'Instructores' en Perfil: self-serve + leads. Cualquiera crea su perfil de instructor (upsert_my_pro_profile) y aparece en el directorio (list_pros, filtro ciudad/búsqueda); jugadores ven el detalle (get_pro_profile) y envían solicitudes de clase (request_lesson) — el pro acepta/rechaza (respond_lesson_request) con notif. Sin pagos: lead-gen, pago directo con el pro (in-app cuando Stripe live). Backend: 2 tablas RLS + 7 RPCs DEFINER con grants. Cross-venue. Notifs best-effort)","color:#f0c040;font-weight:bold;font-size:13px");
@@ -847,7 +849,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.68">
+<meta name="version" content="20.70">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -6508,7 +6510,7 @@ function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=us
   // v20.2: Mapa actualizado tras agregar tab "Extras" (idx 4). Perfil ahora es tab 7.
   // Slots sigue siendo tab 2 (no se desplazó).
   // v20.30 Fase D.2.2: Tab Campo split en 5 sub-segments. Cada campo en REQ_NAV apunta al sub apropiado.
-  const REQ_NAV={photos:{tab:4,edit:false,field:"photos",sub:"identidad"},desc:{tab:4,edit:true,field:"desc",sub:"identidad"},fees:{tab:4,edit:true,field:"fees",sub:"operacion"},phone:{tab:4,edit:true,field:"phone",sub:"operacion"},hours:{tab:4,edit:true,field:"hours",sub:"operacion"},days:{tab:4,edit:true,field:"days",sub:"operacion"},addr:{tab:4,edit:true,field:"addr",sub:"operacion"},holes:{tab:4,edit:false,field:"holes",sub:"layouts"},slots:{tab:1,edit:false,field:null,sub:"slots"}};
+  const REQ_NAV={photos:{tab:4,edit:false,field:"photos",sub:"info"},desc:{tab:4,edit:true,field:"desc",sub:"info"},fees:{tab:4,edit:true,field:"fees",sub:"info"},phone:{tab:4,edit:true,field:"phone",sub:"info"},hours:{tab:4,edit:true,field:"hours",sub:"info"},days:{tab:4,edit:true,field:"days",sub:"info"},addr:{tab:4,edit:true,field:"addr",sub:"info"},holes:{tab:4,edit:false,field:"holes",sub:"layouts"},slots:{tab:1,edit:false,field:null,sub:"slots"}};
   const goToReq=(k)=>{const n=REQ_NAV[k];if(!n||!navTo)return;navTo(n.tab,{autoEdit:n.edit,focusField:n.field,sub:n.sub})};
   async function submitReview(){if(submitting)return;setSubmitting(true);
     // v20.27.3 #8 fix (QA pt.19): usa RPC server-side. Antes hacía UPDATE directo
@@ -8302,7 +8304,7 @@ function AdminNotifPrefsCard({course}){
   </div>;
 }
 
-function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed,section}){const S=(sec)=>!section||section==="all"||section===sec;const{s,out:ctxOut}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[desc,setDesc]=useState(course.description||"");const[phone,setPhone]=useState(course.phone_number||"");const[feeMin,setFeeMin]=useState(course.green_fee_min?.toString()||"");const[feeMax,setFeeMax]=useState(course.green_fee_max?.toString()||"");const[cancelHrs,setCancelHrs]=useState(course.cancellation_hours?.toString()||"24");const[cancelPct,setCancelPct]=useState(course.cancellation_refund_pct?.toString()||"100");const[opHours,setOpHours]=useState(course.operating_hours||"");const[opDays,setOpDays]=useState(course.operating_days||"");const[addr,setAddr]=useState(course.full_address||course.address||"");const[courseTz,setCourseTz]=useState(course.timezone||"America/Mexico_City");
+function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed,section}){const S=(sec)=>!section||section==="all"||section===sec||(section==="info"&&(sec==="identidad"||sec==="operacion"));const{s,out:ctxOut}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[desc,setDesc]=useState(course.description||"");const[phone,setPhone]=useState(course.phone_number||"");const[feeMin,setFeeMin]=useState(course.green_fee_min?.toString()||"");const[feeMax,setFeeMax]=useState(course.green_fee_max?.toString()||"");const[cancelHrs,setCancelHrs]=useState(course.cancellation_hours?.toString()||"24");const[cancelPct,setCancelPct]=useState(course.cancellation_refund_pct?.toString()||"100");const[opHours,setOpHours]=useState(course.operating_hours||"");const[opDays,setOpDays]=useState(course.operating_days||"");const[addr,setAddr]=useState(course.full_address||course.address||"");const[courseTz,setCourseTz]=useState(course.timezone||"America/Mexico_City");
   // v19.68: campo `website` retirado del UI por estrategia de moat (controlar flow de comunicaciones via Partee).
   // La columna golf_courses.website permanece en DB con datos legacy intactos — decisión de drop diferida.
   const[stCount,setStCount]=useState(course.stations_count?.toString()||"");const[cbCount,setCbCount]=useState(course.cabins_count?.toString()||"");const[simBrand,setSimBrand]=useState(course.simulator_brand||"");const[hasFood,setHasFood]=useState(course.has_food_service||false);const[hasShop,setHasShop]=useState(course.has_pro_shop||false);
@@ -10632,16 +10634,18 @@ function AdminInsights({course}){
 // v20.30 Fase D.2.2: 5 sub-segments (Identidad · Operación · Layouts · Finanzas · Cuenta).
 // AdminProfile recibe section prop y filtra bloques internamente con helper S(sec).
 function AdminCampo({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed,initialSub}){
-  const[sub,setSub]=useState(initialSub||"identidad");
-  useEffect(()=>{if(initialSub)setSub(initialSub)},[initialSub]);
+  // v20.70: merge identidad+operacion → "info"; "cuenta" label → "Ajustes".
+  // Normalizamos legacy initialSub values para que el deep-link de CourseStatusBanner siga funcionando.
+  const normSub=(s)=>(s==="identidad"||s==="operacion")?"info":s;
+  const[sub,setSub]=useState(normSub(initialSub||"info"));
+  useEffect(()=>{if(initialSub)setSub(normSub(initialSub))},[initialSub]);
   const ft=course.facility_type||"campo";
   const layoutsLabel=ft==="campo"?t("Layouts"):ft==="plataforma"?t("Bahías"):t("Cabinas");
   const items=[
-    {k:"identidad",l:t("Identidad")},
-    {k:"operacion",l:t("Operación")},
+    {k:"info",l:t("Información")},
     {k:"layouts",l:layoutsLabel},
     {k:"finanzas",l:t("Finanzas")},
-    {k:"cuenta",l:t("Cuenta")}
+    {k:"cuenta",l:t("Ajustes")}
   ];
   return<div className="fi">
     <AdminPageHeader title={"CAMPO · "+t("TU CONFIGURACIÓN")} question={t("Mis datos y mi cuenta")}/>
