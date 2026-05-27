@@ -8,6 +8,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.76 (Nueva sub-tab 'Historico' en Ventas para consulta contable de bookings. Diferencia con 'Cobros': Cobros = payouts (lo que Partee debe/pago al campo despues de comision); Historico = bookings crudo (cada transaccion confirmada o cancelada con su detalle). Stats 2x2 hero: ventas totales, ticket promedio, cancelaciones, total transacciones. Filtros por rango (30d/90d/1y/Todo) y por status. Export CSV con BOM UTF-8 para Excel. Detalle expandible: jugador/email, modo pago, promo aplicada, extras, descuentos, cancellation_fee, check-in time, % comision Partee, Stripe payment intent.)","color:#0984e3;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.75 (AdminCampo IA refactor 2 · de 4 a 3 tabs. La tab 'Finanzas' se elimina y su contenido se reparte: el SETUP de Stripe Connect (banners segun status + toggle SPEI vs Automatico) se mueve a 'Ajustes' como primer bloque visible (es configuracion); el HISTORIAL de cobros (hero stats RECIBIDO/POR LIQUIDAR + filtros + lista de payouts) se mueve a Ventas como nueva sub 'Cobros' al inicio (es transaccional, es lo primero que el admin quiere ver al abrir Ventas). AdminPayouts dividido en AdminPayoutsSetup + AdminPayoutsHistory. Deep-links legacy a finanzas redirigen a cuenta.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.74 (Edicion inline de precio en el modal del slot. Antes el modal solo permitia 'Bloquear' y 'Hot Deal' — no habia forma de cambiar el precio individual de un slot. Ahora boton 'Editar' junto al precio abre input numerico inline con Guardar/Cancelar. Actualiza price Y base_price (precio oficial del slot); para descuento temporal usa Hot Deal o Dynamic Pricing. Deshabilitado para slots ya ocupados.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.73 (generar slots arreglado · backend+frontend. ANTES: el frontend llamaba directamente a la edge function slot-manager (un CRON job que solo acepta SERVICE_ROLE_KEY/CRON_SECRET) sin Authorization header, recibia 401 silencioso, y mostraba 'Slots generados' como success aunque NO se insertaba nada (toda la vista calendar quedaba en 0). AHORA: nueva RPC generate_slots_for_my_course SECURITY DEFINER que valida via managed_course_id, parsea operating_hours del propio campo, usa green_fee_min como price y opera solo en el campo del admin. Frontend usa sb.rpc() con error inspection real y muestra # de slots insertados.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.72 (saveLayout y saveHole con try/catch/finally — antes ambos se tragaban silenciosamente errores de RLS/CHECK/network. Sintoma: boton de guardar quedaba spinning '...' indefinidamente porque setLySaving(false) nunca se ejecutaba. Ahora cualquier fallo muestra toast claro con el error real. Tambien chequeo del demoter de is_default antes del save principal.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -853,7 +855,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.74">
+<meta name="version" content="20.76">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -8471,6 +8473,10 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
         Eliminada duplicación visual que confundía al usuario. */}
 
     {S("cuenta")&&<>
+    {/* v20.75: setup de Stripe Connect (banner segun status + toggle metodo). Antes vivia
+        en tab Finanzas dentro de AdminCampo; movido aqui porque es CONFIGURACION (no
+        transaccional). El historial de cobros vive en Ventas → Cobros. */}
+    <AdminPayoutsSetup course={course} onRefresh={onRefresh}/>
     <ThemeToggle/><LangToggle/><button onClick={()=>{
       // v19.64: alineado con el patrón robusto del Player Profile (línea 4177).
       // Antes: onClick={onOut} sin confirm → si el click no llegaba al backend (botón tapado
@@ -10281,38 +10287,18 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
   </div>}
 
 // AdminPayouts (v19.0): panel de pagos para course_admin con filtro, banner Stripe Connect y toggle payout_method
-function AdminPayouts({course,onRefresh}){const[payouts,setPayouts]=useState([]);const[ld,setLd]=useState(true);const[filter,setFilter]=useState("all");const[exp,setExp]=useState(null);const[connectLd,setConnectLd]=useState(false);const[toggleLd,setToggleLd]=useState(false);
-  useEffect(()=>{load()},[course?.id]);
-  async function load(){setLd(true);const{data}=await sb.from("course_payouts").select("*,booking:bookings(booking_code,booking_date,booking_time,course_name)").eq("course_id",course.id).order("created_at",{ascending:false});setPayouts(data||[]);setLd(false)}
+// v20.75: AdminPayouts dividido en dos componentes con responsabilidades claras.
+// Setup (Stripe Connect onboarding + toggle metodo de pago) ahora vive en la tab Ajustes
+// (es configuracion). Historial (stats + filtros + lista de payouts) ahora vive en la
+// pestaña Ventas como sub "Cobros" (es transaccional). Esto elimina la tab Finanzas de
+// AdminCampo (queda con 3 tabs: Informacion, Layouts, Ajustes).
+function AdminPayoutsSetup({course,onRefresh}){
+  const[connectLd,setConnectLd]=useState(false);const[toggleLd,setToggleLd]=useState(false);
   const cs=course.stripe_connect_status||"not_started";const cVerified=cs==="verified"&&course.stripe_connect_payouts_enabled;const pm=course.payout_method||"manual_spei";
   async function openConnect(){setConnectLd(true);try{const{data,error}=await sb.functions.invoke("create-course-connect-account",{body:{course_id:course.id}});if(error)throw error;if(data?.already_verified){window.__toast?.("Tu cuenta ya está verificada","success");onRefresh?.();return}if(data?.url){window.location.href=data.url;return}window.__toast?.("No se obtuvo URL de Stripe","error")}catch(e){window.__toast?.("Error: "+(e.message||e),"error")}finally{setConnectLd(false)}}
   async function togglePayoutMethod(newMode){if(toggleLd||newMode===pm)return;if(!cVerified&&newMode==="auto_via_connect"){window.__toast?.("Primero verifica tu cuenta Stripe Connect","warn");return}setToggleLd(true);const{error}=await sb.from("golf_courses").update({payout_method:newMode}).eq("id",course.id);setToggleLd(false);if(error){window.__toast?.("Error: "+error.message,"error");return}window.__toast?.("Método actualizado","success");onRefresh?.()}
-  // Stats del mes
-  const monthStart=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString();
-  const settledThisMonth=payouts.filter(p=>(p.status==="settled_auto"||p.status==="settled_manual")&&p.created_at>=monthStart);
-  const monthTotal=settledThisMonth.reduce((s,p)=>s+Number(p.amount_to_course||0),0);
-  const PEND=["awaiting_claim_window","pending_settlement","awaiting_course_connect","transferring"];
-  const pending=payouts.filter(p=>PEND.includes(p.status));const pendingTotal=pending.reduce((s,p)=>s+Number(p.amount_to_course||0),0);
-  // Filtros
-  const FILT={all:()=>true,pending:p=>PEND.includes(p.status),settled:p=>p.status==="settled_auto"||p.status==="settled_manual",other:p=>p.status==="refunded"||p.status==="failed"};
-  const filtered=payouts.filter(FILT[filter]||FILT.all);
-  // Status visual
-  const ST={awaiting_claim_window:{l:"Ventana 48h",c:C.gld,desc:"Esperando ventana de cancelación"},pending_settlement:{l:"Pendiente",c:C.gld,desc:"Listo para liquidar"},awaiting_course_connect:{l:"Connect pendiente",c:C.acc,desc:"Configura Stripe Connect para liquidar"},transferring:{l:"Transfiriendo",c:C.gld,desc:"En proceso"},settled_auto:{l:"Pagado",c:C.grn,desc:"Liquidado vía Stripe"},settled_manual:{l:"Pagado SPEI",c:C.grn,desc:"Liquidado vía SPEI manual"},refunded:{l:"Reembolsado",c:C.tm,desc:"Booking cancelado"},failed:{l:"Falló",c:C.acc,desc:"Error - revisar"}};
-  return<div className="fi">
-    {/* Hero stats */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
-        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>RECIBIDO ESTE MES</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.grn,marginTop:6}}>${fm(monthTotal)}</div>
-        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{settledThisMonth.length} {settledThisMonth.length===1?"pago":"pagos"}</div>
-      </div>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
-        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>POR LIQUIDAR</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.gld,marginTop:6}}>${fm(pendingTotal)}</div>
-        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{pending.length} {pending.length===1?"pago":"pagos"}</div>
-      </div>
-    </div>
-    {/* Banner Stripe Connect */}
+  return<div className="fi" style={{marginBottom:16}}>
+    {/* Banners Stripe Connect */}
     {cs==="not_started"&&<div style={{padding:14,borderRadius:14,background:C.acc+"08",border:"1px solid "+C.acc+"30",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
         <div style={{width:36,height:36,borderRadius:12,background:C.acc+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("dollar",18,C.acc)}}/>
@@ -10357,6 +10343,35 @@ function AdminPayouts({course,onRefresh}){const[payouts,setPayouts]=useState([])
         <button onClick={()=>togglePayoutMethod("auto_via_connect")} disabled={toggleLd} style={{flex:1,padding:10,borderRadius:10,border:"2px solid "+(pm==="auto_via_connect"?C.grn:C.bd),background:pm==="auto_via_connect"?C.grn+"15":"transparent",color:pm==="auto_via_connect"?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:toggleLd?"wait":"pointer"}}>Automático</button>
       </div>
     </div>}
+  </div>
+}
+
+function AdminPayoutsHistory({course}){const[payouts,setPayouts]=useState([]);const[ld,setLd]=useState(true);const[filter,setFilter]=useState("all");const[exp,setExp]=useState(null);
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);const{data}=await sb.from("course_payouts").select("*,booking:bookings(booking_code,booking_date,booking_time,course_name)").eq("course_id",course.id).order("created_at",{ascending:false});setPayouts(data||[]);setLd(false)}
+  // Stats del mes
+  const monthStart=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString();
+  const settledThisMonth=payouts.filter(p=>(p.status==="settled_auto"||p.status==="settled_manual")&&p.created_at>=monthStart);
+  const monthTotal=settledThisMonth.reduce((s,p)=>s+Number(p.amount_to_course||0),0);
+  const PEND=["awaiting_claim_window","pending_settlement","awaiting_course_connect","transferring"];
+  const pending=payouts.filter(p=>PEND.includes(p.status));const pendingTotal=pending.reduce((s,p)=>s+Number(p.amount_to_course||0),0);
+  const FILT={all:()=>true,pending:p=>PEND.includes(p.status),settled:p=>p.status==="settled_auto"||p.status==="settled_manual",other:p=>p.status==="refunded"||p.status==="failed"};
+  const filtered=payouts.filter(FILT[filter]||FILT.all);
+  const ST={awaiting_claim_window:{l:"Ventana 48h",c:C.gld,desc:"Esperando ventana de cancelación"},pending_settlement:{l:"Pendiente",c:C.gld,desc:"Listo para liquidar"},awaiting_course_connect:{l:"Connect pendiente",c:C.acc,desc:"Configura Stripe Connect en Ajustes para liquidar"},transferring:{l:"Transfiriendo",c:C.gld,desc:"En proceso"},settled_auto:{l:"Pagado",c:C.grn,desc:"Liquidado vía Stripe"},settled_manual:{l:"Pagado SPEI",c:C.grn,desc:"Liquidado vía SPEI manual"},refunded:{l:"Reembolsado",c:C.tm,desc:"Booking cancelado"},failed:{l:"Falló",c:C.acc,desc:"Error - revisar"}};
+  return<div className="fi">
+    {/* Hero stats */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>RECIBIDO ESTE MES</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.grn,marginTop:6}}>${fm(monthTotal)}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{settledThisMonth.length} {settledThisMonth.length===1?"pago":"pagos"}</div>
+      </div>
+      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>POR LIQUIDAR</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.gld,marginTop:6}}>${fm(pendingTotal)}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{pending.length} {pending.length===1?"pago":"pagos"}</div>
+      </div>
+    </div>
     {/* Filtros */}
     <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto"}}>
       {[{k:"all",l:"Todos"},{k:"pending",l:"Pendientes"},{k:"settled",l:"Pagados"},{k:"other",l:"Otros"}].map(f=>
@@ -10663,9 +10678,138 @@ function AdminTeeTime({course,initialSub}){
 }
 
 // Tab 2 · VENTAS — Genera más ingreso (verbo: LANZAR)
+// v20.76: Historico de Ventas (consulta contable de bookings). Distinto de "Cobros":
+// Cobros = course_payouts (lo que Partee debe/pago al campo despues de comision).
+// Historico = bookings crudo (cada transaccion, confirmada o cancelada, con su detalle).
+// Util para auditoria, conciliacion, y entender que se vendio vs que se cancelo.
+function AdminSalesHistory({course}){
+  const[bookings,setBookings]=useState([]);const[ld,setLd]=useState(true);
+  const[range,setRange]=useState("30d");const[stFilter,setStFilter]=useState("all");const[exp,setExp]=useState(null);
+  useEffect(()=>{load()},[course?.id,range]);
+  async function load(){setLd(true);
+    let q=sb.from("bookings").select("*,user:user_profiles!user_id(full_name,email)").eq("course_id",course.id).order("created_at",{ascending:false}).limit(300);
+    if(range!=="all"){const days=range==="30d"?30:range==="90d"?90:365;const since=new Date(Date.now()-days*86400000).toISOString();q=q.gte("created_at",since)}
+    const{data,error}=await q;
+    if(error){window.__toast?.("Error al cargar historico: "+error.message,"error");setLd(false);return}
+    setBookings(data||[]);setLd(false);
+  }
+  // Filtros cliente
+  const FILT={all:()=>true,confirmed:b=>b.status==="confirmed",cancelled:b=>b.status==="cancelled",completed:b=>b.status==="completed"};
+  const filtered=bookings.filter(FILT[stFilter]||FILT.all);
+  // Stats hero (sobre todo el rango cargado, no el filtro)
+  const conf=bookings.filter(b=>b.status==="confirmed"||b.status==="completed");
+  const canc=bookings.filter(b=>b.status==="cancelled");
+  const totalSales=conf.reduce((s,b)=>s+Number(b.total_cost||0),0);
+  const totalCancFee=canc.reduce((s,b)=>s+Number(b.cancellation_fee||0),0);
+  const avgTicket=conf.length>0?totalSales/conf.length:0;
+  const ST={confirmed:{l:"Confirmada",c:C.grn},cancelled:{l:"Cancelada",c:C.acc},completed:{l:"Completada",c:C.grn},pending:{l:"Pendiente",c:C.gld}};
+  const rangeLabel={"30d":"últimos 30 días","90d":"últimos 90 días","12m":"último año",all:"todo el historial"}[range];
+  function exportCSV(){
+    if(filtered.length===0){window.__toast?.("Nada que exportar","warn");return}
+    const headers=["Fecha","Codigo","Jugador","Email","Fecha tee","Hora","Jugadores","Total MXN","Status","Modo pago","Promo","Extras MXN","Comision MXN","Stripe PI"];
+    const rows=filtered.map(b=>[
+      new Date(b.created_at).toISOString().slice(0,19).replace("T"," "),
+      b.booking_code||"",
+      (b.user?.full_name||"").replace(/,/g," "),
+      b.user?.email||"",
+      b.booking_date||"",
+      (b.booking_time||"").slice(0,5),
+      b.party_size||1,
+      Number(b.total_cost||0).toFixed(2),
+      b.status||"",
+      b.payment_mode||"",
+      b.promo_code||"",
+      Number(b.extras_total||0).toFixed(2),
+      Number(b.cancellation_fee||0).toFixed(2),
+      b.stripe_payment_intent||""
+    ]);
+    const csv=[headers,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`partee-historico-${course.course_name.replace(/\s+/g,"_")}-${range}.csv`;a.click();URL.revokeObjectURL(a.href);
+    window.__toast?.(filtered.length+" filas exportadas","success");
+  }
+  return<div className="fi">
+    {/* Hero stats 2x2 */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>VENTAS TOTALES</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.grn,marginTop:6}}>${fm(totalSales)}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{conf.length} {conf.length===1?"reserva":"reservas"}</div>
+      </div>
+      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>TICKET PROMEDIO</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.txt,marginTop:6}}>${fm(Math.round(avgTicket))}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>por reserva confirmada</div>
+      </div>
+      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>CANCELACIONES</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.acc,marginTop:6}}>{canc.length}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>${fm(totalCancFee)} retenido por fee</div>
+      </div>
+      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>TOTAL TRANSACC.</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.txt,marginTop:6}}>{bookings.length}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{rangeLabel}</div>
+      </div>
+    </div>
+    {/* Rango */}
+    <div style={{display:"flex",gap:6,marginBottom:8,overflowX:"auto"}}>
+      {[{k:"30d",l:"30 días"},{k:"90d",l:"90 días"},{k:"12m",l:"1 año"},{k:"all",l:"Todo"}].map(r=>
+        <button key={r.k} onClick={()=>setRange(r.k)} style={{padding:"7px 12px",borderRadius:10,border:"1px solid "+(range===r.k?C.grn:C.bd),background:range===r.k?C.grn+"15":"transparent",color:range===r.k?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{r.l}</button>
+      )}
+      <button onClick={exportCSV} disabled={filtered.length===0} style={{marginLeft:"auto",padding:"7px 12px",borderRadius:10,border:"1px solid "+C.bd,background:"transparent",color:filtered.length===0?C.tm:C.ts,fontSize:11,fontWeight:700,cursor:filtered.length===0?"not-allowed":"pointer",whiteSpace:"nowrap",opacity:filtered.length===0?.5:1}}>↓ CSV</button>
+    </div>
+    {/* Filtros status */}
+    <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto"}}>
+      {[{k:"all",l:"Todas"},{k:"confirmed",l:"Confirmadas"},{k:"completed",l:"Completadas"},{k:"cancelled",l:"Canceladas"}].map(f=>
+        <button key={f.k} onClick={()=>setStFilter(f.k)} style={{padding:"7px 12px",borderRadius:10,border:"1px solid "+(stFilter===f.k?C.grn:C.bd),background:stFilter===f.k?C.grn+"15":"transparent",color:stFilter===f.k?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{f.l}</button>
+      )}
+    </div>
+    {/* Lista */}
+    {ld?<Skeleton w="100%" h={70}/>:filtered.length===0?
+      <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>Sin transacciones en este rango/filtro</div>
+      :filtered.map(b=>{const st=ST[b.status]||{l:b.status||"?",c:C.tm};const isExp=exp===b.id;return(
+        <div key={b.id} onClick={()=>setExp(isExp?null:b.id)} style={{padding:12,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,marginBottom:8,cursor:"pointer"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:14,fontWeight:800,color:C.txt}}>${fm(b.total_cost)}</span>
+                <span style={{padding:"2px 8px",borderRadius:6,background:st.c+"15",color:st.c,fontSize:9,fontWeight:700,letterSpacing:".05em"}}>{st.l.toUpperCase()}</span>
+                {b.is_offer&&<span style={{padding:"2px 6px",borderRadius:5,background:C.acc+"15",color:C.acc,fontSize:9,fontWeight:700}}>HOT DEAL</span>}
+                {b.membership_id&&<span style={{padding:"2px 6px",borderRadius:5,background:C.gld+"15",color:C.gld,fontSize:9,fontWeight:700}}>MEMBRESÍA</span>}
+                {b.promo_code&&<span style={{padding:"2px 6px",borderRadius:5,background:"#6c5ce715",color:"#6c5ce7",fontSize:9,fontWeight:700}}>PROMO {b.promo_code}</span>}
+              </div>
+              <div style={{fontSize:11,color:C.ts,marginTop:3}}>
+                {b.booking_code||"—"} · {b.user?.full_name||"Jugador"} · {b.party_size} {b.party_size===1?"jug":"jugs"} · {b.booking_date?new Date(b.booking_date+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"}):""} {(b.booking_time||"").slice(0,5)}
+              </div>
+            </div>
+            <div style={{transform:isExp?"rotate(180deg)":"rotate(0deg)",transition:"transform .2s",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/>
+          </div>
+          {isExp&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
+              <div><span style={{color:C.tm}}>Email: </span><span style={{color:C.txt,fontWeight:600}}>{b.user?.email||"—"}</span></div>
+              <div><span style={{color:C.tm}}>Modo pago: </span><span style={{color:C.txt,fontWeight:600}}>{b.payment_mode||"—"}</span></div>
+              <div><span style={{color:C.tm}}>Reservado: </span><span style={{color:C.txt,fontWeight:600}}>{new Date(b.created_at).toLocaleDateString("es-MX",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span></div>
+              {b.extras_total>0&&<div><span style={{color:C.tm}}>Extras: </span><span style={{color:C.txt,fontWeight:600}}>${fm(b.extras_total)}</span></div>}
+              {b.discount_amount>0&&<div><span style={{color:C.tm}}>Descuento: </span><span style={{color:C.txt,fontWeight:600}}>-${fm(b.discount_amount)}</span></div>}
+              {b.membership_discount_amount>0&&<div><span style={{color:C.tm}}>Desc. membresía: </span><span style={{color:C.txt,fontWeight:600}}>-${fm(b.membership_discount_amount)}</span></div>}
+              {b.cancelled_at&&<div><span style={{color:C.tm}}>Cancelado: </span><span style={{color:C.txt,fontWeight:600}}>{new Date(b.cancelled_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
+              {b.cancellation_fee>0&&<div><span style={{color:C.tm}}>No-show fee: </span><span style={{color:C.acc,fontWeight:600}}>${fm(b.cancellation_fee)}</span></div>}
+              {b.checked_in_at&&<div><span style={{color:C.tm}}>Check-in: </span><span style={{color:C.grn,fontWeight:600}}>{new Date(b.checked_in_at).toLocaleDateString("es-MX",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span></div>}
+              {b.platform_fee_pct!=null&&<div><span style={{color:C.tm}}>Comisión: </span><span style={{color:C.txt,fontWeight:600}}>{b.platform_fee_pct}%</span></div>}
+              {b.stripe_payment_intent&&<div style={{gridColumn:"span 2",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><span style={{color:C.tm}}>Stripe PI: </span><span style={{color:C.txt,fontWeight:600,fontFamily:"monospace",fontSize:10}}>{b.stripe_payment_intent}</span></div>}
+            </div>
+          </div>}
+        </div>
+      )})}
+  </div>
+}
+
 function AdminVentas({course}){
-  const[sub,setSub]=useState("promos");
+  const[sub,setSub]=useState("cobros");
   const items=[
+    {k:"cobros",l:t("Cobros")},
+    {k:"historico",l:t("Histórico")},
     {k:"promos",l:t("Promos")},
     {k:"pricing",l:t("Pricing")},
     {k:"memberships",l:t("Membresías")},
@@ -10677,6 +10821,8 @@ function AdminVentas({course}){
     <AdminPageHeader title={"VENTAS · "+t("GENERA MÁS INGRESO")} question={t("¿Cómo gano más esta semana?")}/>
     <AdminSubNav items={items} active={sub} onChange={setSub}/>
     <div key={sub} className="fi">
+    {sub==="cobros"&&<AdminPayoutsHistory course={course}/>}
+    {sub==="historico"&&<AdminSalesHistory course={course}/>}
     {sub==="promos"&&<AdminPromos course={course}/>}
     {sub==="pricing"&&<AdminPricingRules course={course}/>}
     {sub==="memberships"&&<AdminMembershipTiers course={course}/>}
@@ -10737,8 +10883,10 @@ function AdminInsights({course}){
 // AdminProfile recibe section prop y filtra bloques internamente con helper S(sec).
 function AdminCampo({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed,initialSub}){
   // v20.70: merge identidad+operacion → "info"; "cuenta" label → "Ajustes".
-  // Normalizamos legacy initialSub values para que el deep-link de CourseStatusBanner siga funcionando.
-  const normSub=(s)=>(s==="identidad"||s==="operacion")?"info":s;
+  // v20.75: tab "finanzas" removida. El setup de Stripe Connect ahora vive en "cuenta"
+  // (Ajustes); el historial de cobros vive en AdminVentas. Deep-links legacy a "finanzas"
+  // redirigen a "cuenta" (donde esta lo mas probable que el usuario buscaba: el setup).
+  const normSub=(s)=>(s==="identidad"||s==="operacion")?"info":s==="finanzas"?"cuenta":s;
   const[sub,setSub]=useState(normSub(initialSub||"info"));
   useEffect(()=>{if(initialSub)setSub(normSub(initialSub))},[initialSub]);
   const ft=course.facility_type||"campo";
@@ -10746,14 +10894,13 @@ function AdminCampo({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsum
   const items=[
     {k:"info",l:t("Información")},
     {k:"layouts",l:layoutsLabel},
-    {k:"finanzas",l:t("Finanzas")},
     {k:"cuenta",l:t("Ajustes")}
   ];
   return<div className="fi">
     <AdminPageHeader title={"CAMPO · "+t("TU CONFIGURACIÓN")} question={t("Mis datos y mi cuenta")}/>
     <AdminSubNav items={items} active={sub} onChange={setSub}/>
     <div key={sub} className="fi">
-    {sub==="finanzas"?<AdminPayouts course={course} onRefresh={onRefresh}/>:<AdminProfile course={course} section={sub} onOut={onOut} onRefresh={onRefresh} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={onAutoEditConsumed}/>}
+    <AdminProfile course={course} section={sub} onOut={onOut} onRefresh={onRefresh} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={onAutoEditConsumed}/>
     </div>
   </div>
 }
