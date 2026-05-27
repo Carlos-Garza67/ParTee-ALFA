@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.79 (Subscription tier introducido: golf_courses ahora tiene subscription_plan (free/pro/pro_plus/enterprise) + status + started_at + renews_at. Default free para todos. Notificaciones avanzadas (Pulse/Insight/Churn/Campanas) gated por Pro: si free, muestra preview con candado + CTA upgrade; si Pro, muestra toggles con chip PROXIMAMENTE en cada item porque backend de crons aun no genera. Nuevo AdminSubscriptionCard arriba de Ajustes con CTA upgrade que abre ProUpgradeModal (Stripe Subscriptions todavia no integrado, en v1 dirige al equipo: hola@partee.com.mx). Nuevo AdminRegularNotifsInfo read-only que clarifica que notifs de reservas/cancelaciones/check-in son siempre activas. AutomationHealthCard solo visible si Pro. Ajustes: PAGOS · MI CUENTA · SUSCRIPCION · NOTIFICACIONES · APARIENCIA · SESION · ZONA PELIGROSA.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.78 (Ajustes del course_admin reorganizada con 7 secciones tipo sub-header: PAGOS · MI CUENTA · NOTIFICACIONES · AUTOMATIZACIONES · APARIENCIA · SESION · ZONA PELIGROSA. Antes era un mar de bloques heterogeneos sin jerarquia visual. Nuevo bloque AdminAccountCard: edita nombre + telefono del admin con avatar de inicial. Email read-only (cambiar email requiere flujo de magic link aparte, follow-up). Cambiar contrasena reusa el componente ChangePassword que ya existia para player. Cerrar sesion y Eliminar cuenta movidos al final con separacion visual clara.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.77 (HoleGeoEditor diagnostico visible · si get_holes_geo falla o retorna vacio, el usuario ve el mensaje exacto del error en el UI (no solo toast efimero) + boton Reintentar + console.log con course.id, length, sample row. Detecta tambien course.id ausente. Esto reemplaza el toast efimero que desaparecia antes de que el admin pudiera leer el motivo del fallo. Backend ya verificado OK: RPC get_holes_geo retorna los 9 hoyos de Club Santa Lejos cuando se simula a Alex; el bug probablemente era cache de Vercel sirviendo build previo.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.76 (Nueva sub-tab 'Historico' en Ventas para consulta contable de bookings. Diferencia con 'Cobros': Cobros = payouts (lo que Partee debe/pago al campo despues de comision); Historico = bookings crudo (cada transaccion confirmada o cancelada con su detalle). Stats 2x2 hero: ventas totales, ticket promedio, cancelaciones, total transacciones. Filtros por rango (30d/90d/1y/Todo) y por status. Export CSV con BOM UTF-8 para Excel. Detalle expandible: jugador/email, modo pago, promo aplicada, extras, descuentos, cancellation_fee, check-in time, % comision Partee, Stripe payment intent.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -857,7 +858,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.78">
+<meta name="version" content="20.79">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -8237,6 +8238,14 @@ function AutomationHealthCard({course}){
 // v20.12: AdminNotifPrefsCard — toggles para que el course-admin elija qué automations recibir.
 // Se monta al final del AdminProfile. Visualmente: card con 4 toggles + descripción + save button.
 function AdminNotifPrefsCard({course}){
+  // v20.79: Gate de Partee Pro. Si !isPro, muestra locked preview sin toggles. Si isPro,
+  // muestra toggles funcionales pero con chip "Próximamente" en cada item porque el
+  // backend (crons + edge functions) todavia no genera el contenido — los toggles persisten
+  // la preferencia pero hasta que enciendan los crons, no llegan los resumenes.
+  const plan=course.subscription_plan||"free";
+  const status=course.subscription_status||"active";
+  const isPro=["pro","pro_plus","enterprise"].includes(plan)&&status==="active";
+
   const[ld,setLd]=useState(true);
   const[exists,setExists]=useState(false);
   const[dailyPulse,setDailyPulse]=useState(true);
@@ -8245,8 +8254,9 @@ function AdminNotifPrefsCard({course}){
   const[campaignSummary,setCampaignSummary]=useState(true);
   const[busy,setBusy]=useState(false);
   const[dirty,setDirty]=useState(false);
+  const[showUpgrade,setShowUpgrade]=useState(false);
 
-  useEffect(()=>{load()},[course?.id]);
+  useEffect(()=>{if(isPro)load()},[course?.id,isPro]);
   async function load(){setLd(true);
     const{data,error}=await sb.rpc("get_admin_notification_prefs",{p_course_id:course.id});
     if(error){console.warn("[v20.12] notif prefs err:",error);setLd(false);return}
@@ -8281,15 +8291,44 @@ function AdminNotifPrefsCard({course}){
     {k:"cs",val:campaignSummary,set:setCampaignSummary,icon:"📨",label:"Resumen de campañas",desc:"Stats post-envío: opens, clicks, bounces"}
   ];
 
-  return<div style={{marginTop:18,padding:16,background:C.cd,border:"1px solid "+C.bd,borderRadius:14}}>
-    <div style={{..._s.flexB,marginBottom:14}}>
-      <div>
-        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:14}}>🔔</span>Notificaciones de automatizaciones
+  // === MODO LOCKED (no Pro): preview con candado + CTA upgrade ===
+  if(!isPro)return<>
+    <div style={{padding:16,background:`linear-gradient(135deg,${C.gld}08,${C.acc}05)`,border:`1px dashed ${C.gld}50`,borderRadius:14,marginBottom:10,position:"relative"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <div style={{fontSize:24}}>🔒</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Notificaciones avanzadas</div>
+            <span style={{padding:"2px 7px",borderRadius:5,background:C.gld+"15",color:C.gld,fontSize:9,fontWeight:800,letterSpacing:".05em"}}>REQUIERE PRO</span>
+          </div>
+          <div style={{fontSize:11,color:C.ts,marginTop:2}}>Inteligencia operacional automatizada</div>
+        </div>
+      </div>
+      <div style={{padding:12,background:C.bg+"60",borderRadius:10,marginBottom:12}}>
+        {toggles.map((t,i)=><div key={t.k} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"7px 0",borderBottom:i<toggles.length-1?"1px solid "+C.bd+"40":"none"}}>
+          <span style={{fontSize:14,opacity:.5,marginTop:1,flexShrink:0}}>{t.icon}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.tm,marginBottom:1}}>{t.label}</div>
+            <div style={{fontSize:10,color:C.tm+"99",lineHeight:1.3}}>{t.desc}</div>
+          </div>
+        </div>)}
+      </div>
+      <button onClick={()=>setShowUpgrade(true)} style={{width:"100%",padding:11,borderRadius:10,background:`linear-gradient(135deg,${C.gld},#e67e22)`,border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>🚀 Activar Partee Pro</button>
+    </div>
+    {showUpgrade&&<ProUpgradeModal currentPlan={plan} isPro={false} onClose={()=>setShowUpgrade(false)}/>}
+  </>;
+
+  // === MODO PRO: toggles funcionales + chip "Proximamente" en cada item (backend pending) ===
+  return<div style={{padding:16,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginBottom:10}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:8}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          <span style={{fontSize:14}}>🔔</span>Notificaciones avanzadas
+          <span style={{padding:"2px 7px",borderRadius:5,background:C.gld+"15",color:C.gld,fontSize:9,fontWeight:800,letterSpacing:".05em"}}>PRO</span>
         </div>
         <div style={{fontSize:10,color:C.tm,marginTop:1}}>Elige qué resúmenes de Partee OS quieres recibir</div>
       </div>
-      {!exists&&!ld&&<span style={{fontSize:9,color:C.gld,fontWeight:700,padding:"2px 7px",background:C.gld+"15",borderRadius:4,letterSpacing:.3}}>DEFAULT</span>}
+      {!exists&&!ld&&<span style={{fontSize:9,color:C.gld,fontWeight:700,padding:"2px 7px",background:C.gld+"15",borderRadius:4,letterSpacing:.3,flexShrink:0}}>DEFAULT</span>}
     </div>
 
     {ld?<Skeleton w="100%" h={180}/>:<>
@@ -8297,16 +8336,20 @@ function AdminNotifPrefsCard({course}){
         {toggles.map(t=><div key={t.k} onClick={tog(t.set,t.val)} style={{display:"flex",alignItems:"flex-start",gap:11,padding:"11px 12px",background:t.val?C.bg:C.cd,border:"1px solid "+(t.val?C.acc+"40":C.bd),borderRadius:10,cursor:"pointer",transition:"all .15s"}}>
           <span style={{fontSize:18,lineHeight:1,marginTop:1,flexShrink:0,opacity:t.val?1:.5}}>{t.icon}</span>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:12,fontWeight:700,color:t.val?C.txt:C.tm,marginBottom:2}}>{t.label}</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:2}}>
+              <div style={{fontSize:12,fontWeight:700,color:t.val?C.txt:C.tm}}>{t.label}</div>
+              <span style={{padding:"1px 5px",borderRadius:4,background:C.gld+"20",color:C.gld,fontSize:8,fontWeight:800,letterSpacing:".05em"}}>PRÓXIMAMENTE</span>
+            </div>
             <div style={{fontSize:10,color:C.tm,lineHeight:1.4}}>{t.desc}</div>
           </div>
-          {/* Toggle switch */}
           <div style={{width:36,height:20,borderRadius:10,background:t.val?C.acc:C.bd,position:"relative",transition:"background .2s",flexShrink:0,marginTop:1}}>
             <div style={{position:"absolute",top:2,left:t.val?18:2,width:16,height:16,borderRadius:8,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
           </div>
         </div>)}
       </div>
-
+      <div style={{fontSize:10,color:C.tm,marginBottom:10,padding:"8px 10px",background:C.gld+"08",borderRadius:8,lineHeight:1.4}}>
+        ℹ️ El backend de estas automatizaciones está en construcción. Tus preferencias se guardan, y se activarán automáticamente cuando estén listas.
+      </div>
       <button onClick={save} disabled={busy||!dirty} style={{width:"100%",padding:11,background:!dirty?C.bd:busy?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:!dirty||busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:!dirty||busy?"default":"pointer",letterSpacing:.3,transition:"all .15s"}}>{busy?"Guardando…":dirty?"💾 Guardar cambios":"✓ Sin cambios"}</button>
     </>}
   </div>;
@@ -8475,10 +8518,12 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
         Eliminada duplicación visual que confundía al usuario. */}
 
     {S("cuenta")&&<>
-    {/* v20.78: Ajustes reorganizada con sub-headers para escalar. Antes era un mar de
-        bloques heterogeneos. Ahora: Pagos · Mi cuenta · Notificaciones · Automatizaciones
-        · Apariencia · Sesion · Zona peligrosa. */}
-    {(()=>{const SH=(label)=><div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",marginTop:18,marginBottom:8,textTransform:"uppercase"}}>{label}</div>;return<>
+    {/* v20.79: Ajustes con seccion Suscripcion arriba (gancho de upsell) + split de notifs
+        en regulares (siempre on, info read-only) vs avanzadas (gated por Pro). El
+        AutomationHealthCard solo se renderiza si es Pro porque monitorea las features Pro. */}
+    {(()=>{const SH=(label)=><div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",marginTop:18,marginBottom:8,textTransform:"uppercase"}}>{label}</div>;
+      const isPro=["pro","pro_plus","enterprise"].includes(course.subscription_plan||"free")&&(course.subscription_status||"active")==="active";
+      return<>
       {SH(t("Pagos"))}
       <AdminPayoutsSetup course={course} onRefresh={onRefresh}/>
 
@@ -8486,11 +8531,13 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
       <AdminAccountCard/>
       <ChangePassword/>
 
-      {SH(t("Notificaciones"))}
-      <AdminNotifPrefsCard course={course}/>
+      {SH(t("Suscripción"))}
+      <AdminSubscriptionCard course={course} onRefresh={onRefresh}/>
 
-      {SH(t("Automatizaciones"))}
-      <AutomationHealthCard course={course}/>
+      {SH(t("Notificaciones"))}
+      <AdminRegularNotifsInfo/>
+      <AdminNotifPrefsCard course={course}/>
+      {isPro&&<AutomationHealthCard course={course}/>}
 
       {SH(t("Apariencia"))}
       <ThemeToggle/><LangToggle/>
@@ -10301,6 +10348,111 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
 // (es configuracion). Historial (stats + filtros + lista de payouts) ahora vive en la
 // pestaña Ventas como sub "Cobros" (es transaccional). Esto elimina la tab Finanzas de
 // AdminCampo (queda con 3 tabs: Informacion, Layouts, Ajustes).
+// v20.79: Modal de contacto para upgrade/cancelar Partee Pro. Stripe Subscriptions todavia
+// no esta integrado (pendiente del roadmap maestro). En v1 dirigimos al usuario al equipo
+// para onboarding asistido — honestidad sobre maturity del producto + permite control de
+// quien entra al tier Pro (anti-fraud + customer success activo al inicio).
+function ProUpgradeModal({currentPlan,isPro,onClose}){
+  return ReactDOM.createPortal(
+    <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{maxWidth:440,width:"100%",background:C.bg,borderRadius:16,padding:22,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em"}}>{isPro?"GESTIONAR SUSCRIPCIÓN":"UPGRADE"}</div>
+            <div style={{fontSize:20,fontWeight:800,color:C.txt,marginTop:4}}>{isPro?"Tu plan "+(currentPlan==="pro"?"Partee Pro":currentPlan==="pro_plus"?"Partee Pro+":"Enterprise"):"🚀 Partee Pro"}</div>
+          </div>
+          <button onClick={onClose} style={{width:32,height:32,borderRadius:9,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
+        </div>
+        {!isPro&&<div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
+          <div style={{fontSize:12,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:8}}>QUÉ INCLUYE</div>
+          <div style={{fontSize:13,color:C.txt,lineHeight:1.7}}>
+            <div style={{marginBottom:5}}>📡 <b>Pulse diario</b> — anomalías matutinas AI</div>
+            <div style={{marginBottom:5}}>🤖 <b>Insight semanal</b> — narrativa Claude AI los lunes</div>
+            <div style={{marginBottom:5}}>⚠️ <b>Alertas de churn</b> — VIPs en riesgo en tiempo real</div>
+            <div style={{marginBottom:5}}>📨 <b>Stats de campañas</b> — opens/clicks/bounces post-envío</div>
+            <div style={{marginBottom:5}}>💰 <b>Comisión reducida</b> — de 8.5% a 5.5% por transacción</div>
+            <div>🎯 <b>Soporte prioritario</b> — onboarding asistido por el equipo</div>
+          </div>
+        </div>}
+        <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
+          <div style={{fontSize:13,color:C.txt,lineHeight:1.6}}>
+            {isPro
+              ?"Para cancelar o cambiar tu plan, contacta al equipo Partee. Nos aseguramos de que la transición sea sin interrupciones para tu campo."
+              :"Partee Pro se activa mediante onboarding asistido. Te ayudamos con la configuración de pagos, migración de datos históricos y capacitación inicial de tu equipo."}
+          </div>
+        </div>
+        <div style={{padding:14,background:`linear-gradient(135deg,${C.grn}10,#00cec908)`,border:"1px solid "+C.grn+"40",borderRadius:12,marginBottom:14}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.grn,letterSpacing:".05em",marginBottom:4}}>ESCRÍBENOS</div>
+          <a href="mailto:hola@partee.com.mx?subject=Partee Pro - Activación" style={{fontSize:16,fontWeight:800,color:C.txt,textDecoration:"none",display:"block"}}>hola@partee.com.mx</a>
+          <div style={{fontSize:11,color:C.ts,marginTop:4}}>Respuesta en menos de 24h hábiles</div>
+        </div>
+        <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
+      </div>
+    </div>,document.body);
+}
+
+// v20.79: Card de suscripcion. Free muestra CTA de upgrade. Pro/Pro+ muestra status +
+// fecha de renovacion + boton de gestion. Stripe Subscriptions todavia no esta integrado;
+// el flujo de activacion es manual (contacto con equipo) hasta que se conecte.
+function AdminSubscriptionCard({course,onRefresh}){
+  const[showModal,setShowModal]=useState(false);
+  const plan=course.subscription_plan||"free";
+  const status=course.subscription_status||"active";
+  const isPro=["pro","pro_plus","enterprise"].includes(plan)&&status==="active";
+  const TIER={
+    free:{label:"Free",col:C.tm,price:"$0",sub:"Plan inicial · 8.5% comisión",cta:"🚀 Activar Partee Pro",ctaStyle:"primary"},
+    pro:{label:"Partee Pro",col:C.gld,price:"$2,000 MXN/mes",sub:"5.5% comisión + automatizaciones AI",cta:"Gestionar suscripción",ctaStyle:"secondary"},
+    pro_plus:{label:"Partee Pro+",col:C.grn,price:"$5,500 MXN/mes",sub:"4.5% comisión + GPS + AI completo",cta:"Gestionar suscripción",ctaStyle:"secondary"},
+    enterprise:{label:"Enterprise",col:C.acc,price:"Custom",sub:"Multi-location + integraciones",cta:"Contactar",ctaStyle:"secondary"}
+  };
+  const info=TIER[plan]||TIER.free;
+  return<>
+    <div style={{padding:16,borderRadius:14,background:C.cd,border:`1px solid ${isPro?info.col+"40":C.bd}`,marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,gap:10}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em"}}>TU PLAN</div>
+          <div style={{fontSize:18,fontWeight:800,color:info.col,marginTop:4}}>{info.label}</div>
+          <div style={{fontSize:11,color:C.ts,marginTop:2}}>{info.price}</div>
+        </div>
+        {isPro&&<span style={{padding:"4px 9px",borderRadius:6,background:info.col+"15",color:info.col,fontSize:9,fontWeight:700,letterSpacing:".05em",flexShrink:0}}>ACTIVO</span>}
+        {status==="cancelled"&&<span style={{padding:"4px 9px",borderRadius:6,background:C.acc+"15",color:C.acc,fontSize:9,fontWeight:700,letterSpacing:".05em",flexShrink:0}}>CANCELADO</span>}
+        {status==="past_due"&&<span style={{padding:"4px 9px",borderRadius:6,background:C.acc+"15",color:C.acc,fontSize:9,fontWeight:700,letterSpacing:".05em",flexShrink:0}}>PAGO ATRASADO</span>}
+      </div>
+      <div style={{fontSize:12,color:C.txt,marginBottom:12,lineHeight:1.5}}>{info.sub}</div>
+      {isPro&&<>
+        {course.subscription_started_at&&<div style={{fontSize:11,color:C.ts,marginBottom:4}}>Activo desde: {new Date(course.subscription_started_at).toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</div>}
+        {course.subscription_renews_at&&<div style={{fontSize:11,color:C.ts,marginBottom:10}}>Próxima renovación: {new Date(course.subscription_renews_at).toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</div>}
+      </>}
+      <button onClick={()=>setShowModal(true)} style={{width:"100%",padding:11,borderRadius:10,background:info.ctaStyle==="primary"?`linear-gradient(135deg,${C.gld},#e67e22)`:"transparent",border:info.ctaStyle==="primary"?"none":"1px solid "+C.bd,color:info.ctaStyle==="primary"?"#fff":C.txt,fontSize:13,fontWeight:700,cursor:"pointer"}}>{info.cta}</button>
+    </div>
+    {showModal&&<ProUpgradeModal currentPlan={plan} isPro={isPro} onClose={()=>setShowModal(false)}/>}
+  </>;
+}
+
+// v20.79: Info read-only de notifs regulares (siempre activas, parte del servicio core).
+// Para transparencia: el admin sabe que estas notifs llegan automaticamente sin opt-out.
+function AdminRegularNotifsInfo(){
+  return<div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd,marginBottom:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+      <span style={{fontSize:16}}>📬</span>
+      <div>
+        <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Notificaciones de operación</div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>Siempre activas · parte del servicio core</div>
+      </div>
+    </div>
+    <div style={{fontSize:11,color:C.ts,lineHeight:1.8}}>
+      <div>✓ Nueva reserva confirmada</div>
+      <div>✓ Reserva cancelada por el jugador</div>
+      <div>✓ Reserva modificada (cambio de jugadores)</div>
+      <div>✓ Check-in del jugador en el campo</div>
+      <div>✓ Pago recibido / liquidación procesada</div>
+    </div>
+    <div style={{fontSize:10,color:C.tm,marginTop:10,fontStyle:"italic",lineHeight:1.4}}>
+      Estas notificaciones se envían vía email y push automáticamente para asegurar que no pierdas eventos críticos de tu campo.
+    </div>
+  </div>;
+}
+
 // v20.78: Card de datos personales del course_admin (nombre, email, telefono).
 // Email read-only (cambiar requiere flujo de magic link aparte, follow-up). Cambiar
 // contraseña vive en el componente ChangePassword ya existente (linea ~6398).
