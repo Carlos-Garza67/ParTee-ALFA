@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.81 (ProUpgradeModal self-service: quita cuadro descriptivo + tarjeta hola@partee.com.mx. Reemplaza por flujo en 4 steps. (1) Plans: mensual/anual sin cambios. (2) Payment-method: 2 cards grandes 💳 Tarjeta (Stripe) y 🏦 Transferencia SPEI. (3a) SPEI: tabla con Banco/Beneficiario/CLABE/RFC/Monto/Referencia, cada uno con boton Copiar, banner amarillo destacando que la referencia es necesaria para identificar el pago. (3b) Card-soon: si STRIPE_PAYMENT_LINKS no estan configurados, mensaje + boton para pagar por SPEI mientras tanto. Pro existente arranca en step manage. Chip 'Has elegido' visible en steps post-plans con boton Cambiar. Datos SPEI son placeholders en CONFIG block; reemplazar antes de prod.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.80 (Pricing visible. Card de Suscripcion en modo Free: quita sub 'Plan inicial 8.5% comision' (ruido visual) y cambia CTA a 'Ver nuestros planes' (mas neutral). ProUpgradeModal ahora tiene 2 steps: 'plans' muestra Plan Mensual ($1,500 USD/mes) vs Plan Anual ($13,200 USD/ano) con badge 'AHORRA 27%' en el anual (1500*12=18000 vs 13200 = ahorro $4,800 USD/ano ~ 3 meses gratis). Step 'contact' arranca al elegir un plan, con chip de plan seleccionado + boton 'Cambiar' para volver. El subject del mailto se pre-llena con el plan elegido para que el equipo de Partee sepa que ofrecer. Pro existentes saltan directo a step contact.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.79 (Subscription tier introducido: golf_courses ahora tiene subscription_plan (free/pro/pro_plus/enterprise) + status + started_at + renews_at. Default free para todos. Notificaciones avanzadas (Pulse/Insight/Churn/Campanas) gated por Pro: si free, muestra preview con candado + CTA upgrade; si Pro, muestra toggles con chip PROXIMAMENTE en cada item porque backend de crons aun no genera. Nuevo AdminSubscriptionCard arriba de Ajustes con CTA upgrade que abre ProUpgradeModal (Stripe Subscriptions todavia no integrado, en v1 dirige al equipo: hola@partee.com.mx). Nuevo AdminRegularNotifsInfo read-only que clarifica que notifs de reservas/cancelaciones/check-in son siempre activas. AutomationHealthCard solo visible si Pro. Ajustes: PAGOS · MI CUENTA · SUSCRIPCION · NOTIFICACIONES · APARIENCIA · SESION · ZONA PELIGROSA.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.78 (Ajustes del course_admin reorganizada con 7 secciones tipo sub-header: PAGOS · MI CUENTA · NOTIFICACIONES · AUTOMATIZACIONES · APARIENCIA · SESION · ZONA PELIGROSA. Antes era un mar de bloques heterogeneos sin jerarquia visual. Nuevo bloque AdminAccountCard: edita nombre + telefono del admin con avatar de inicial. Email read-only (cambiar email requiere flujo de magic link aparte, follow-up). Cambiar contrasena reusa el componente ChangePassword que ya existia para player. Cerrar sesion y Eliminar cuenta movidos al final con separacion visual clara.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -859,7 +860,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.80">
+<meta name="version" content="20.81">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -8316,7 +8317,7 @@ function AdminNotifPrefsCard({course}){
       </div>
       <button onClick={()=>setShowUpgrade(true)} style={{width:"100%",padding:11,borderRadius:10,background:`linear-gradient(135deg,${C.gld},#e67e22)`,border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>🚀 Activar Partee Pro</button>
     </div>
-    {showUpgrade&&<ProUpgradeModal currentPlan={plan} isPro={false} onClose={()=>setShowUpgrade(false)}/>}
+    {showUpgrade&&<ProUpgradeModal course={course} currentPlan={plan} isPro={false} onClose={()=>setShowUpgrade(false)}/>}
   </>;
 
   // === MODO PRO: toggles funcionales + chip "Proximamente" en cada item (backend pending) ===
@@ -10349,43 +10350,86 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
 // (es configuracion). Historial (stats + filtros + lista de payouts) ahora vive en la
 // pestaña Ventas como sub "Cobros" (es transaccional). Esto elimina la tab Finanzas de
 // AdminCampo (queda con 3 tabs: Informacion, Layouts, Ajustes).
-// v20.79: Modal de contacto para upgrade/cancelar Partee Pro. Stripe Subscriptions todavia
-// no esta integrado (pendiente del roadmap maestro). En v1 dirigimos al usuario al equipo
-// para onboarding asistido — honestidad sobre maturity del producto + permite control de
-// quien entra al tier Pro (anti-fraud + customer success activo al inicio).
-// v20.80: Refactor a flujo de 2 steps. Step 1 "plans" muestra mensual vs anual con
-// badge AHORRA 27% (1500*12=18000 vs 13200 = ahorro 4800 USD/año). Step 2 "contact"
-// con plan seleccionado pre-llenado en el subject del mailto. Si isPro, arranca directo
-// en step contact (gestion). Tag de USD explicito en el precio.
-function ProUpgradeModal({currentPlan,isPro,onClose}){
-  const[step,setStep]=useState(isPro?"contact":"plans");
+// v20.79 → v20.81: Modal de upgrade/gestion de Partee Pro.
+// v20.81 cambio mayor: self-service. Quita cuadro de "onboarding asistido" + tarjeta de email.
+// Ahora 2 metodos de pago: (a) Tarjeta via Stripe Payment Links (cuando esten configurados);
+// (b) SPEI manual con instrucciones bancarias. Pro existentes saltan a step "manage" con
+// solo boton para volver. La cosa critica: este flujo aun depende de que platform_admin
+// configure los Payment Links de Stripe Y los datos bancarios SPEI ANTES de exponerlo a
+// course_admins reales (ver CONFIG block abajo).
+function ProUpgradeModal({course,currentPlan,isPro,onClose}){
+  const[step,setStep]=useState(isPro?"manage":"plans");
   const[selectedPlan,setSelectedPlan]=useState(null); // 'monthly' | 'annual'
+  const[copied,setCopied]=useState(null);
+
+  // ===== CONFIG: pegar valores reales antes de exponer a campos en produccion =====
+  // 1) Stripe Payment Links: crear 2 products+prices en Stripe Dashboard (mode: subscription)
+  //    y pegar los URLs aqui. Si quedan vacios, el boton Tarjeta muestra "no disponible aun".
+  const STRIPE_PAYMENT_LINKS={
+    monthly:"", // ej: "https://buy.stripe.com/XXXXX"
+    annual:""   // ej: "https://buy.stripe.com/YYYYY"
+  };
+  // 2) Datos bancarios para SPEI. Reemplazar con cuenta real de Partee S.A. de C.V.
+  const SPEI_INFO={
+    bank:"BBVA México",
+    beneficiary:"Partee S.A. de C.V.",
+    clabe:"012180012345678901", // ← reemplazar con CLABE real (18 digitos)
+    account:"01234567890",       // ← reemplazar con # cuenta (opcional)
+    rfc:"PAR250101ABC"            // ← reemplazar con RFC real
+  };
+  // =================================================================================
 
   const PLAN_DETAILS={
-    monthly:{label:"Plan Mensual",price:"$1,500 USD",period:"al mes",mailtag:"Plan Mensual ($1,500 USD/mes)"},
-    annual:{label:"Plan Anual",price:"$13,200 USD",period:"al año",mailtag:"Plan Anual ($13,200 USD/año)"}
+    monthly:{label:"Plan Mensual",price:"$1,500 USD",amount:"$1,500.00 USD",period:"al mes"},
+    annual:{label:"Plan Anual",price:"$13,200 USD",amount:"$13,200.00 USD",period:"al año"}
   };
   const sel=selectedPlan?PLAN_DETAILS[selectedPlan]:null;
-  const mailtoSubject=encodeURIComponent(isPro
-    ?"Partee Pro - Gestionar suscripción"
-    :sel?`Partee Pro - ${sel.mailtag}`:"Partee Pro - Activación");
-  const mailtoUrl=`mailto:hola@partee.com.mx?subject=${mailtoSubject}`;
+  // Referencia unica por campo+plan para que SPEI sea trackeable manualmente
+  const speiReference=`PARTEE-${(course?.id||"").slice(0,8).toUpperCase()}-${(selectedPlan||"").toUpperCase().slice(0,3)}`;
 
-  function pickPlan(plan){setSelectedPlan(plan);setStep("contact")}
+  function pickPlan(plan){setSelectedPlan(plan);setStep("payment-method")}
   function backToPlans(){setSelectedPlan(null);setStep("plans")}
+  function pickCard(){
+    const url=STRIPE_PAYMENT_LINKS[selectedPlan];
+    if(!url){setStep("card-soon");return}
+    // Stripe Payment Link redirige al checkout de Stripe; al completar, vuelve a partee.com.mx
+    // y el webhook activa la suscripcion. En v1 sin webhook, activacion manual platform_admin.
+    window.location.href=url;
+  }
+  function pickSpei(){setStep("spei")}
+  async function copyText(text,key){
+    try{await navigator.clipboard.writeText(text);setCopied(key);setTimeout(()=>setCopied(null),1800)}
+    catch(e){window.__toast?.("No se pudo copiar","warn")}
+  }
 
   return ReactDOM.createPortal(
     <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{maxWidth:520,width:"100%",background:C.bg,borderRadius:16,padding:22,maxHeight:"92vh",overflowY:"auto"}}>
+      <div onClick={e=>e.stopPropagation()} style={{maxWidth:540,width:"100%",background:C.bg,borderRadius:16,padding:22,maxHeight:"92vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:10}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em"}}>{isPro?"GESTIONAR SUSCRIPCIÓN":step==="plans"?"NUESTROS PLANES":"ACTIVACIÓN"}</div>
+            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em"}}>{
+              step==="plans"?"NUESTROS PLANES":
+              step==="payment-method"?"MÉTODO DE PAGO":
+              step==="spei"?"TRANSFERENCIA SPEI":
+              step==="card-soon"?"TARJETA":
+              "GESTIONAR"
+            }</div>
             <div style={{fontSize:20,fontWeight:800,color:C.txt,marginTop:4}}>{isPro?"Tu plan "+(currentPlan==="pro"?"Partee Pro":currentPlan==="pro_plus"?"Partee Pro+":"Enterprise"):"🚀 Partee Pro"}</div>
           </div>
           <button onClick={onClose} style={{width:32,height:32,borderRadius:9,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
         </div>
 
-        {/* STEP 1: PLANS */}
+        {/* Chip de plan seleccionado, visible en todos los steps post-plans */}
+        {sel&&(step==="payment-method"||step==="spei"||step==="card-soon")&&<div style={{padding:12,background:C.grn+"10",border:"1px solid "+C.grn+"40",borderRadius:10,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>HAS ELEGIDO</div>
+            <div style={{fontSize:14,fontWeight:800,color:C.txt,marginTop:2}}>{sel.label}</div>
+            <div style={{fontSize:11,color:C.ts,marginTop:1}}>{sel.price} {sel.period}</div>
+          </div>
+          <button onClick={backToPlans} style={{padding:"7px 10px",borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.ts,fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>← Cambiar</button>
+        </div>}
+
+        {/* ===== STEP 1: PLANS ===== */}
         {step==="plans"&&<>
           <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
             <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:8}}>QUÉ INCLUYE</div>
@@ -10398,11 +10442,8 @@ function ProUpgradeModal({currentPlan,isPro,onClose}){
               <div>🎯 <b>Soporte prioritario</b> · onboarding asistido</div>
             </div>
           </div>
-
           <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>ELIGE TU PLAN</div>
-
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-            {/* Plan Mensual */}
             <div style={{padding:14,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,display:"flex",flexDirection:"column"}}>
               <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:6}}>MENSUAL</div>
               <div style={{fontSize:22,fontWeight:800,color:C.txt}}>$1,500</div>
@@ -10410,8 +10451,6 @@ function ProUpgradeModal({currentPlan,isPro,onClose}){
               <div style={{fontSize:10,color:C.tm,marginTop:8,marginBottom:12,lineHeight:1.4,flex:1}}>Sin compromiso · cancela cuando quieras</div>
               <button onClick={()=>pickPlan("monthly")} style={{width:"100%",padding:10,borderRadius:9,background:"transparent",border:"1px solid "+C.bd,color:C.txt,fontSize:12,fontWeight:700,cursor:"pointer"}}>Elegir mensual</button>
             </div>
-
-            {/* Plan Anual */}
             <div style={{padding:14,borderRadius:12,background:`linear-gradient(135deg,${C.gld}10,${C.grn}08)`,border:"2px solid "+C.grn,display:"flex",flexDirection:"column",position:"relative"}}>
               <div style={{position:"absolute",top:-9,right:10,padding:"3px 8px",borderRadius:5,background:C.grn,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:".05em"}}>AHORRA 27%</div>
               <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:6}}>ANUAL</div>
@@ -10422,39 +10461,82 @@ function ProUpgradeModal({currentPlan,isPro,onClose}){
               <button onClick={()=>pickPlan("annual")} style={{width:"100%",padding:10,borderRadius:9,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Elegir anual</button>
             </div>
           </div>
-
           <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
         </>}
 
-        {/* STEP 2: CONTACT */}
-        {step==="contact"&&<>
-          {sel&&<div style={{padding:12,background:C.grn+"10",border:"1px solid "+C.grn+"40",borderRadius:10,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>HAS ELEGIDO</div>
-              <div style={{fontSize:14,fontWeight:800,color:C.txt,marginTop:2}}>{sel.label}</div>
-              <div style={{fontSize:11,color:C.ts,marginTop:1}}>{sel.price} {sel.period}</div>
-            </div>
-            <button onClick={backToPlans} style={{padding:"7px 10px",borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.ts,fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>← Cambiar</button>
-          </div>}
+        {/* ===== STEP 2: PAYMENT METHOD ===== */}
+        {step==="payment-method"&&<>
+          <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>¿CÓMO QUIERES PAGAR?</div>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
+            {/* Tarjeta */}
+            <button onClick={pickCard} style={{padding:14,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:14,transition:"all .15s"}} onMouseOver={e=>{e.currentTarget.style.borderColor=C.grn}} onMouseOut={e=>{e.currentTarget.style.borderColor=C.bd}}>
+              <div style={{width:44,height:44,borderRadius:11,background:`linear-gradient(135deg,${C.grn}20,#00cec918)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>💳</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Tarjeta de crédito o débito</div>
+                <div style={{fontSize:11,color:C.ts,marginTop:2,lineHeight:1.4}}>Visa, MasterCard, AmEx · activación inmediata · procesado por Stripe</div>
+              </div>
+              <span style={{color:C.tm,fontSize:18,fontWeight:800,flexShrink:0}}>›</span>
+            </button>
+            {/* SPEI */}
+            <button onClick={pickSpei} style={{padding:14,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:14,transition:"all .15s"}} onMouseOver={e=>{e.currentTarget.style.borderColor=C.gld}} onMouseOut={e=>{e.currentTarget.style.borderColor=C.bd}}>
+              <div style={{width:44,height:44,borderRadius:11,background:`linear-gradient(135deg,${C.gld}25,#e67e2218)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>🏦</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Transferencia SPEI</div>
+                <div style={{fontSize:11,color:C.ts,marginTop:2,lineHeight:1.4}}>Desde cualquier banco mexicano · activación al confirmar el depósito</div>
+              </div>
+              <span style={{color:C.tm,fontSize:18,fontWeight:800,flexShrink:0}}>›</span>
+            </button>
+          </div>
+        </>}
 
+        {/* ===== STEP 3a: SPEI INSTRUCTIONS ===== */}
+        {step==="spei"&&<>
+          <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:12}}>
+            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:10}}>DATOS DE TRANSFERENCIA</div>
+            {[
+              {k:"bank",l:"Banco",v:SPEI_INFO.bank},
+              {k:"benef",l:"Beneficiario",v:SPEI_INFO.beneficiary},
+              {k:"clabe",l:"CLABE",v:SPEI_INFO.clabe,mono:true},
+              {k:"rfc",l:"RFC",v:SPEI_INFO.rfc,mono:true},
+              {k:"amount",l:"Monto",v:sel?.amount||"—",highlight:true},
+              {k:"ref",l:"Referencia",v:speiReference,mono:true,highlight:true,note:"Incluye esta referencia exacta"}
+            ].map(f=><div key={f.k} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid "+C.bd+"40",gap:10}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".03em"}}>{f.l}</div>
+                <div style={{fontSize:f.highlight?14:13,fontWeight:f.highlight?800:600,color:f.highlight?C.grn:C.txt,marginTop:2,fontFamily:f.mono?"monospace":"inherit",wordBreak:"break-all"}}>{f.v}</div>
+                {f.note&&<div style={{fontSize:10,color:C.acc,marginTop:2}}>⚠ {f.note}</div>}
+              </div>
+              <button onClick={()=>copyText(f.v,f.k)} style={{padding:"6px 10px",borderRadius:7,border:"1px solid "+C.bd,background:copied===f.k?C.grn+"20":"transparent",color:copied===f.k?C.grn:C.ts,fontSize:10,fontWeight:700,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>{copied===f.k?"✓ Copiado":"Copiar"}</button>
+            </div>)}
+          </div>
+          <div style={{padding:12,background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:10,marginBottom:14}}>
+            <div style={{fontSize:11,color:C.txt,lineHeight:1.5}}>
+              <b>Importante:</b> incluye <span style={{fontFamily:"monospace",fontWeight:800,color:C.gld}}>{speiReference}</span> en el concepto/referencia de tu SPEI. Sin esto no podemos identificar tu pago automáticamente.
+            </div>
+            <div style={{fontSize:10,color:C.ts,marginTop:6,lineHeight:1.4}}>Tu plan se activa en menos de 24h hábiles tras recibir la transferencia.</div>
+          </div>
+          <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
+        </>}
+
+        {/* ===== STEP 3b: TARJETA NO CONFIGURADA ===== */}
+        {step==="card-soon"&&<>
+          <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14,textAlign:"center"}}>
+            <div style={{fontSize:32,marginBottom:8}}>🔧</div>
+            <div style={{fontSize:14,fontWeight:800,color:C.txt,marginBottom:6}}>Pago con tarjeta · configurando</div>
+            <div style={{fontSize:12,color:C.ts,lineHeight:1.5}}>Estamos integrando Stripe Checkout para activación inmediata con tarjeta. Mientras tanto, puedes pagar por transferencia SPEI sin problema.</div>
+          </div>
+          <button onClick={pickSpei} style={{width:"100%",padding:12,borderRadius:10,background:`linear-gradient(135deg,${C.gld},#e67e22)`,border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:8}}>🏦 Pagar por transferencia SPEI</button>
+          <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
+        </>}
+
+        {/* ===== STEP MANAGE (Pro existente) ===== */}
+        {step==="manage"&&<>
           <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
             <div style={{fontSize:13,color:C.txt,lineHeight:1.6}}>
-              {isPro
-                ?"Para cancelar o cambiar tu plan, contacta al equipo Partee. Nos aseguramos de que la transición sea sin interrupciones para tu campo."
-                :"Partee Pro se activa mediante onboarding asistido. Te ayudamos con la configuración de pagos, migración de datos históricos y capacitación inicial de tu equipo."}
+              Para cancelar tu suscripción, cambiar de plan (mensual ↔ anual) o actualizar tu método de pago, ve al portal de Stripe.
             </div>
           </div>
-
-          <a href={mailtoUrl} style={{display:"block",padding:14,background:`linear-gradient(135deg,${C.grn}10,#00cec908)`,border:"1px solid "+C.grn+"40",borderRadius:12,marginBottom:14,textDecoration:"none"}}>
-            <div style={{fontSize:10,fontWeight:700,color:C.grn,letterSpacing:".05em",marginBottom:4}}>ESCRÍBENOS</div>
-            <div style={{fontSize:16,fontWeight:800,color:C.txt}}>hola@partee.com.mx</div>
-            <div style={{fontSize:11,color:C.ts,marginTop:4}}>Respuesta en menos de 24h hábiles</div>
-          </a>
-
-          <div style={{display:"flex",gap:8}}>
-            {!isPro&&<button onClick={backToPlans} style={{flex:1,padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.txt,fontSize:13,fontWeight:600,cursor:"pointer"}}>← Ver planes</button>}
-            <button onClick={onClose} style={{flex:1,padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
-          </div>
+          <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
         </>}
       </div>
     </div>,document.body);
@@ -10497,7 +10579,7 @@ function AdminSubscriptionCard({course,onRefresh}){
       </>}
       <button onClick={()=>setShowModal(true)} style={{width:"100%",padding:11,borderRadius:10,background:info.ctaStyle==="primary"?`linear-gradient(135deg,${C.gld},#e67e22)`:"transparent",border:info.ctaStyle==="primary"?"none":"1px solid "+C.bd,color:info.ctaStyle==="primary"?"#fff":C.txt,fontSize:13,fontWeight:700,cursor:"pointer",marginTop:!info.sub&&!isPro?8:0}}>{info.cta}</button>
     </div>
-    {showModal&&<ProUpgradeModal currentPlan={plan} isPro={isPro} onClose={()=>setShowModal(false)}/>}
+    {showModal&&<ProUpgradeModal course={course} currentPlan={plan} isPro={isPro} onClose={()=>setShowModal(false)}/>}
   </>;
 }
 
