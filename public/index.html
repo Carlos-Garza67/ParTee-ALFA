@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.73 (generar slots arreglado · backend+frontend. ANTES: el frontend llamaba directamente a la edge function slot-manager (un CRON job que solo acepta SERVICE_ROLE_KEY/CRON_SECRET) sin Authorization header, recibia 401 silencioso, y mostraba 'Slots generados' como success aunque NO se insertaba nada (toda la vista calendar quedaba en 0). AHORA: nueva RPC generate_slots_for_my_course SECURITY DEFINER que valida via managed_course_id, parsea operating_hours del propio campo, usa green_fee_min como price y opera solo en el campo del admin. Frontend usa sb.rpc() con error inspection real y muestra # de slots insertados.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.72 (saveLayout y saveHole con try/catch/finally — antes ambos se tragaban silenciosamente errores de RLS/CHECK/network. Sintoma: boton de guardar quedaba spinning '...' indefinidamente porque setLySaving(false) nunca se ejecutaba. Ahora cualquier fallo muestra toast claro con el error real. Tambien chequeo del demoter de is_default antes del save principal.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.71 (Hardening AdminProfile · 3 fixes: (1) grilla de hoyos usa hole_count (fisicos) en vez de holes_per_round, asi un medio campo de 9 fisicos ya no muestra 18 botones; (2) saveCourse con try/catch + toast — antes los errores del UPDATE (400 Bad Request, RLS, etc) se tragaban silenciosamente; (3) validacion cliente de lat[-90,90] y lng[-180,180] con toast claro si se pega coord sin punto decimal o fuera de rango)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.70 (AdminCampo IA refactor · merge tabs Identidad+Operacion en un solo tab 'Informacion' (la separacion era arbitraria, todo es info del campo); rename 'Cuenta' a 'Ajustes' (convencion mas estandar). S helper acepta info como union de identidad+operacion para no romper render. Deep-links de CourseStatusBanner (REQ_NAV) migrados al nuevo key. Normalizacion de legacy initialSub values para backward compat. De 5 tabs a 4)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -851,7 +852,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.72">
+<meta name="version" content="20.73">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -10186,7 +10187,25 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
   const today=new Date().toISOString().split("T")[0];
   const toggleSlot=async(sl)=>{const ns=sl.status==="available"?"blocked":"available";await sb.from("time_slots").update({status:ns}).eq("id",sl.id);load()};
   const savePrice=async()=>{if(!editSlot||!editPrice)return;await sb.from("time_slots").update({price:parseFloat(editPrice)}).eq("id",editSlot.id);setEditSlot(null);load()};
-  const generateSlots=async()=>{setGen(true);try{await fetch(SB_FN_URL+"/slot-manager",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});if(window.__toast)window.__toast("Slots generados","success");load()}catch(e){if(window.__toast)window.__toast("Error: "+e.message,"error")}setGen(false)};
+  const generateSlots=async()=>{
+    setGen(true);
+    try{
+      // v20.73: antes el frontend llamaba directo a la edge function slot-manager (un cron)
+      // sin Authorization header, recibia 401 silencioso, y mostraba "Slots generados" como
+      // success aunque no se insertaba nada. Ahora usa RPC generate_slots_for_my_course que
+      // valida via managed_course_id y opera solo en el campo del admin.
+      const{data,error}=await sb.rpc("generate_slots_for_my_course",{p_days:30});
+      if(error){window.__toast?.("Error al generar slots: "+error.message,"error");return}
+      const ins=data?.inserted||0;
+      const sk=data?.skipped_existing||0;
+      window.__toast?.(ins+" slots generados"+(sk>0?" ("+sk+" ya existian)":""),"success");
+      load();
+    }catch(e){
+      window.__toast?.("Error inesperado al generar slots: "+(e?.message||e),"error");
+    }finally{
+      setGen(false);
+    }
+  };
   const toggleOffer=async(sl)=>{await sb.from("time_slots").update({is_offer:!sl.is_offer}).eq("id",sl.id);load()};
   const available=slots.filter(s=>s.status==="available");const blocked=slots.filter(s=>s.status==="blocked");const booked=slots.filter(s=>s.status==="booked");
   const bands=[{k:"early",l:"Early Bird (6-9h)",r:[0,9]},{k:"prime",l:"Prime (9-12h)",r:[9,12]},{k:"mid",l:t("Mediodía (12-15h)"),r:[12,15]},{k:"twi",l:t("Twilight (15+)"),r:[15,24]}];
