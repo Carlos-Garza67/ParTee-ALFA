@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.74 (Edicion inline de precio en el modal del slot. Antes el modal solo permitia 'Bloquear' y 'Hot Deal' — no habia forma de cambiar el precio individual de un slot. Ahora boton 'Editar' junto al precio abre input numerico inline con Guardar/Cancelar. Actualiza price Y base_price (precio oficial del slot); para descuento temporal usa Hot Deal o Dynamic Pricing. Deshabilitado para slots ya ocupados.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.73 (generar slots arreglado · backend+frontend. ANTES: el frontend llamaba directamente a la edge function slot-manager (un CRON job que solo acepta SERVICE_ROLE_KEY/CRON_SECRET) sin Authorization header, recibia 401 silencioso, y mostraba 'Slots generados' como success aunque NO se insertaba nada (toda la vista calendar quedaba en 0). AHORA: nueva RPC generate_slots_for_my_course SECURITY DEFINER que valida via managed_course_id, parsea operating_hours del propio campo, usa green_fee_min como price y opera solo en el campo del admin. Frontend usa sb.rpc() con error inspection real y muestra # de slots insertados.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.72 (saveLayout y saveHole con try/catch/finally — antes ambos se tragaban silenciosamente errores de RLS/CHECK/network. Sintoma: boton de guardar quedaba spinning '...' indefinidamente porque setLySaving(false) nunca se ejecutaba. Ahora cualquier fallo muestra toast claro con el error real. Tambien chequeo del demoter de is_default antes del save principal.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.71 (Hardening AdminProfile · 3 fixes: (1) grilla de hoyos usa hole_count (fisicos) en vez de holes_per_round, asi un medio campo de 9 fisicos ya no muestra 18 botones; (2) saveCourse con try/catch + toast — antes los errores del UPDATE (400 Bad Request, RLS, etc) se tragaban silenciosamente; (3) validacion cliente de lat[-90,90] y lng[-180,180] con toast claro si se pega coord sin punto decimal o fuera de rango)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -852,7 +853,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.73">
+<meta name="version" content="20.74">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -10055,6 +10056,9 @@ function TeeSheetPro({course}){
 function SlotDetailDrawer({slotId,course,onClose,onChange}){
   const[data,setData]=useState(null);const[ld,setLd]=useState(true);
   const[busyId,setBusyId]=useState(null);
+  // v20.74: state para edicion inline de precio del slot
+  const[edPrice,setEdPrice]=useState(false);
+  const[newPrice,setNewPrice]=useState("");
   async function load(){setLd(true);
     const{data:r,error}=await sb.rpc("get_slot_full_detail",{p_slot_id:slotId});
     if(error){window.__toast?.("Error: "+error.message,"warn");setLd(false);return}
@@ -10075,6 +10079,26 @@ function SlotDetailDrawer({slotId,course,onClose,onChange}){
     setBusyId(null);
     if(error){window.__toast?.("Error: "+error.message,"warn");return}
     load()
+  }
+  // v20.74: edicion manual del precio del slot. Actualiza price Y base_price (precio "oficial"
+  // del slot). Si el admin quiere descuento temporal usa Hot Deal o Dynamic Pricing.
+  async function savePrice(){
+    if(busyId)return;
+    const p=parseFloat(newPrice);
+    if(isNaN(p)||p<=0){window.__toast?.("Precio invalido (debe ser numero > 0)","error");return}
+    setBusyId("price");
+    try{
+      const{error}=await sb.from("time_slots").update({price:p,base_price:p}).eq("id",slotId);
+      if(error){window.__toast?.("Error al actualizar precio: "+error.message,"error");return}
+      window.__toast?.("Precio actualizado a $"+Math.round(p).toLocaleString(),"success");
+      setEdPrice(false);
+      setNewPrice("");
+      load();
+    }catch(e){
+      window.__toast?.("Error inesperado: "+(e?.message||e),"error");
+    }finally{
+      setBusyId(null);
+    }
   }
   
   const s=data?.slot;
@@ -10109,11 +10133,23 @@ function SlotDetailDrawer({slotId,course,onClose,onChange}){
         {/* Price card */}
         <div style={{padding:12,background:`linear-gradient(135deg,${C.grn}10,#00cec905)`,border:"1px solid "+C.grn+"30",borderRadius:12,marginBottom:14}}>
           <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8}}>
-            <div>
+            <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:9,color:C.tm,letterSpacing:".07em"}}>PRECIO ACTUAL</div>
-              <div style={{fontSize:26,fontWeight:800,color:C.grn}}>${Math.round(s.price).toLocaleString()} <span style={{fontSize:11,color:C.tm,fontWeight:500}}>MXN</span></div>
+              {edPrice?
+                <div style={{display:"flex",gap:6,alignItems:"center",marginTop:4,flexWrap:"wrap"}}>
+                  <span style={{fontSize:18,fontWeight:800,color:C.grn}}>$</span>
+                  <input type="number" inputMode="numeric" min="1" step="1" value={newPrice} onChange={e=>setNewPrice(e.target.value)} autoFocus disabled={busyId==="price"} style={{width:110,padding:"6px 10px",fontSize:18,fontWeight:800,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.txt}}/>
+                  <button onClick={savePrice} disabled={busyId==="price"} style={{padding:"6px 12px",background:C.grn,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:busyId==="price"?"wait":"pointer",opacity:busyId==="price"?.6:1}}>{busyId==="price"?"...":"Guardar"}</button>
+                  <button onClick={()=>{setEdPrice(false);setNewPrice("")}} disabled={busyId==="price"} style={{padding:"6px 12px",background:"transparent",border:"1px solid "+C.bd,borderRadius:8,color:C.ts,fontSize:11,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+                </div>
+              :
+                <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+                  <div style={{fontSize:26,fontWeight:800,color:C.grn}}>${Math.round(s.price).toLocaleString()} <span style={{fontSize:11,color:C.tm,fontWeight:500}}>MXN</span></div>
+                  <button onClick={()=>{setEdPrice(true);setNewPrice(Math.round(s.price).toString())}} disabled={s.status==="booked"} title={s.status==="booked"?"No puedes cambiar precio de slot ocupado":"Editar precio"} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:6,padding:"3px 8px",color:s.status==="booked"?C.tm:C.ts,fontSize:10,fontWeight:600,cursor:s.status==="booked"?"not-allowed":"pointer",opacity:s.status==="booked"?.5:1}}>✎ Editar</button>
+                </div>
+              }
             </div>
-            {s.base_price!=null&&s.base_price!==s.price&&<div style={{textAlign:"right"}}>
+            {!edPrice&&s.base_price!=null&&s.base_price!==s.price&&<div style={{textAlign:"right"}}>
               <div style={{fontSize:9,color:C.tm,letterSpacing:".07em"}}>BASE</div>
               <div style={{fontSize:14,color:C.tm,textDecoration:"line-through"}}>${Math.round(s.base_price).toLocaleString()}</div>
               <div style={{fontSize:10,fontWeight:700,color:s.price>s.base_price?"#6c5ce7":C.grn,marginTop:2}}>{s.price>s.base_price?"▲ +":"▼ "}${Math.round(s.price-s.base_price).toLocaleString()}</div>
