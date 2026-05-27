@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.78 (Ajustes del course_admin reorganizada con 7 secciones tipo sub-header: PAGOS · MI CUENTA · NOTIFICACIONES · AUTOMATIZACIONES · APARIENCIA · SESION · ZONA PELIGROSA. Antes era un mar de bloques heterogeneos sin jerarquia visual. Nuevo bloque AdminAccountCard: edita nombre + telefono del admin con avatar de inicial. Email read-only (cambiar email requiere flujo de magic link aparte, follow-up). Cambiar contrasena reusa el componente ChangePassword que ya existia para player. Cerrar sesion y Eliminar cuenta movidos al final con separacion visual clara.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.77 (HoleGeoEditor diagnostico visible · si get_holes_geo falla o retorna vacio, el usuario ve el mensaje exacto del error en el UI (no solo toast efimero) + boton Reintentar + console.log con course.id, length, sample row. Detecta tambien course.id ausente. Esto reemplaza el toast efimero que desaparecia antes de que el admin pudiera leer el motivo del fallo. Backend ya verificado OK: RPC get_holes_geo retorna los 9 hoyos de Club Santa Lejos cuando se simula a Alex; el bug probablemente era cache de Vercel sirviendo build previo.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.76 (Nueva sub-tab 'Historico' en Ventas para consulta contable de bookings. Diferencia con 'Cobros': Cobros = payouts (lo que Partee debe/pago al campo despues de comision); Historico = bookings crudo (cada transaccion confirmada o cancelada con su detalle). Stats 2x2 hero: ventas totales, ticket promedio, cancelaciones, total transacciones. Filtros por rango (30d/90d/1y/Todo) y por status. Export CSV con BOM UTF-8 para Excel. Detalle expandible: jugador/email, modo pago, promo aplicada, extras, descuentos, cancellation_fee, check-in time, % comision Partee, Stripe payment intent.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.75 (AdminCampo IA refactor 2 · de 4 a 3 tabs. La tab 'Finanzas' se elimina y su contenido se reparte: el SETUP de Stripe Connect (banners segun status + toggle SPEI vs Automatico) se mueve a 'Ajustes' como primer bloque visible (es configuracion); el HISTORIAL de cobros (hero stats RECIBIDO/POR LIQUIDAR + filtros + lista de payouts) se mueve a Ventas como nueva sub 'Cobros' al inicio (es transaccional, es lo primero que el admin quiere ver al abrir Ventas). AdminPayouts dividido en AdminPayoutsSetup + AdminPayoutsHistory. Deep-links legacy a finanzas redirigen a cuenta.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -856,7 +857,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.77">
+<meta name="version" content="20.78">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -8474,45 +8475,52 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
         Eliminada duplicación visual que confundía al usuario. */}
 
     {S("cuenta")&&<>
-    {/* v20.75: setup de Stripe Connect (banner segun status + toggle metodo). Antes vivia
-        en tab Finanzas dentro de AdminCampo; movido aqui porque es CONFIGURACION (no
-        transaccional). El historial de cobros vive en Ventas → Cobros. */}
-    <AdminPayoutsSetup course={course} onRefresh={onRefresh}/>
-    <ThemeToggle/><LangToggle/><button onClick={()=>{
-      // v19.64: alineado con el patrón robusto del Player Profile (línea 4177).
-      // Antes: onClick={onOut} sin confirm → si el click no llegaba al backend (botón tapado
-      // por la bottom-bar fija del course_admin con paddingBottom:70 en admin-content), el
-      // usuario no tenía feedback visual de que algo pasó. El confirm dialog hace evidente
-      // que el click sí se registró, y el out() del context es más confiable que la prop.
-      const doOut=ctxOut||onOut;
-      if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>doOut());
-      else if(confirm(t("Cerrar sesión?")))doOut();
-    }} style={{width:"100%",padding:12,marginTop:16,marginBottom:14,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
-    {/* v20.15: Salud de automatizaciones — estado en vivo de pulse/insight/churn */}
-    <AutomationHealthCard course={course}/>
+    {/* v20.78: Ajustes reorganizada con sub-headers para escalar. Antes era un mar de
+        bloques heterogeneos. Ahora: Pagos · Mi cuenta · Notificaciones · Automatizaciones
+        · Apariencia · Sesion · Zona peligrosa. */}
+    {(()=>{const SH=(label)=><div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",marginTop:18,marginBottom:8,textTransform:"uppercase"}}>{label}</div>;return<>
+      {SH(t("Pagos"))}
+      <AdminPayoutsSetup course={course} onRefresh={onRefresh}/>
 
-    {/* v20.12: Notification preferences UI — toggles para automations (daily pulse, weekly insight, etc) */}
-    <AdminNotifPrefsCard course={course}/>
+      {SH(t("Mi cuenta"))}
+      <AdminAccountCard/>
+      <ChangePassword/>
 
-    <button onClick={()=>{
-      // v19.60: alineado con el flow elaborado del Profile — usa edge function delete-account
-      // (soft-delete con blockers check + ban auth.users + anonymize profile + signOut global).
-      const go=async()=>{
-        try{
-          const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
-          const res=await fetch(SB_FN_URL+"/delete-account",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"}});
-          const data=await res.json();
-          if(!res.ok||!data.success){
-            if(data.blockers&&data.blockers.length){window.__toast?.(t("Cuenta no eliminada: hay actividad pendiente"),"error")}
-            else{window.__toast?.(data.error||t("Error al eliminar cuenta"),"error")}
-            return;
-          }
-          window.__toast?.(t("Cuenta eliminada"),"success");
-          setTimeout(()=>onOut(),600);
-        }catch(e){window.__toast?.(t("Error al eliminar cuenta"),"error")}
-      };
-      if(window.__confirm)window.__confirm(t("¿Eliminar cuenta?"),go);else if(confirm(t("¿Eliminar cuenta?")))go();
-    }} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid #666",borderRadius:14,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
+      {SH(t("Notificaciones"))}
+      <AdminNotifPrefsCard course={course}/>
+
+      {SH(t("Automatizaciones"))}
+      <AutomationHealthCard course={course}/>
+
+      {SH(t("Apariencia"))}
+      <ThemeToggle/><LangToggle/>
+
+      {SH(t("Sesión"))}
+      <button onClick={()=>{
+        const doOut=ctxOut||onOut;
+        if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>doOut());
+        else if(confirm(t("Cerrar sesión?")))doOut();
+      }} style={{width:"100%",padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
+
+      {SH(t("Zona peligrosa"))}
+      <button onClick={()=>{
+        const go=async()=>{
+          try{
+            const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+            const res=await fetch(SB_FN_URL+"/delete-account",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"}});
+            const data=await res.json();
+            if(!res.ok||!data.success){
+              if(data.blockers&&data.blockers.length){window.__toast?.(t("Cuenta no eliminada: hay actividad pendiente"),"error")}
+              else{window.__toast?.(data.error||t("Error al eliminar cuenta"),"error")}
+              return;
+            }
+            window.__toast?.(t("Cuenta eliminada"),"success");
+            setTimeout(()=>onOut(),600);
+          }catch(e){window.__toast?.(t("Error al eliminar cuenta"),"error")}
+        };
+        if(window.__confirm)window.__confirm(t("¿Eliminar cuenta?"),go);else if(confirm(t("¿Eliminar cuenta?")))go();
+      }} style={{width:"100%",padding:12,background:"transparent",border:"1px solid #666",borderRadius:14,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
+    </>})()}
     </>}
   </div>}
 
@@ -10293,6 +10301,54 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
 // (es configuracion). Historial (stats + filtros + lista de payouts) ahora vive en la
 // pestaña Ventas como sub "Cobros" (es transaccional). Esto elimina la tab Finanzas de
 // AdminCampo (queda con 3 tabs: Informacion, Layouts, Ajustes).
+// v20.78: Card de datos personales del course_admin (nombre, email, telefono).
+// Email read-only (cambiar requiere flujo de magic link aparte, follow-up). Cambiar
+// contraseña vive en el componente ChangePassword ya existente (linea ~6398).
+function AdminAccountCard(){const{p:pr,s,setP}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);
+  const[nm,setNm]=useState(pr?.full_name||"");
+  const[ph,setPh]=useState(pr?.phone||"");
+  const email=s?.user?.email||pr?.email||"—";
+  const initial=((pr?.full_name||email||"A").trim().charAt(0)||"A").toUpperCase();
+  async function save(){
+    if(!nm.trim()){window.__toast?.(t("Nombre obligatorio"),"warn");return}
+    if(sv)return;setSv(true);
+    try{
+      const{error}=await sb.from("user_profiles").update({full_name:nm.trim(),phone:ph.trim()||null,updated_at:new Date().toISOString()}).eq("id",pr.id);
+      if(error)throw error;
+      setP({...pr,full_name:nm.trim(),phone:ph.trim()||null});
+      setEd(false);
+      window.__toast?.(t("Guardado"),"success");
+    }catch(e){
+      window.__toast?.("Error: "+(e.message||e),"error");
+    }finally{setSv(false)}
+  }
+  function cancel(){setEd(false);setNm(pr?.full_name||"");setPh(pr?.phone||"")}
+  if(!ed)return<div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd,marginBottom:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:12}}>
+      <div style={{width:48,height:48,borderRadius:24,background:`linear-gradient(135deg,${C.grn},#00cec9)`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:20,flexShrink:0}}>{initial}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:800,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pr?.full_name||t("Sin nombre")}</div>
+        <div style={{fontSize:11,color:C.ts,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{email}</div>
+        {pr?.phone&&<div style={{fontSize:11,color:C.ts,marginTop:2}}>📞 {pr.phone}</div>}
+      </div>
+      <button onClick={()=>setEd(true)} style={{padding:"7px 13px",borderRadius:9,border:"1px solid "+C.bd,background:"transparent",color:C.txt,fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>{t("Editar")}</button>
+    </div>
+  </div>;
+  return<div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd,marginBottom:10}}>
+    <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:12}}>{t("Mis datos")}</div>
+    <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em",marginBottom:4}}>{t("NOMBRE COMPLETO")}</div>
+    <input value={nm} onChange={e=>setNm(e.target.value)} placeholder={t("Tu nombre")} maxLength={80} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.bg,color:C.txt,fontSize:13,marginBottom:10,boxSizing:"border-box",outline:"none"}}/>
+    <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em",marginBottom:4}}>EMAIL <span style={{color:C.ts,fontWeight:400,textTransform:"none",letterSpacing:0}}>· {t("contacta soporte para cambiarlo")}</span></div>
+    <div style={{padding:"10px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.bg+"80",color:C.ts,fontSize:13,marginBottom:10,wordBreak:"break-all"}}>{email}</div>
+    <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em",marginBottom:4}}>{t("TELÉFONO")}</div>
+    <input value={ph} onChange={e=>setPh(e.target.value)} placeholder="55 1234 5678" inputMode="tel" maxLength={20} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.bg,color:C.txt,fontSize:13,marginBottom:12,boxSizing:"border-box",outline:"none"}}/>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={save} disabled={sv} style={{flex:1,padding:11,borderRadius:10,background:C.grn,border:"none",color:"#fff",fontSize:12,fontWeight:700,cursor:sv?"wait":"pointer",opacity:sv?.7:1}}>{sv?t("Guardando..."):t("Guardar")}</button>
+      <button onClick={cancel} disabled={sv} style={{padding:"11px 16px",borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>
+    </div>
+  </div>;
+}
+
 function AdminPayoutsSetup({course,onRefresh}){
   const[connectLd,setConnectLd]=useState(false);const[toggleLd,setToggleLd]=useState(false);
   const cs=course.stripe_connect_status||"not_started";const cVerified=cs==="verified"&&course.stripe_connect_payouts_enabled;const pm=course.payout_method||"manual_spei";
