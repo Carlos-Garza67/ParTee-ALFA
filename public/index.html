@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.68 (Fix UI staleness post-onboarding · doRegLoc ahora hace window.location.reload() despues de update de user_profiles, para que el parent re-fetche el profile y vea managed_course_id antes de renderizar AdminDashboard. Sin esto, el auto-login disparado por signUp leia el profile con managed_course_id=null y mostraba 'Sin locacion' aunque la BD estuviera correcta. Reload es heavy-handed pero infalible)","color:#e94560;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.67 (Fix course onboarding · doRegLoc reordenado: signUp PRIMERO, luego INSERT a golf_courses (antes iba al reves y fallaba por RLS porque auth.uid() era NULL al momento del insert). Linkeo de managed_course_id al perfil ahora va despues del insert. Sin esto, ningun nuevo course admin podia darse de alta. Detectado en QA por Carlos)","color:#e94560;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.66 (Pro Marketplace MVP · 'Instructores' en Perfil: self-serve + leads. Cualquiera crea su perfil de instructor (upsert_my_pro_profile) y aparece en el directorio (list_pros, filtro ciudad/búsqueda); jugadores ven el detalle (get_pro_profile) y envían solicitudes de clase (request_lesson) — el pro acepta/rechaza (respond_lesson_request) con notif. Sin pagos: lead-gen, pago directo con el pro (in-app cuando Stripe live). Backend: 2 tablas RLS + 7 RPCs DEFINER con grants. Cross-venue. Notifs best-effort)","color:#f0c040;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.65 (Referral · 'Invita y gana': cada jugador tiene un código compartible que ES una fila promo_codes (15% off para el referido); el referido lo teclea en el campo de promo existente — cero cambios de ese lado. Al convertir (uso en promo_code_uses) un trigger BLINDADO (EXCEPTION WHEN OTHERS, jamás rompe la redención/booking) premia al referrer con su propio código 15% off 90d + notif. Sección ReferralSection en Perfil con código, compartir y stats. Backend: 2 tablas RLS + 2 RPCs DEFINER + trigger. % tunable. Cross-venue)","color:#f0c040;font-weight:bold;font-size:13px");
@@ -846,7 +847,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.67">
+<meta name="version" content="20.68">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -1826,7 +1827,10 @@ function Login(){const[e,setE]=useState("");const[pw,setPw]=useState("");const[p
     await sb.from("user_profiles").update({managed_course_id:nc.id,admin_facility_type:facType}).eq("email",e);
     setMsg("OK:"+t("Confirma tu email"));
     fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_welcome",to:e,data:{name:nm,course_name:locName,facility_type:facType,city:locCity,state:locState}})}).catch(()=>{});
-    setBusy(false)
+    setBusy(false);
+    // v20.68: forzar reload para que el parent re-fetche el profile con managed_course_id seteado.
+    // Sin esto, el auto-login disparado por signUp leyo el profile antes del update y mostro "Sin locacion".
+    setTimeout(()=>window.location.reload(),200);
   }
   const prevMode=()=>{if(mode==="locOnboarding")setMode("pickFacType");else if(mode==="pickFacType")setMode("role");else setMode("register");setMsg("")};
   const inp={width:"100%",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:"14px 16px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12};
