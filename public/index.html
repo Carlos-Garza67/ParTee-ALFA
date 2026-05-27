@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.82 (Notifs de operacion convertidas de read-only a toggles funcionales por canal. AdminRegularNotifsInfo reemplazado por AdminRegularNotifsControls: 5 eventos (booking_created/cancelled/modified, checkin_player, payment_received) x 3 canales (email/push/in_app) = 15 toggles independientes. Persistido en admin_notification_prefs.operation_prefs (JSONB) via RPCs get_admin_operation_prefs y update_admin_operation_prefs (SEC DEF, authz por managed_course_id). Chip ⚠ APAGADO visible si los 3 canales del evento estan off. Banner aclarando que el wire-up de envio real en send-email/send-push es follow-up.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.81 (ProUpgradeModal self-service: quita cuadro descriptivo + tarjeta hola@partee.com.mx. Reemplaza por flujo en 4 steps. (1) Plans: mensual/anual sin cambios. (2) Payment-method: 2 cards grandes 💳 Tarjeta (Stripe) y 🏦 Transferencia SPEI. (3a) SPEI: tabla con Banco/Beneficiario/CLABE/RFC/Monto/Referencia, cada uno con boton Copiar, banner amarillo destacando que la referencia es necesaria para identificar el pago. (3b) Card-soon: si STRIPE_PAYMENT_LINKS no estan configurados, mensaje + boton para pagar por SPEI mientras tanto. Pro existente arranca en step manage. Chip 'Has elegido' visible en steps post-plans con boton Cambiar. Datos SPEI son placeholders en CONFIG block; reemplazar antes de prod.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.80 (Pricing visible. Card de Suscripcion en modo Free: quita sub 'Plan inicial 8.5% comision' (ruido visual) y cambia CTA a 'Ver nuestros planes' (mas neutral). ProUpgradeModal ahora tiene 2 steps: 'plans' muestra Plan Mensual ($1,500 USD/mes) vs Plan Anual ($13,200 USD/ano) con badge 'AHORRA 27%' en el anual (1500*12=18000 vs 13200 = ahorro $4,800 USD/ano ~ 3 meses gratis). Step 'contact' arranca al elegir un plan, con chip de plan seleccionado + boton 'Cambiar' para volver. El subject del mailto se pre-llena con el plan elegido para que el equipo de Partee sepa que ofrecer. Pro existentes saltan directo a step contact.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.79 (Subscription tier introducido: golf_courses ahora tiene subscription_plan (free/pro/pro_plus/enterprise) + status + started_at + renews_at. Default free para todos. Notificaciones avanzadas (Pulse/Insight/Churn/Campanas) gated por Pro: si free, muestra preview con candado + CTA upgrade; si Pro, muestra toggles con chip PROXIMAMENTE en cada item porque backend de crons aun no genera. Nuevo AdminSubscriptionCard arriba de Ajustes con CTA upgrade que abre ProUpgradeModal (Stripe Subscriptions todavia no integrado, en v1 dirige al equipo: hola@partee.com.mx). Nuevo AdminRegularNotifsInfo read-only que clarifica que notifs de reservas/cancelaciones/check-in son siempre activas. AutomationHealthCard solo visible si Pro. Ajustes: PAGOS · MI CUENTA · SUSCRIPCION · NOTIFICACIONES · APARIENCIA · SESION · ZONA PELIGROSA.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -860,7 +861,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.81">
+<meta name="version" content="20.82">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -8537,7 +8538,7 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
       <AdminSubscriptionCard course={course} onRefresh={onRefresh}/>
 
       {SH(t("Notificaciones"))}
-      <AdminRegularNotifsInfo/>
+      <AdminRegularNotifsControls course={course}/>
       <AdminNotifPrefsCard course={course}/>
       {isPro&&<AutomationHealthCard course={course}/>}
 
@@ -10583,27 +10584,92 @@ function AdminSubscriptionCard({course,onRefresh}){
   </>;
 }
 
-// v20.79: Info read-only de notifs regulares (siempre activas, parte del servicio core).
-// Para transparencia: el admin sabe que estas notifs llegan automaticamente sin opt-out.
-function AdminRegularNotifsInfo(){
+// v20.82: Notifs de operacion ahora son toggles funcionales por canal (email/push/in_app).
+// Persistidas via RPC update_admin_operation_prefs en columna JSONB operation_prefs de
+// admin_notification_prefs. El envio real de send-email/send-push aun NO lee estos toggles
+// (wire-up incremental pendiente); mientras tanto todos los eventos criticos siguen
+// llegando por todos los canales para no perder eventos. Cuando se haga el wire-up, los
+// toggles activos/inactivos pasaran a controlar el envio real.
+function AdminRegularNotifsControls({course}){
+  const EVENTS=[
+    {k:"booking_created",icon:"✅",label:"Nueva reserva",desc:"Un jugador confirmó una reserva en tu campo"},
+    {k:"booking_cancelled",icon:"❌",label:"Reserva cancelada",desc:"Un jugador canceló su reserva (con o sin fee)"},
+    {k:"booking_modified",icon:"✏️",label:"Reserva modificada",desc:"Cambio de jugadores, hora, o detalles de la reserva"},
+    {k:"checkin_player",icon:"📍",label:"Check-in del jugador",desc:"Un jugador se reportó presente en el campo"},
+    {k:"payment_received",icon:"💰",label:"Pago / liquidación",desc:"Pago procesado o liquidación enviada a tu cuenta"}
+  ];
+  const CHANNELS=[
+    {k:"email",icon:"📧",label:"Email"},
+    {k:"push",icon:"📱",label:"Push"},
+    {k:"in_app",icon:"🔔",label:"App"}
+  ];
+  const[prefs,setPrefs]=useState(null);
+  const[ld,setLd]=useState(true);
+  const[busy,setBusy]=useState(false);
+  const[dirty,setDirty]=useState(false);
+
+  useEffect(()=>{load()},[course?.id]);
+  async function load(){setLd(true);
+    const{data,error}=await sb.rpc("get_admin_operation_prefs",{p_course_id:course.id});
+    if(error){console.warn("[v20.82] op prefs err:",error);setLd(false);return}
+    setPrefs(data||{});setDirty(false);setLd(false);
+  }
+  function toggle(eventKey,channelKey){
+    setPrefs(p=>({...p,[eventKey]:{...p[eventKey],[channelKey]:!p[eventKey]?.[channelKey]}}));
+    setDirty(true);
+  }
+  async function save(){
+    if(busy||!dirty)return;setBusy(true);
+    const{error}=await sb.rpc("update_admin_operation_prefs",{p_course_id:course.id,p_prefs:prefs});
+    setBusy(false);
+    if(error){window.__toast?.("Error: "+error.message,"warn");return}
+    window.__toast?.("Preferencias guardadas","success");
+    setDirty(false);
+  }
+
   return<div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd,marginBottom:10}}>
-    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
       <span style={{fontSize:16}}>📬</span>
-      <div>
+      <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Notificaciones de operación</div>
-        <div style={{fontSize:10,color:C.tm,marginTop:1}}>Siempre activas · parte del servicio core</div>
+        <div style={{fontSize:10,color:C.tm,marginTop:1}}>Elige por dónde quieres recibir cada evento</div>
       </div>
     </div>
-    <div style={{fontSize:11,color:C.ts,lineHeight:1.8}}>
-      <div>✓ Nueva reserva confirmada</div>
-      <div>✓ Reserva cancelada por el jugador</div>
-      <div>✓ Reserva modificada (cambio de jugadores)</div>
-      <div>✓ Check-in del jugador en el campo</div>
-      <div>✓ Pago recibido / liquidación procesada</div>
-    </div>
-    <div style={{fontSize:10,color:C.tm,marginTop:10,fontStyle:"italic",lineHeight:1.4}}>
-      Estas notificaciones se envían vía email y push automáticamente para asegurar que no pierdas eventos críticos de tu campo.
-    </div>
+
+    {ld?<Skeleton w="100%" h={300}/>:!prefs?
+      <div style={{padding:20,textAlign:"center",color:C.tm,fontSize:12}}>No se pudieron cargar las preferencias</div>
+      :<>
+      {/* Lista de eventos × canales */}
+      {EVENTS.map((ev,idx)=>{const p=prefs[ev.k]||{};const anyOn=p.email||p.push||p.in_app;return(
+        <div key={ev.k} style={{padding:"11px 0",borderBottom:idx<EVENTS.length-1?"1px solid "+C.bd+"40":"none"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:8}}>
+            <span style={{fontSize:18,lineHeight:1,marginTop:1,flexShrink:0,opacity:anyOn?1:.4}}>{ev.icon}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:700,color:anyOn?C.txt:C.tm}}>{ev.label}</div>
+              <div style={{fontSize:10,color:C.tm,marginTop:1,lineHeight:1.4}}>{ev.desc}</div>
+            </div>
+            {!anyOn&&<span style={{padding:"2px 6px",borderRadius:5,background:C.acc+"15",color:C.acc,fontSize:9,fontWeight:700,flexShrink:0,whiteSpace:"nowrap"}}>⚠ APAGADO</span>}
+          </div>
+          <div style={{display:"flex",gap:6,marginLeft:28}}>
+            {CHANNELS.map(ch=>{const on=!!p[ch.k];return(
+              <button key={ch.k} onClick={()=>toggle(ev.k,ch.k)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"1px solid "+(on?C.acc:C.bd),background:on?C.acc+"15":"transparent",color:on?C.acc:C.tm,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s"}}>
+                <span style={{fontSize:12,opacity:on?1:.4}}>{ch.icon}</span>
+                <span>{ch.label}</span>
+              </button>
+            )})}
+          </div>
+        </div>
+      )})}
+
+      {/* Banner sobre estado del wire-up */}
+      <div style={{marginTop:14,padding:"8px 10px",background:C.gld+"08",borderRadius:8,fontSize:10,color:C.tm,lineHeight:1.4}}>
+        ℹ️ Tus preferencias se guardan. Mientras se completa la integración con email/push backend, todas las notificaciones críticas siguen llegando por todos los canales para no perder eventos.
+      </div>
+
+      <button onClick={save} disabled={busy||!dirty} style={{width:"100%",marginTop:10,padding:11,background:!dirty?C.bd:busy?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:!dirty||busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:!dirty||busy?"default":"pointer",letterSpacing:.3}}>
+        {busy?"Guardando…":dirty?"💾 Guardar cambios":"✓ Sin cambios"}
+      </button>
+    </>}
   </div>;
 }
 
