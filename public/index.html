@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.80 (Pricing visible. Card de Suscripcion en modo Free: quita sub 'Plan inicial 8.5% comision' (ruido visual) y cambia CTA a 'Ver nuestros planes' (mas neutral). ProUpgradeModal ahora tiene 2 steps: 'plans' muestra Plan Mensual ($1,500 USD/mes) vs Plan Anual ($13,200 USD/ano) con badge 'AHORRA 27%' en el anual (1500*12=18000 vs 13200 = ahorro $4,800 USD/ano ~ 3 meses gratis). Step 'contact' arranca al elegir un plan, con chip de plan seleccionado + boton 'Cambiar' para volver. El subject del mailto se pre-llena con el plan elegido para que el equipo de Partee sepa que ofrecer. Pro existentes saltan directo a step contact.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.79 (Subscription tier introducido: golf_courses ahora tiene subscription_plan (free/pro/pro_plus/enterprise) + status + started_at + renews_at. Default free para todos. Notificaciones avanzadas (Pulse/Insight/Churn/Campanas) gated por Pro: si free, muestra preview con candado + CTA upgrade; si Pro, muestra toggles con chip PROXIMAMENTE en cada item porque backend de crons aun no genera. Nuevo AdminSubscriptionCard arriba de Ajustes con CTA upgrade que abre ProUpgradeModal (Stripe Subscriptions todavia no integrado, en v1 dirige al equipo: hola@partee.com.mx). Nuevo AdminRegularNotifsInfo read-only que clarifica que notifs de reservas/cancelaciones/check-in son siempre activas. AutomationHealthCard solo visible si Pro. Ajustes: PAGOS · MI CUENTA · SUSCRIPCION · NOTIFICACIONES · APARIENCIA · SESION · ZONA PELIGROSA.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.78 (Ajustes del course_admin reorganizada con 7 secciones tipo sub-header: PAGOS · MI CUENTA · NOTIFICACIONES · AUTOMATIZACIONES · APARIENCIA · SESION · ZONA PELIGROSA. Antes era un mar de bloques heterogeneos sin jerarquia visual. Nuevo bloque AdminAccountCard: edita nombre + telefono del admin con avatar de inicial. Email read-only (cambiar email requiere flujo de magic link aparte, follow-up). Cambiar contrasena reusa el componente ChangePassword que ya existia para player. Cerrar sesion y Eliminar cuenta movidos al final con separacion visual clara.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.77 (HoleGeoEditor diagnostico visible · si get_holes_geo falla o retorna vacio, el usuario ve el mensaje exacto del error en el UI (no solo toast efimero) + boton Reintentar + console.log con course.id, length, sample row. Detecta tambien course.id ausente. Esto reemplaza el toast efimero que desaparecia antes de que el admin pudiera leer el motivo del fallo. Backend ya verificado OK: RPC get_holes_geo retorna los 9 hoyos de Club Santa Lejos cuando se simula a Alex; el bug probablemente era cache de Vercel sirviendo build previo.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -858,7 +859,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.79">
+<meta name="version" content="20.80">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -10352,41 +10353,109 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
 // no esta integrado (pendiente del roadmap maestro). En v1 dirigimos al usuario al equipo
 // para onboarding asistido — honestidad sobre maturity del producto + permite control de
 // quien entra al tier Pro (anti-fraud + customer success activo al inicio).
+// v20.80: Refactor a flujo de 2 steps. Step 1 "plans" muestra mensual vs anual con
+// badge AHORRA 27% (1500*12=18000 vs 13200 = ahorro 4800 USD/año). Step 2 "contact"
+// con plan seleccionado pre-llenado en el subject del mailto. Si isPro, arranca directo
+// en step contact (gestion). Tag de USD explicito en el precio.
 function ProUpgradeModal({currentPlan,isPro,onClose}){
+  const[step,setStep]=useState(isPro?"contact":"plans");
+  const[selectedPlan,setSelectedPlan]=useState(null); // 'monthly' | 'annual'
+
+  const PLAN_DETAILS={
+    monthly:{label:"Plan Mensual",price:"$1,500 USD",period:"al mes",mailtag:"Plan Mensual ($1,500 USD/mes)"},
+    annual:{label:"Plan Anual",price:"$13,200 USD",period:"al año",mailtag:"Plan Anual ($13,200 USD/año)"}
+  };
+  const sel=selectedPlan?PLAN_DETAILS[selectedPlan]:null;
+  const mailtoSubject=encodeURIComponent(isPro
+    ?"Partee Pro - Gestionar suscripción"
+    :sel?`Partee Pro - ${sel.mailtag}`:"Partee Pro - Activación");
+  const mailtoUrl=`mailto:hola@partee.com.mx?subject=${mailtoSubject}`;
+
+  function pickPlan(plan){setSelectedPlan(plan);setStep("contact")}
+  function backToPlans(){setSelectedPlan(null);setStep("plans")}
+
   return ReactDOM.createPortal(
     <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{maxWidth:440,width:"100%",background:C.bg,borderRadius:16,padding:22,maxHeight:"90vh",overflowY:"auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-          <div style={{flex:1}}>
-            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em"}}>{isPro?"GESTIONAR SUSCRIPCIÓN":"UPGRADE"}</div>
+      <div onClick={e=>e.stopPropagation()} style={{maxWidth:520,width:"100%",background:C.bg,borderRadius:16,padding:22,maxHeight:"92vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em"}}>{isPro?"GESTIONAR SUSCRIPCIÓN":step==="plans"?"NUESTROS PLANES":"ACTIVACIÓN"}</div>
             <div style={{fontSize:20,fontWeight:800,color:C.txt,marginTop:4}}>{isPro?"Tu plan "+(currentPlan==="pro"?"Partee Pro":currentPlan==="pro_plus"?"Partee Pro+":"Enterprise"):"🚀 Partee Pro"}</div>
           </div>
           <button onClick={onClose} style={{width:32,height:32,borderRadius:9,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
         </div>
-        {!isPro&&<div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
-          <div style={{fontSize:12,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:8}}>QUÉ INCLUYE</div>
-          <div style={{fontSize:13,color:C.txt,lineHeight:1.7}}>
-            <div style={{marginBottom:5}}>📡 <b>Pulse diario</b> — anomalías matutinas AI</div>
-            <div style={{marginBottom:5}}>🤖 <b>Insight semanal</b> — narrativa Claude AI los lunes</div>
-            <div style={{marginBottom:5}}>⚠️ <b>Alertas de churn</b> — VIPs en riesgo en tiempo real</div>
-            <div style={{marginBottom:5}}>📨 <b>Stats de campañas</b> — opens/clicks/bounces post-envío</div>
-            <div style={{marginBottom:5}}>💰 <b>Comisión reducida</b> — de 8.5% a 5.5% por transacción</div>
-            <div>🎯 <b>Soporte prioritario</b> — onboarding asistido por el equipo</div>
+
+        {/* STEP 1: PLANS */}
+        {step==="plans"&&<>
+          <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
+            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:8}}>QUÉ INCLUYE</div>
+            <div style={{fontSize:13,color:C.txt,lineHeight:1.7}}>
+              <div style={{marginBottom:4}}>📡 <b>Pulse diario</b> · anomalías matutinas AI</div>
+              <div style={{marginBottom:4}}>🤖 <b>Insight semanal</b> · narrativa Claude AI los lunes</div>
+              <div style={{marginBottom:4}}>⚠️ <b>Alertas de churn</b> · VIPs en riesgo en tiempo real</div>
+              <div style={{marginBottom:4}}>📨 <b>Stats de campañas</b> · opens/clicks/bounces</div>
+              <div style={{marginBottom:4}}>💰 <b>Comisión reducida</b> · de 8.5% a 5.5%</div>
+              <div>🎯 <b>Soporte prioritario</b> · onboarding asistido</div>
+            </div>
           </div>
-        </div>}
-        <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
-          <div style={{fontSize:13,color:C.txt,lineHeight:1.6}}>
-            {isPro
-              ?"Para cancelar o cambiar tu plan, contacta al equipo Partee. Nos aseguramos de que la transición sea sin interrupciones para tu campo."
-              :"Partee Pro se activa mediante onboarding asistido. Te ayudamos con la configuración de pagos, migración de datos históricos y capacitación inicial de tu equipo."}
+
+          <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>ELIGE TU PLAN</div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            {/* Plan Mensual */}
+            <div style={{padding:14,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,display:"flex",flexDirection:"column"}}>
+              <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:6}}>MENSUAL</div>
+              <div style={{fontSize:22,fontWeight:800,color:C.txt}}>$1,500</div>
+              <div style={{fontSize:11,color:C.ts,marginTop:1}}>USD / mes</div>
+              <div style={{fontSize:10,color:C.tm,marginTop:8,marginBottom:12,lineHeight:1.4,flex:1}}>Sin compromiso · cancela cuando quieras</div>
+              <button onClick={()=>pickPlan("monthly")} style={{width:"100%",padding:10,borderRadius:9,background:"transparent",border:"1px solid "+C.bd,color:C.txt,fontSize:12,fontWeight:700,cursor:"pointer"}}>Elegir mensual</button>
+            </div>
+
+            {/* Plan Anual */}
+            <div style={{padding:14,borderRadius:12,background:`linear-gradient(135deg,${C.gld}10,${C.grn}08)`,border:"2px solid "+C.grn,display:"flex",flexDirection:"column",position:"relative"}}>
+              <div style={{position:"absolute",top:-9,right:10,padding:"3px 8px",borderRadius:5,background:C.grn,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:".05em"}}>AHORRA 27%</div>
+              <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:6}}>ANUAL</div>
+              <div style={{fontSize:22,fontWeight:800,color:C.txt}}>$13,200</div>
+              <div style={{fontSize:11,color:C.ts,marginTop:1}}>USD / año</div>
+              <div style={{fontSize:10,color:C.grn,marginTop:8,fontWeight:600,lineHeight:1.4}}>Equivale a $1,100 USD/mes</div>
+              <div style={{fontSize:10,color:C.tm,marginTop:2,marginBottom:12,lineHeight:1.4,flex:1}}>Ahorras $4,800 USD/año · ~3 meses gratis</div>
+              <button onClick={()=>pickPlan("annual")} style={{width:"100%",padding:10,borderRadius:9,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Elegir anual</button>
+            </div>
           </div>
-        </div>
-        <div style={{padding:14,background:`linear-gradient(135deg,${C.grn}10,#00cec908)`,border:"1px solid "+C.grn+"40",borderRadius:12,marginBottom:14}}>
-          <div style={{fontSize:10,fontWeight:700,color:C.grn,letterSpacing:".05em",marginBottom:4}}>ESCRÍBENOS</div>
-          <a href="mailto:hola@partee.com.mx?subject=Partee Pro - Activación" style={{fontSize:16,fontWeight:800,color:C.txt,textDecoration:"none",display:"block"}}>hola@partee.com.mx</a>
-          <div style={{fontSize:11,color:C.ts,marginTop:4}}>Respuesta en menos de 24h hábiles</div>
-        </div>
-        <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
+
+          <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
+        </>}
+
+        {/* STEP 2: CONTACT */}
+        {step==="contact"&&<>
+          {sel&&<div style={{padding:12,background:C.grn+"10",border:"1px solid "+C.grn+"40",borderRadius:10,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>HAS ELEGIDO</div>
+              <div style={{fontSize:14,fontWeight:800,color:C.txt,marginTop:2}}>{sel.label}</div>
+              <div style={{fontSize:11,color:C.ts,marginTop:1}}>{sel.price} {sel.period}</div>
+            </div>
+            <button onClick={backToPlans} style={{padding:"7px 10px",borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.ts,fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>← Cambiar</button>
+          </div>}
+
+          <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
+            <div style={{fontSize:13,color:C.txt,lineHeight:1.6}}>
+              {isPro
+                ?"Para cancelar o cambiar tu plan, contacta al equipo Partee. Nos aseguramos de que la transición sea sin interrupciones para tu campo."
+                :"Partee Pro se activa mediante onboarding asistido. Te ayudamos con la configuración de pagos, migración de datos históricos y capacitación inicial de tu equipo."}
+            </div>
+          </div>
+
+          <a href={mailtoUrl} style={{display:"block",padding:14,background:`linear-gradient(135deg,${C.grn}10,#00cec908)`,border:"1px solid "+C.grn+"40",borderRadius:12,marginBottom:14,textDecoration:"none"}}>
+            <div style={{fontSize:10,fontWeight:700,color:C.grn,letterSpacing:".05em",marginBottom:4}}>ESCRÍBENOS</div>
+            <div style={{fontSize:16,fontWeight:800,color:C.txt}}>hola@partee.com.mx</div>
+            <div style={{fontSize:11,color:C.ts,marginTop:4}}>Respuesta en menos de 24h hábiles</div>
+          </a>
+
+          <div style={{display:"flex",gap:8}}>
+            {!isPro&&<button onClick={backToPlans} style={{flex:1,padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.txt,fontSize:13,fontWeight:600,cursor:"pointer"}}>← Ver planes</button>}
+            <button onClick={onClose} style={{flex:1,padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
+          </div>
+        </>}
       </div>
     </div>,document.body);
 }
@@ -10394,15 +10463,18 @@ function ProUpgradeModal({currentPlan,isPro,onClose}){
 // v20.79: Card de suscripcion. Free muestra CTA de upgrade. Pro/Pro+ muestra status +
 // fecha de renovacion + boton de gestion. Stripe Subscriptions todavia no esta integrado;
 // el flujo de activacion es manual (contacto con equipo) hasta que se conecte.
+// v20.80: Free elimina el sub "Plan inicial · 8.5% comision" (era ruido visual). CTA
+// cambiado a "Ver nuestros planes" (mas neutral que "Activar" — al hacer click el modal
+// muestra mensual vs anual con descuento, el usuario decide).
 function AdminSubscriptionCard({course,onRefresh}){
   const[showModal,setShowModal]=useState(false);
   const plan=course.subscription_plan||"free";
   const status=course.subscription_status||"active";
   const isPro=["pro","pro_plus","enterprise"].includes(plan)&&status==="active";
   const TIER={
-    free:{label:"Free",col:C.tm,price:"$0",sub:"Plan inicial · 8.5% comisión",cta:"🚀 Activar Partee Pro",ctaStyle:"primary"},
-    pro:{label:"Partee Pro",col:C.gld,price:"$2,000 MXN/mes",sub:"5.5% comisión + automatizaciones AI",cta:"Gestionar suscripción",ctaStyle:"secondary"},
-    pro_plus:{label:"Partee Pro+",col:C.grn,price:"$5,500 MXN/mes",sub:"4.5% comisión + GPS + AI completo",cta:"Gestionar suscripción",ctaStyle:"secondary"},
+    free:{label:"Free",col:C.tm,price:"$0",sub:null,cta:"Ver nuestros planes",ctaStyle:"primary"},
+    pro:{label:"Partee Pro",col:C.gld,price:"$1,500 USD/mes",sub:"5.5% comisión + automatizaciones AI",cta:"Gestionar suscripción",ctaStyle:"secondary"},
+    pro_plus:{label:"Partee Pro+",col:C.grn,price:"$5,500 USD/mes",sub:"4.5% comisión + GPS + AI completo",cta:"Gestionar suscripción",ctaStyle:"secondary"},
     enterprise:{label:"Enterprise",col:C.acc,price:"Custom",sub:"Multi-location + integraciones",cta:"Contactar",ctaStyle:"secondary"}
   };
   const info=TIER[plan]||TIER.free;
@@ -10418,12 +10490,12 @@ function AdminSubscriptionCard({course,onRefresh}){
         {status==="cancelled"&&<span style={{padding:"4px 9px",borderRadius:6,background:C.acc+"15",color:C.acc,fontSize:9,fontWeight:700,letterSpacing:".05em",flexShrink:0}}>CANCELADO</span>}
         {status==="past_due"&&<span style={{padding:"4px 9px",borderRadius:6,background:C.acc+"15",color:C.acc,fontSize:9,fontWeight:700,letterSpacing:".05em",flexShrink:0}}>PAGO ATRASADO</span>}
       </div>
-      <div style={{fontSize:12,color:C.txt,marginBottom:12,lineHeight:1.5}}>{info.sub}</div>
+      {info.sub&&<div style={{fontSize:12,color:C.txt,marginBottom:12,lineHeight:1.5}}>{info.sub}</div>}
       {isPro&&<>
         {course.subscription_started_at&&<div style={{fontSize:11,color:C.ts,marginBottom:4}}>Activo desde: {new Date(course.subscription_started_at).toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</div>}
         {course.subscription_renews_at&&<div style={{fontSize:11,color:C.ts,marginBottom:10}}>Próxima renovación: {new Date(course.subscription_renews_at).toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</div>}
       </>}
-      <button onClick={()=>setShowModal(true)} style={{width:"100%",padding:11,borderRadius:10,background:info.ctaStyle==="primary"?`linear-gradient(135deg,${C.gld},#e67e22)`:"transparent",border:info.ctaStyle==="primary"?"none":"1px solid "+C.bd,color:info.ctaStyle==="primary"?"#fff":C.txt,fontSize:13,fontWeight:700,cursor:"pointer"}}>{info.cta}</button>
+      <button onClick={()=>setShowModal(true)} style={{width:"100%",padding:11,borderRadius:10,background:info.ctaStyle==="primary"?`linear-gradient(135deg,${C.gld},#e67e22)`:"transparent",border:info.ctaStyle==="primary"?"none":"1px solid "+C.bd,color:info.ctaStyle==="primary"?"#fff":C.txt,fontSize:13,fontWeight:700,cursor:"pointer",marginTop:!info.sub&&!isPro?8:0}}>{info.cta}</button>
     </div>
     {showModal&&<ProUpgradeModal currentPlan={plan} isPro={isPro} onClose={()=>setShowModal(false)}/>}
   </>;
