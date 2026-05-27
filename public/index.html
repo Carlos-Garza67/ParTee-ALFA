@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.77 (HoleGeoEditor diagnostico visible · si get_holes_geo falla o retorna vacio, el usuario ve el mensaje exacto del error en el UI (no solo toast efimero) + boton Reintentar + console.log con course.id, length, sample row. Detecta tambien course.id ausente. Esto reemplaza el toast efimero que desaparecia antes de que el admin pudiera leer el motivo del fallo. Backend ya verificado OK: RPC get_holes_geo retorna los 9 hoyos de Club Santa Lejos cuando se simula a Alex; el bug probablemente era cache de Vercel sirviendo build previo.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.76 (Nueva sub-tab 'Historico' en Ventas para consulta contable de bookings. Diferencia con 'Cobros': Cobros = payouts (lo que Partee debe/pago al campo despues de comision); Historico = bookings crudo (cada transaccion confirmada o cancelada con su detalle). Stats 2x2 hero: ventas totales, ticket promedio, cancelaciones, total transacciones. Filtros por rango (30d/90d/1y/Todo) y por status. Export CSV con BOM UTF-8 para Excel. Detalle expandible: jugador/email, modo pago, promo aplicada, extras, descuentos, cancellation_fee, check-in time, % comision Partee, Stripe payment intent.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.75 (AdminCampo IA refactor 2 · de 4 a 3 tabs. La tab 'Finanzas' se elimina y su contenido se reparte: el SETUP de Stripe Connect (banners segun status + toggle SPEI vs Automatico) se mueve a 'Ajustes' como primer bloque visible (es configuracion); el HISTORIAL de cobros (hero stats RECIBIDO/POR LIQUIDAR + filtros + lista de payouts) se mueve a Ventas como nueva sub 'Cobros' al inicio (es transaccional, es lo primero que el admin quiere ver al abrir Ventas). AdminPayouts dividido en AdminPayoutsSetup + AdminPayoutsHistory. Deep-links legacy a finanzas redirigen a cuenta.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.74 (Edicion inline de precio en el modal del slot. Antes el modal solo permitia 'Bloquear' y 'Hot Deal' — no habia forma de cambiar el precio individual de un slot. Ahora boton 'Editar' junto al precio abre input numerico inline con Guardar/Cancelar. Actualiza price Y base_price (precio oficial del slot); para descuento temporal usa Hot Deal o Dynamic Pricing. Deshabilitado para slots ya ocupados.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -855,7 +856,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.76">
+<meta name="version" content="20.77">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -10917,6 +10918,8 @@ function HoleGeoEditor({course, onClose}){
   const[idx,setIdx]=useState(0);
   const[mode,setMode]=useState("tee");
   const[loading,setLoading]=useState(true);
+  const[loadErr,setLoadErr]=useState(null);
+  const[reloadKey,setReloadKey]=useState(0);
   const[saving,setSaving]=useState(false);
   const[bulkSaving,setBulkSaving]=useState(false);
   const[bulkProgress,setBulkProgress]=useState(null);
@@ -10936,23 +10939,37 @@ function HoleGeoEditor({course, onClose}){
     sc.onload=()=>resolve();sc.onerror=()=>reject(new Error("load"));document.head.appendChild(sc);
   });
   useEffect(()=>{
-    let alive=true;
+    let alive=true;setLoading(true);setLoadErr(null);
+    // v20.77: diagnostico visible. Si el RPC falla o retorna vacio, el usuario ve por que.
+    if(!course||!course.id){
+      console.error("[HoleGeoEditor] course.id ausente:",course);
+      setLoadErr("course.id no disponible (revisa que el campo este cargado)");setLoading(false);return;
+    }
+    console.log("[HoleGeoEditor] cargando hoyos para course.id=",course.id);
     Promise.race([
       sb.rpc("get_holes_geo",{p_course_id:course.id}),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),10000))
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout 10s")),10000))
     ]).then(({data,error})=>{
       if(!alive)return;
-      if(error){window.__toast&&window.__toast(t("No se pudieron cargar los hoyos"),"error");setLoading(false);return}
+      if(error){
+        console.error("[HoleGeoEditor] RPC error:",error);
+        setLoadErr("RPC: "+(error.message||error.code||JSON.stringify(error)));setLoading(false);return;
+      }
+      console.log("[HoleGeoEditor] RPC OK · "+(data?.length||0)+" hoyos · sample:",data?.[0]);
       const hs=(data||[]).map(h=>({hole_id:h.hole_id,hole_number:h.hole_number,par:h.par,
         tee:h.tee_lat!=null?{lat:h.tee_lat,lng:h.tee_lng}:null,
         green:h.green_lat!=null?{lat:h.green_lat,lng:h.green_lng}:null,
         saved:(h.tee_lat!=null&&h.green_lat!=null)}));
       setHoles(hs);setLoading(false);
-      const firstInc=hs.findIndex(h=>!h.tee||!h.green);
-      setIdx(firstInc>=0?firstInc:0);
-    }).catch(()=>{if(alive){window.__toast&&window.__toast(t("No se pudieron cargar los hoyos · revisa tu conexión"),"error");setLoading(false)}});
+      if(hs.length===0){setLoadErr("La consulta no devolvio hoyos. Primero crea los hoyos en Campo > Layouts.")}
+      else{const firstInc=hs.findIndex(h=>!h.tee||!h.green);setIdx(firstInc>=0?firstInc:0)}
+    }).catch(e=>{
+      if(!alive)return;
+      console.error("[HoleGeoEditor] catch:",e);
+      setLoadErr(e.message||String(e));setLoading(false);
+    });
     return()=>{alive=false};
-  },[course.id]);
+  },[course?.id,reloadKey]);
   useEffect(()=>{
     let alive=true;
     loadLeaflet().then(()=>{
@@ -11040,6 +11057,11 @@ function HoleGeoEditor({course, onClose}){
     </div>
     <div ref={mapRef} style={{flex:1,minHeight:0,width:"100%",background:C.cd}}/>
     <div style={{padding:"10px 16px 16px",borderTop:"1px solid "+C.bd,background:C.cd,flexShrink:0,maxHeight:"46vh",overflowY:"auto"}}>
+      {loadErr&&<div style={{padding:12,borderRadius:12,background:C.acc+"10",border:"1px solid "+C.acc+"40",marginBottom:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.acc,marginBottom:6}}>⚠ No se pudieron cargar los hoyos</div>
+        <div style={{fontSize:11,color:C.ts,marginBottom:8,wordBreak:"break-word",fontFamily:"monospace"}}>{loadErr}</div>
+        <button onClick={()=>setReloadKey(k=>k+1)} style={{padding:"7px 14px",borderRadius:9,border:"1px solid "+C.acc,background:"transparent",color:C.acc,fontSize:11,fontWeight:700,cursor:"pointer"}}>Reintentar</button>
+      </div>}
       {loading?<div style={{fontSize:12,color:C.ts,textAlign:"center",padding:"10px 0"}}>{t("Cargando")}…</div>:<>
       <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:4}}>{t("Hoyo")} {cur?cur.hole_number:"–"} {cur?<span style={{color:C.tm,fontWeight:400}}>· {t("Par")} {cur.par}</span>:null}{curSaved?<span style={{color:C.grn,fontWeight:700,fontSize:11}}> · {t("guardado")} ✓</span>:null}</div>
       <div style={{fontSize:12,color:C.ts,marginBottom:10}}>{mode==="tee"?t("Toca el mapa para marcar el TEE de salida"):t("Toca el mapa para marcar el GREEN")}</div>
