@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.72 (saveLayout y saveHole con try/catch/finally — antes ambos se tragaban silenciosamente errores de RLS/CHECK/network. Sintoma: boton de guardar quedaba spinning '...' indefinidamente porque setLySaving(false) nunca se ejecutaba. Ahora cualquier fallo muestra toast claro con el error real. Tambien chequeo del demoter de is_default antes del save principal.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.71 (Hardening AdminProfile · 3 fixes: (1) grilla de hoyos usa hole_count (fisicos) en vez de holes_per_round, asi un medio campo de 9 fisicos ya no muestra 18 botones; (2) saveCourse con try/catch + toast — antes los errores del UPDATE (400 Bad Request, RLS, etc) se tragaban silenciosamente; (3) validacion cliente de lat[-90,90] y lng[-180,180] con toast claro si se pega coord sin punto decimal o fuera de rango)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.70 (AdminCampo IA refactor · merge tabs Identidad+Operacion en un solo tab 'Informacion' (la separacion era arbitraria, todo es info del campo); rename 'Cuenta' a 'Ajustes' (convencion mas estandar). S helper acepta info como union de identidad+operacion para no romper render. Deep-links de CourseStatusBanner (REQ_NAV) migrados al nuevo key. Normalizacion de legacy initialSub values para backward compat. De 5 tabs a 4)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.69 (Fix critico RLS UPDATE golf_courses · backend: policy golf_courses_update_authorized usaba course_administrators (tabla VACIA) + platform_admin como unicas vias, asi que ningun course_admin podia guardar cambios a su campo. Ahora autoriza correctamente por user_profiles.managed_course_id (el patron real de Partee). Sintoma engañoso: el await no fallaba, solo updateaba 0 rows silenciosamente. Frontend: rename tab 'Operación' a 'Información')","color:#e94560;font-weight:bold;font-size:13px");
@@ -850,7 +851,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.71">
+<meta name="version" content="20.72">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -8340,7 +8341,24 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
   const removePhoto=(idx)=>{const go=async()=>{const np=photos.filter((_,i)=>i!==idx);setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);if(onRefresh)onRefresh()};if(window.__confirm)window.__confirm("¿Eliminar esta foto?",go);else if(confirm("¿Eliminar esta foto?"))go()};
   const replacePhoto=async(e,idx)=>{const file=e.target.files?.[0];if(!file||!file.type.startsWith("image/")||file.size>5*1024*1024)return;setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){setUpPh(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos];np[idx]=publicUrl;setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);setUpPh(false);if(onRefresh)onRefresh()};
   const uploadPhoto=async(e)=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith("image/")){window.__toast?.("Solo imágenes","error");return}if(file.size>5*1024*1024){window.__toast?.(t("Máximo 5MB"),"error");return}setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){window.__toast?.(ue.message,"error");setUpPh(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos,publicUrl];setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);setUpPh(false);if(onRefresh)onRefresh()};
-  const saveHole=async()=>{if(!editHole)return;const payload={course_id:course.id,hole_number:editHole,par:parseInt(hPar),distance_yards:hDist?parseInt(hDist):null,hole_description:hDesc||null};const ex=holes.find(h=>h.hole_number===editHole);if(ex)await sb.from("course_holes").update(payload).eq("id",ex.id);else await sb.from("course_holes").insert(payload);const{data}=await sb.from("course_holes").select("*").eq("course_id",course.id).is("layout_id",null).order("hole_number");setHoles(data||[]);setEditHole(null)};
+  const saveHole=async()=>{
+    if(!editHole)return;
+    const payload={course_id:course.id,hole_number:editHole,par:parseInt(hPar),distance_yards:hDist?parseInt(hDist):null,hole_description:hDesc||null};
+    try{
+      const ex=holes.find(h=>h.hole_number===editHole);
+      const{error:saveErr}=ex
+        ?await sb.from("course_holes").update(payload).eq("id",ex.id)
+        :await sb.from("course_holes").insert(payload);
+      if(saveErr){window.__toast?.("Error al guardar hoyo: "+saveErr.message,"error");return}
+      const{data,error:loadErr}=await sb.from("course_holes").select("*").eq("course_id",course.id).is("layout_id",null).order("hole_number");
+      if(loadErr){window.__toast?.("Hoyo guardado pero error al recargar: "+loadErr.message,"error");return}
+      setHoles(data||[]);
+      setEditHole(null);
+      window.__toast?.(t("Hoyo guardado"),"success");
+    }catch(e){
+      window.__toast?.("Error inesperado al guardar hoyo: "+(e?.message||e),"error");
+    }
+  };
   const openHole=n=>{const h=holes.find(x=>x.hole_number===n);setEditHole(n);setHPar(h?h.par.toString():"4");setHDist(h?h.distance_yards?.toString()||"":"");setHDesc(h?h.hole_description||"":"")};
 
   // v19.71: logo upload/remove. Bucket venue-photos compartido con fotos pero path con prefijo logo-{ts}.
@@ -8350,11 +8368,32 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
   // v19.71: editor multi-layout — open/close/save/delete/setDefault.
   const openLayoutEditor=(ly)=>{if(ly){setEditLayout(ly);setLyName(ly.name||"");setLyHC(ly.holes_count!=null?ly.holes_count.toString():"");setLyParEdit(ly.par!=null?ly.par.toString():"");setLyRating(ly.rating!=null?ly.rating.toString():"");setLySlope(ly.slope!=null?ly.slope.toString():"");setLyIsDefault(!!ly.is_default)}else{setEditLayout({});setLyName("");setLyHC(course.holes_per_round?course.holes_per_round.toString():"18");setLyParEdit(course.total_par?course.total_par.toString():"72");setLyRating("");setLySlope("");setLyIsDefault(layouts.length===0)}};
   const closeLayoutEditor=()=>{setEditLayout(null);setLyName("");setLyHC("");setLyParEdit("");setLyRating("");setLySlope("");setLyIsDefault(false)};
-  const saveLayout=async()=>{if(!lyName.trim()){window.__toast?.(t("El nombre es obligatorio"),"error");return}setLySaving(true);const payload={course_id:course.id,name:lyName.trim(),holes_count:lyHC?parseInt(lyHC):null,par:lyParEdit?parseInt(lyParEdit):null,rating:lyRating?parseFloat(lyRating):null,slope:lySlope?parseInt(lySlope):null,is_default:lyIsDefault};
-    // Si is_default=true y ya existe otro layout default distinto, demoter primero (constraint only_one_default_per_course)
-    if(lyIsDefault){const cur=layouts.find(l=>l.is_default&&(!editLayout?.id||l.id!==editLayout.id));if(cur){await sb.from("course_layouts").update({is_default:false}).eq("id",cur.id)}}
-    if(editLayout&&editLayout.id){await sb.from("course_layouts").update(payload).eq("id",editLayout.id)}else{await sb.from("course_layouts").insert(payload)}
-    await reloadLayouts();setLySaving(false);closeLayoutEditor();window.__toast?.(t("Layout guardado"),"success")};
+  const saveLayout=async()=>{
+    if(!lyName.trim()){window.__toast?.(t("El nombre es obligatorio"),"error");return}
+    setLySaving(true);
+    const payload={course_id:course.id,name:lyName.trim(),holes_count:lyHC?parseInt(lyHC):null,par:lyParEdit?parseInt(lyParEdit):null,rating:lyRating?parseFloat(lyRating):null,slope:lySlope?parseInt(lySlope):null,is_default:lyIsDefault};
+    try{
+      // Si is_default=true y ya existe otro default distinto, demoter primero (constraint only_one_default_per_course)
+      if(lyIsDefault){
+        const cur=layouts.find(l=>l.is_default&&(!editLayout?.id||l.id!==editLayout.id));
+        if(cur){
+          const{error:demoErr}=await sb.from("course_layouts").update({is_default:false}).eq("id",cur.id);
+          if(demoErr){window.__toast?.("Error al demover layout default actual: "+demoErr.message,"error");return}
+        }
+      }
+      const{error:saveErr}=editLayout&&editLayout.id
+        ?await sb.from("course_layouts").update(payload).eq("id",editLayout.id)
+        :await sb.from("course_layouts").insert(payload);
+      if(saveErr){window.__toast?.("Error al guardar layout: "+saveErr.message,"error");return}
+      await reloadLayouts();
+      closeLayoutEditor();
+      window.__toast?.(t("Layout guardado"),"success");
+    }catch(e){
+      window.__toast?.("Error inesperado al guardar layout: "+(e?.message||e),"error");
+    }finally{
+      setLySaving(false);
+    }
+  };
   const deleteLayout=(ly)=>{if(ly.is_default){window.__toast?.(t("No puedes eliminar el layout default. Marca otro como default primero."),"error");return}const go=async()=>{
     // Bloquear delete si hay scorecards apuntando — destruirían cálculos de handicap pasados.
     const{count:sc}=await sb.from("scorecards").select("id",{count:"exact",head:true}).eq("layout_id",ly.id);
