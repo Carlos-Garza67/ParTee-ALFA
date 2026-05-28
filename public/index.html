@@ -8,6 +8,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v20.85 (Ajustes del course_admin refactorizada con pautas visuales identicas al Player Profile. Nuevo componente AdminAjustesAccordion: 6 secciones colapsables (Mi cuenta, Cobros y pagos, Suscripcion, Notificaciones, Apariencia, Sesion y cuenta) en patron accordion. Header siempre visible con icon coloreado en container 32x32 (radius 10, bg color+10), label fontSize 14 fontWeight 700, chevron rotate 180deg al expandir. Body con C.el background + borderRadius continuo. Mi cuenta arranca abierta por default. Quitado el patron de sub-headers UPPERCASE planos. Removido el colapso interno de AdminRegularNotifsControls (ahora el accordion exterior maneja el colapso, evita doble-collapse). Cobros + suscripcion + sesion/cuenta agrupados en sus propias secciones del accordion.)","color:#0984e3;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v20.84 (Notificaciones de operacion ahora colapsable. Header siempre visible con icono, titulo, subtitulo, badge contador 'N/5 eventos activos' (verde si >0, rojo si 0), badge 'SIN GUARDAR' (dorado) si dirty, chevron rotate al expandir. Click en header expande/colapsa con animacion. Expandido: master toggle por evento + sub-chips 📱 Celular y 📧 Correo independientes para customizar canal. Master ON prende los 3 canales; sub-chips permiten apagar uno sin perder los otros. Sub-chips atenuados+pointer-events-none si master OFF. Banner wire-up + boton guardar siguen al final. e.stopPropagation en sub-chips evita que click propague al master.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.83 (Notifs de operacion simplificadas a UN toggle por evento. Al activar, prende los 3 canales como bundle (celular + correo + app); al desactivar, los 3 se apagan juntos. UX mas simple: el admin no piensa 'quiero email pero no push para X', piensa 'quiero notificarme de X' y le llega por todos los canales configurados. Estructura JSONB se mantiene por si en el futuro queremos granularidad de canal. Subtitulo del componente aclara 'Al activar recibes por celular, correo y dentro de la app'.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.82 (Notifs de operacion convertidas de read-only a toggles funcionales por canal. AdminRegularNotifsInfo reemplazado por AdminRegularNotifsControls: 5 eventos (booking_created/cancelled/modified, checkin_player, payment_received) x 3 canales (email/push/in_app) = 15 toggles independientes. Persistido en admin_notification_prefs.operation_prefs (JSONB) via RPCs get_admin_operation_prefs y update_admin_operation_prefs (SEC DEF, authz por managed_course_id). Chip ⚠ APAGADO visible si los 3 canales del evento estan off. Banner aclarando que el wire-up de envio real en send-email/send-push es follow-up.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.81 (ProUpgradeModal self-service: quita cuadro descriptivo + tarjeta hola@partee.com.mx. Reemplaza por flujo en 4 steps. (1) Plans: mensual/anual sin cambios. (2) Payment-method: 2 cards grandes 💳 Tarjeta (Stripe) y 🏦 Transferencia SPEI. (3a) SPEI: tabla con Banco/Beneficiario/CLABE/RFC/Monto/Referencia, cada uno con boton Copiar, banner amarillo destacando que la referencia es necesaria para identificar el pago. (3b) Card-soon: si STRIPE_PAYMENT_LINKS no estan configurados, mensaje + boton para pagar por SPEI mientras tanto. Pro existente arranca en step manage. Chip 'Has elegido' visible en steps post-plans con boton Cambiar. Datos SPEI son placeholders en CONFIG block; reemplazar antes de prod.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -862,7 +864,7 @@ console.log("%c[Partee] Build v20.3 (Memberships v1 — período pre-pagado one-
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <title>Partee Golf — Reserva Tee Times en Campos de Golf en México</title>
-<meta name="version" content="20.83">
+<meta name="version" content="20.85">
 <meta name="description" content="Reserva tee times en los mejores campos de golf de México. Compara precios, juega partidas, conecta con otros golfistas y mejora tu handicap. Descarga gratis.">
 <meta name="keywords" content="golf México, tee times, reserva golf, campos de golf, partidas golf, handicap, green fee, Partee Golf">
 <meta name="author" content="Partee Golf">
@@ -8359,6 +8361,75 @@ function AdminNotifPrefsCard({course}){
   </div>;
 }
 
+// v20.85: Accordion para Ajustes del course_admin con pautas visuales identicas al
+// Player Profile (linea ~6232). Un solo openSec a la vez. Header siempre visible con
+// icon coloreado en container 32x32 (radius 10, bg color+'10'), label + chevron rotate.
+// Body expandido con C.el||C.cd background y "0 0 14px 14px" borderRadius. Reemplaza
+// el patron previo (sub-headers UPPERCASE planos) por algo agrupable y mas refinado.
+function AdminAjustesAccordion({course,onOut,onRefresh,ctxOut}){
+  const isPro=["pro","pro_plus","enterprise"].includes(course.subscription_plan||"free")&&(course.subscription_status||"active")==="active";
+  const[openSec,setOpenSec]=useState("cuenta"); // Mi cuenta arranca abierto
+
+  const SECTIONS=[
+    {k:"cuenta",icon:ic("user",18,C.grn),label:t("Mi cuenta"),color:C.grn,content:<>
+      <AdminAccountCard/>
+      <ChangePassword/>
+    </>},
+    {k:"cobros",icon:ic("credit",18,C.gld),label:t("Cobros y pagos"),color:C.gld,content:<>
+      <AdminPayoutsSetup course={course} onRefresh={onRefresh}/>
+    </>},
+    {k:"suscripcion",icon:ic("dollar",18,C.secBlu||"#5b86e5"),label:t("Suscripción"),color:C.secBlu||"#5b86e5",content:<>
+      <AdminSubscriptionCard course={course} onRefresh={onRefresh}/>
+    </>},
+    {k:"notifs",icon:ic("bell",18,C.acc),label:t("Notificaciones"),color:C.acc,content:<>
+      <AdminRegularNotifsControls course={course}/>
+      <AdminNotifPrefsCard course={course}/>
+      {isPro&&<AutomationHealthCard course={course}/>}
+    </>},
+    {k:"apariencia",icon:ic("settings",18,C.ts),label:t("Apariencia"),color:C.ts,content:<>
+      <ThemeToggle/><LangToggle/>
+    </>},
+    {k:"sesion",icon:ic("alert",18,C.acc),label:t("Sesión y cuenta"),color:C.acc,content:<>
+      <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>Cierra sesión en este dispositivo o elimina permanentemente tu cuenta de course_admin.</div>
+      <button onClick={()=>{
+        const doOut=ctxOut||onOut;
+        if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>doOut());
+        else if(confirm(t("Cerrar sesión?")))doOut();
+      }} style={{width:"100%",padding:11,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:8}}>{t("Cerrar Sesión")}</button>
+      <button onClick={()=>{
+        const go=async()=>{
+          try{
+            const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+            const res=await fetch(SB_FN_URL+"/delete-account",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"}});
+            const data=await res.json();
+            if(!res.ok||!data.success){
+              if(data.blockers&&data.blockers.length){window.__toast?.(t("Cuenta no eliminada: hay actividad pendiente"),"error")}
+              else{window.__toast?.(data.error||t("Error al eliminar cuenta"),"error")}
+              return;
+            }
+            window.__toast?.(t("Cuenta eliminada"),"success");
+            setTimeout(()=>onOut(),600);
+          }catch(e){window.__toast?.(t("Error al eliminar cuenta"),"error")}
+        };
+        if(window.__confirm)window.__confirm(t("¿Eliminar cuenta?"),go);else if(confirm(t("¿Eliminar cuenta?")))go();
+      }} style={{width:"100%",padding:11,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
+    </>}
+  ];
+
+  return<div>
+    {SECTIONS.map(sec=><div key={sec.k} style={{marginBottom:8}}>
+      <div onClick={()=>setOpenSec(openSec===sec.k?null:sec.k)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:C.glass||C.w04||C.cd,border:"1px solid "+(C.glassBd||C.bd),borderRadius:openSec===sec.k?"14px 14px 0 0":14,cursor:"pointer",boxShadow:C.shCard||"none",userSelect:"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:10,background:sec.color+"10",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sec.icon}}/>
+          <span style={{fontSize:14,fontWeight:700,color:C.txt}}>{sec.label}</span>
+        </div>
+        <div style={{transform:openSec===sec.k?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/>
+      </div>
+      {openSec===sec.k&&<div style={{padding:16,background:C.el||C.cd,border:"1px solid "+(C.elBd||C.bd),borderTop:"none",borderRadius:"0 0 14px 14px"}}>{sec.content}</div>}
+    </div>)}
+  </div>;
+}
+
 function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsumed,section}){const S=(sec)=>!section||section==="all"||section===sec||(section==="info"&&(sec==="identidad"||sec==="operacion"));const{s,out:ctxOut}=useA();const[ed,setEd]=useState(false);const[sv,setSv]=useState(false);const[desc,setDesc]=useState(course.description||"");const[phone,setPhone]=useState(course.phone_number||"");const[feeMin,setFeeMin]=useState(course.green_fee_min?.toString()||"");const[feeMax,setFeeMax]=useState(course.green_fee_max?.toString()||"");const[cancelHrs,setCancelHrs]=useState(course.cancellation_hours?.toString()||"24");const[cancelPct,setCancelPct]=useState(course.cancellation_refund_pct?.toString()||"100");const[opHours,setOpHours]=useState(course.operating_hours||"");const[opDays,setOpDays]=useState(course.operating_days||"");const[addr,setAddr]=useState(course.full_address||course.address||"");const[courseTz,setCourseTz]=useState(course.timezone||"America/Mexico_City");
   // v19.68: campo `website` retirado del UI por estrategia de moat (controlar flow de comunicaciones via Partee).
   // La columna golf_courses.website permanece en DB con datos legacy intactos — decisión de drop diferida.
@@ -8522,56 +8593,11 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
         Eliminada duplicación visual que confundía al usuario. */}
 
     {S("cuenta")&&<>
-    {/* v20.79: Ajustes con seccion Suscripcion arriba (gancho de upsell) + split de notifs
-        en regulares (siempre on, info read-only) vs avanzadas (gated por Pro). El
-        AutomationHealthCard solo se renderiza si es Pro porque monitorea las features Pro. */}
-    {(()=>{const SH=(label)=><div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".08em",marginTop:18,marginBottom:8,textTransform:"uppercase"}}>{label}</div>;
-      const isPro=["pro","pro_plus","enterprise"].includes(course.subscription_plan||"free")&&(course.subscription_status||"active")==="active";
-      return<>
-      {SH(t("Pagos"))}
-      <AdminPayoutsSetup course={course} onRefresh={onRefresh}/>
-
-      {SH(t("Mi cuenta"))}
-      <AdminAccountCard/>
-      <ChangePassword/>
-
-      {SH(t("Suscripción"))}
-      <AdminSubscriptionCard course={course} onRefresh={onRefresh}/>
-
-      {SH(t("Notificaciones"))}
-      <AdminRegularNotifsControls course={course}/>
-      <AdminNotifPrefsCard course={course}/>
-      {isPro&&<AutomationHealthCard course={course}/>}
-
-      {SH(t("Apariencia"))}
-      <ThemeToggle/><LangToggle/>
-
-      {SH(t("Sesión"))}
-      <button onClick={()=>{
-        const doOut=ctxOut||onOut;
-        if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>doOut());
-        else if(confirm(t("Cerrar sesión?")))doOut();
-      }} style={{width:"100%",padding:12,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
-
-      {SH(t("Zona peligrosa"))}
-      <button onClick={()=>{
-        const go=async()=>{
-          try{
-            const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
-            const res=await fetch(SB_FN_URL+"/delete-account",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"}});
-            const data=await res.json();
-            if(!res.ok||!data.success){
-              if(data.blockers&&data.blockers.length){window.__toast?.(t("Cuenta no eliminada: hay actividad pendiente"),"error")}
-              else{window.__toast?.(data.error||t("Error al eliminar cuenta"),"error")}
-              return;
-            }
-            window.__toast?.(t("Cuenta eliminada"),"success");
-            setTimeout(()=>onOut(),600);
-          }catch(e){window.__toast?.(t("Error al eliminar cuenta"),"error")}
-        };
-        if(window.__confirm)window.__confirm(t("¿Eliminar cuenta?"),go);else if(confirm(t("¿Eliminar cuenta?")))go();
-      }} style={{width:"100%",padding:12,background:"transparent",border:"1px solid #666",borderRadius:14,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
-    </>})()}
+    {/* v20.85: Reemplazado patron de sub-headers UPPERCASE planos por accordion estilo
+        Player Profile (mismas pautas visuales: header con icon coloreado 32x32 + label +
+        chevron rotate, body con C.el background y border continuo). Logica funcional
+        intacta. Componente AdminAjustesAccordion encapsula las 6 secciones. */}
+    <AdminAjustesAccordion course={course} onOut={onOut} ctxOut={ctxOut} onRefresh={onRefresh}/>
     </>}
   </div>}
 
@@ -10585,11 +10611,15 @@ function AdminSubscriptionCard({course,onRefresh}){
   </>;
 }
 
-// v20.82 → v20.83: Un solo toggle por evento que controla los 3 canales como bundle.
-// Carlos: "es activar o descativar... Al activar con celular, correo y en la aplicación".
-// Estructura JSONB mantenida (operation_prefs[event] = {email, push, in_app}) por si en
-// el futuro queremos granularidad, pero el UI mueve los 3 valores juntos. Wire-up de
-// envio real en send-email/send-push sigue pendiente (follow-up).
+// v20.83 → v20.84: Card colapsable + sub-toggles por canal (celular/correo) para customizar.
+// Comportamiento:
+// - Header siempre visible (clickeable para expandir/colapsar). Counter de eventos activos.
+// - Expandido: cada evento tiene toggle MASTER + sub-chips de canal (📱 Celular, 📧 Correo).
+// - Master toggle ON  = los 3 canales (push, email, in_app) pasan a true.
+// - Master toggle OFF = los 3 canales pasan a false.
+// - Sub-chips: click flip ese canal especifico. Si los 3 quedan off, master se ve off.
+// - Si master off, sub-chips se atenuan y deshabilitan (pointer-events none).
+// - In-app no tiene chip visible (queda atado al master implicitamente; subtitulo lo aclara).
 function AdminRegularNotifsControls({course}){
   const EVENTS=[
     {k:"booking_created",icon:"✅",label:"Nueva reserva",desc:"Un jugador confirmó una reserva en tu campo"},
@@ -10609,11 +10639,17 @@ function AdminRegularNotifsControls({course}){
     if(error){console.warn("[v20.82] op prefs err:",error);setLd(false);return}
     setPrefs(data||{});setDirty(false);setLd(false);
   }
-  // Evento ON = los 3 canales true. Evento OFF = los 3 canales false.
-  function isOn(eventKey){const p=prefs?.[eventKey]||{};return!!(p.email||p.push||p.in_app)}
-  function toggle(eventKey){
-    const currentlyOn=isOn(eventKey);
+  function isMasterOn(eventKey){const p=prefs?.[eventKey]||{};return!!(p.email||p.push||p.in_app)}
+  // Master toggle: ON prende los 3, OFF apaga los 3
+  function toggleMaster(eventKey){
+    const currentlyOn=isMasterOn(eventKey);
     setPrefs(p=>({...p,[eventKey]:{email:!currentlyOn,push:!currentlyOn,in_app:!currentlyOn}}));
+    setDirty(true);
+  }
+  // Sub-toggle: flip un canal especifico. Solo si master ya esta on.
+  function toggleChannel(eventKey,channelKey){
+    if(!isMasterOn(eventKey))return; // guardrail: chip deshabilitado pero por si acaso
+    setPrefs(p=>({...p,[eventKey]:{...p[eventKey],[channelKey]:!p[eventKey]?.[channelKey]}}));
     setDirty(true);
   }
   async function save(){
@@ -10625,44 +10661,63 @@ function AdminRegularNotifsControls({course}){
     setDirty(false);
   }
 
-  return<div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd,marginBottom:10}}>
-    <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:14}}>
-      <span style={{fontSize:16}}>📬</span>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Notificaciones de operación</div>
-        <div style={{fontSize:10,color:C.tm,marginTop:1,lineHeight:1.4}}>Al activar recibes por celular 📱, correo 📧 y dentro de la app 🔔</div>
+  // Conteo de eventos activos para badge del header colapsado
+  const activeCount=prefs?EVENTS.filter(ev=>isMasterOn(ev.k)).length:0;
+
+  return<div style={{marginBottom:12}}>
+    {/* Sub-header con counter chips (sin colapso interno; accordion exterior lo maneja) */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:6}}>
+      <div style={{fontSize:11,color:C.tm,lineHeight:1.4}}>Al activar recibes por celular 📱, correo 📧 y en la app 🔔</div>
+      <div style={{display:"flex",gap:5}}>
+        {!ld&&prefs&&<span style={{padding:"2px 7px",borderRadius:5,background:activeCount===0?C.acc+"15":C.grn+"15",color:activeCount===0?C.acc:C.grn,fontSize:9,fontWeight:800,letterSpacing:".03em"}}>{activeCount}/{EVENTS.length} ACTIVOS</span>}
+        {dirty&&<span style={{padding:"2px 7px",borderRadius:5,background:C.gld+"15",color:C.gld,fontSize:9,fontWeight:800,letterSpacing:".03em"}}>SIN GUARDAR</span>}
       </div>
     </div>
 
     {ld?<Skeleton w="100%" h={280}/>:!prefs?
       <div style={{padding:20,textAlign:"center",color:C.tm,fontSize:12}}>No se pudieron cargar las preferencias</div>
       :<>
-      {/* Toggles por evento */}
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
-        {EVENTS.map(ev=>{const on=isOn(ev.k);return(
-          <div key={ev.k} onClick={()=>toggle(ev.k)} style={{display:"flex",alignItems:"flex-start",gap:11,padding:"11px 12px",background:on?C.bg:C.cd,border:"1px solid "+(on?C.acc+"40":C.bd),borderRadius:10,cursor:"pointer",transition:"all .15s"}}>
-            <span style={{fontSize:18,lineHeight:1,marginTop:1,flexShrink:0,opacity:on?1:.4}}>{ev.icon}</span>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:12,fontWeight:700,color:on?C.txt:C.tm,marginBottom:2}}>{ev.label}</div>
-              <div style={{fontSize:10,color:C.tm,lineHeight:1.4}}>{ev.desc}</div>
-            </div>
-            {/* Toggle switch */}
-            <div style={{width:36,height:20,borderRadius:10,background:on?C.acc:C.bd,position:"relative",transition:"background .2s",flexShrink:0,marginTop:1}}>
-              <div style={{position:"absolute",top:2,left:on?18:2,width:16,height:16,borderRadius:8,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
-            </div>
-          </div>
-        )})}
-      </div>
+        {/* Eventos */}
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+          {EVENTS.map(ev=>{
+            const p=prefs[ev.k]||{};
+            const masterOn=isMasterOn(ev.k);
+            return(
+              <div key={ev.k} style={{padding:"11px 12px",background:masterOn?C.bg:C.cd,border:"1px solid "+(masterOn?C.acc+"40":C.bd),borderRadius:10,transition:"all .15s"}}>
+                {/* Master row */}
+                <div onClick={()=>toggleMaster(ev.k)} style={{display:"flex",alignItems:"flex-start",gap:11,cursor:"pointer"}}>
+                  <span style={{fontSize:18,lineHeight:1,marginTop:1,flexShrink:0,opacity:masterOn?1:.4}}>{ev.icon}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:700,color:masterOn?C.txt:C.tm,marginBottom:2}}>{ev.label}</div>
+                    <div style={{fontSize:10,color:C.tm,lineHeight:1.4}}>{ev.desc}</div>
+                  </div>
+                  <div style={{width:36,height:20,borderRadius:10,background:masterOn?C.acc:C.bd,position:"relative",transition:"background .2s",flexShrink:0,marginTop:1}}>
+                    <div style={{position:"absolute",top:2,left:masterOn?18:2,width:16,height:16,borderRadius:8,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+                  </div>
+                </div>
+                {/* Sub-chips de canal */}
+                <div style={{display:"flex",gap:6,marginTop:10,marginLeft:29,opacity:masterOn?1:.35,pointerEvents:masterOn?"auto":"none",transition:"opacity .2s"}}>
+                  {[{k:"push",icon:"📱",label:"Celular"},{k:"email",icon:"📧",label:"Correo"}].map(ch=>{const on=!!p[ch.k];return(
+                    <button key={ch.k} onClick={e=>{e.stopPropagation();toggleChannel(ev.k,ch.k)}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(on?C.acc:C.bd),background:on?C.acc+"15":"transparent",color:on?C.acc:C.tm,fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"all .15s"}}>
+                      <span style={{fontSize:11,opacity:on?1:.5}}>{ch.icon}</span>
+                      <span>{ch.label}</span>
+                    </button>
+                  )})}
+                </div>
+              </div>
+            )
+          })}
+        </div>
 
-      {/* Banner sobre estado del wire-up */}
-      <div style={{padding:"8px 10px",background:C.gld+"08",borderRadius:8,fontSize:10,color:C.tm,lineHeight:1.4,marginBottom:10}}>
-        ℹ️ Tus preferencias se guardan. Mientras se completa la integración con email/push backend, todas las notificaciones críticas siguen llegando para no perder eventos.
-      </div>
+        {/* Banner sobre estado del wire-up */}
+        <div style={{padding:"8px 10px",background:C.gld+"08",borderRadius:8,fontSize:10,color:C.tm,lineHeight:1.4,marginBottom:10}}>
+          ℹ️ Tus preferencias se guardan. Mientras se completa la integración con email/push backend, todas las notificaciones críticas siguen llegando para no perder eventos.
+        </div>
 
-      <button onClick={save} disabled={busy||!dirty} style={{width:"100%",padding:11,background:!dirty?C.bd:busy?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:!dirty||busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:!dirty||busy?"default":"pointer",letterSpacing:.3}}>
-        {busy?"Guardando…":dirty?"💾 Guardar cambios":"✓ Sin cambios"}
-      </button>
-    </>}
+        <button onClick={save} disabled={busy||!dirty} style={{width:"100%",padding:11,background:!dirty?C.bd:busy?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:!dirty||busy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:!dirty||busy?"default":"pointer",letterSpacing:.3}}>
+          {busy?"Guardando…":dirty?"💾 Guardar cambios":"✓ Sin cambios"}
+        </button>
+      </>}
   </div>;
 }
 
