@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v21.0 (Dispatch Center + gestion de usuarios del equipo. (1) EN VIVO: mapa agrandado a 62vh + boton Dispatch -> modal para mandar mensaje al equipo (course_staff) por rol via WhatsApp/Twilio. CASCARON TWILIO: edge fn dispatch-message lista; si TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_FROM no estan seteados regresa twilio_configured:false y registra el intento en course_dispatch_log; al setear los secrets + numero dedicado empieza a enviar sin tocar codigo. MarshalView (pace manual) FUNDIDO en En Vivo via boton Marshal, ya no vive en Reservas. (2) CAMPO > Usuarios: nuevo AdminStaffCard para alta de team members (solo nombre/celular/rol). (3) RESERVAS: quitados botones Marshal + Roster, queda solo Check-in full-width. (4) TEE TIME > Roster: AdminRoster ahora con toggle Disponible/No disp. por staff. Migracion v21_dispatch_and_staff_availability: course_staff +columna available (separada de active=empleo), get_course_roster devuelve available + available_now, tabla course_dispatch_log con RLS admin-read, anon pierde DML en course_staff.)","color:#f0c040;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.91 (Kill switch defensivo contra 'Failed to fetch' / 'Load failed' en Login. Si Supabase auth no responde por SW viejo cacheado, CORS preflight fail, DNS local, o cualquier network error, el Login detecta el patron en el msg y muestra boton '🔄 Limpiar caché y reintentar'. El boton llama window.__parteeRecover() que hace cleanup nuclear: unregister TODOS los Service Workers, delete TODOS los caches del browser, limpia tokens sb-* y supabase.auth.token de localStorage, sessionStorage.clear, hard reload con ?recovered=ts. Tambien accesible manualmente desde DevTools con window.__parteeRecover(). Mitiga el deadlock SW viejo bloquea fetch → no descarga HTML nuevo → no descarga SW nuevo.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.86 (Fix bug del badge ! en la tab Campo. Antes: el badge se encendia con cualquier listing_status != 'active', incluido pending_review. Esto era semanticamente incorrecto: pending_review significa que el course_admin ya completo todo y Partee debe aprobar; NO es un pendiente del admin. El badge generaba ansiedad falsa porque el admin veia el ! y entraba a Campo a buscar que le faltaba, sin encontrar nada. Fix: badge solo aparece para draft o suspended (estados donde el admin SI debe actuar). El status dot junto al logo + chip 'EN REVISION' en barra superior siguen comunicando el estado en pending_review.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.85 (Ajustes del course_admin refactorizada con pautas visuales identicas al Player Profile. Nuevo componente AdminAjustesAccordion: 6 secciones colapsables (Mi cuenta, Cobros y pagos, Suscripcion, Notificaciones, Apariencia, Sesion y cuenta) en patron accordion. Header siempre visible con icon coloreado en container 32x32 (radius 10, bg color+10), label fontSize 14 fontWeight 700, chevron rotate 180deg al expandir. Body con C.el background + borderRadius continuo. Mi cuenta arranca abierta por default. Quitado el patron de sub-headers UPPERCASE planos. Removido el colapso interno de AdminRegularNotifsControls (ahora el accordion exterior maneja el colapso, evita doble-collapse). Cobros + suscripcion + sesion/cuenta agrupados en sus propias secciones del accordion.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -7671,6 +7672,12 @@ function AdminRoster({course, onExit}){
     if(error){window.__toast?.(error.message,"error");return}
     load();
   }
+  // V21: toggle disponibilidad operativa (available, separado de active=empleo)
+  async function toggleStaffAvail(s){
+    const{error}=await sb.from("course_staff").update({available:!s.available}).eq("id",s.id);
+    if(error){window.__toast?.(error.message,"error");return}
+    load();
+  }
   
   // Equipment CRUD
   async function saveEq(e){
@@ -7749,7 +7756,7 @@ function AdminRoster({course, onExit}){
         
         {staff.length===0?
           <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:12}}>Sin staff registrado</div>
-        :staff.map(s=><div key={s.id} style={{padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,marginBottom:8,opacity:s.active?1:.5}}>
+        :staff.map(s=><div key={s.id} style={{padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,marginBottom:8,opacity:(s.active&&s.available)?1:.5}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -7760,6 +7767,7 @@ function AdminRoster({course, onExit}){
               {s.phone&&<div style={{fontSize:11,color:C.tm,marginTop:2}}>{s.phone}</div>}
               {s.notes&&<div style={{fontSize:10,color:C.tm,marginTop:2,fontStyle:"italic"}}>{s.notes}</div>}
             </div>
+            <button onClick={()=>toggleStaffAvail(s)} title="Disponible / No disponible" style={{padding:"4px 10px",borderRadius:8,background:(s.available?C.grn:C.tm)+"15",border:"1px solid "+(s.available?C.grn:C.tm)+"40",color:(s.available?C.grn:C.tm),fontSize:10,fontWeight:700,cursor:"pointer",flexShrink:0}}>{s.available?"Disponible":"No disp."}</button>
             <button onClick={()=>setEditingStaff(s)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",14,C.txt)}}/>
             <button onClick={()=>deleteStaff(s.id)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("trash",14,C.acc)}}/>
           </div>
@@ -8035,8 +8043,6 @@ function AdminBookings({course}){
   const[selDate,setSelDate]=useState(today);
   const[rangeFrom,setRangeFrom]=useState(today);
   const[checkinOpen,setCheckinOpen]=useState(false);
-  const[marshalOpen,setMarshalOpen]=useState(false);
-  const[rosterOpen,setRosterOpen]=useState(false);
   const[rangeTo,setRangeTo]=useState(dayOffset(7));
   const[quickFilter,setQuickFilter]=useState("today"); // today|tomorrow|next7|next30|past7|custom
   const[statusFilter,setStatusFilter]=useState("all");
@@ -8120,24 +8126,14 @@ function AdminBookings({course}){
   
   // v20.28 A.3 / v20.29 E.3 / v20.29 E.1: Render fullscreen views
   if(checkinOpen)return<CheckinTablet course={course} date={today} onExit={()=>setCheckinOpen(false)}/>;
-  if(marshalOpen)return<MarshalView course={course} date={today} onExit={()=>setMarshalOpen(false)}/>;
-  if(rosterOpen)return<AdminRoster course={course} onExit={()=>setRosterOpen(false)}/>;
   
   return<div className="fi">
-    {/* Header: Operating modes CTAs — Check-in + Marshal (day-of) + Roster (persistente) */}
+    {/* v21: solo Check-in aqui. Marshal -> En Vivo (Dispatch); Roster -> sub-tab Roster de Tee Time */}
     {selDate===today&&viewMode==="day"&&
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
-        <button onClick={()=>setCheckinOpen(true)} style={{padding:"11px 6px",background:`linear-gradient(135deg,${C.grn}18,${C.gld}12)`,border:"1px solid "+C.grn+"40",borderRadius:12,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-          <span dangerouslySetInnerHTML={{__html:ic("check",13,C.grn)}}/>
+      <div style={{marginBottom:10}}>
+        <button onClick={()=>setCheckinOpen(true)} style={{width:"100%",padding:"11px 6px",background:`linear-gradient(135deg,${C.grn}18,${C.gld}12)`,border:"1px solid "+C.grn+"40",borderRadius:12,color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <span dangerouslySetInnerHTML={{__html:ic("check",14,C.grn)}}/>
           Check-in
-        </button>
-        <button onClick={()=>setMarshalOpen(true)} style={{padding:"11px 6px",background:`linear-gradient(135deg,${C.acc}15,${C.gld}12)`,border:"1px solid "+C.acc+"40",borderRadius:12,color:C.acc,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-          <span style={{fontSize:12}}>⛳</span>
-          Marshal
-        </button>
-        <button onClick={()=>setRosterOpen(true)} style={{padding:"11px 6px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-          <span dangerouslySetInnerHTML={{__html:ic("user",13,C.txt)}}/>
-          Roster
         </button>
       </div>
     }
@@ -8464,6 +8460,66 @@ function AdminNotifPrefsCard({course}){
   </div>;
 }
 
+// V21: alta de usuarios del equipo (course_staff) desde Campo > Usuarios. Solo nombre/celular/rol.
+// active+available default true. Alimenta Dispatch (En Vivo) y Roster (Tee Time).
+function AdminStaffCard({course}){
+  const[rows,setRows]=useState([]);
+  const[ld,setLd]=useState(true);
+  const[adding,setAdding]=useState(false);
+  const[nm,setNm]=useState("");const[ph,setPh]=useState("");const[rl,setRl]=useState("marshal");
+  const[sv,setSv]=useState(false);
+  const ROLES=[["marshal","Marshal"],["beverage_cart","Bebidas"],["ranger","Ranger"],["caddie","Caddie"],["cart_attendant","Carritos"],["starter","Starter"],["pro","Pro"],["maintenance","Mant."],["other","Otro"]];
+  const roleL=Object.fromEntries(ROLES);
+  async function load(){const{data}=await sb.from("course_staff").select("id,full_name,phone,role,available").eq("course_id",course.id).eq("active",true).order("role").order("full_name");setRows(data||[]);setLd(false)}
+  useEffect(()=>{load()},[course.id]);
+  async function add(){
+    if(!nm.trim()){window.__toast?.("Nombre requerido","warn");return}
+    if(!ph.trim()){window.__toast?.("Celular requerido","warn");return}
+    setSv(true);
+    const{error}=await sb.from("course_staff").insert({course_id:course.id,full_name:nm.trim(),phone:ph.trim(),role:rl,active:true,available:true});
+    setSv(false);
+    if(error){window.__toast?.(error.message,"error");return}
+    window.__toast?.("Usuario agregado","success");
+    setNm("");setPh("");setRl("marshal");setAdding(false);load();
+  }
+  async function del(id){
+    if(!window.confirm("\u00bfEliminar usuario?"))return;
+    const{error}=await sb.from("course_staff").delete().eq("id",id);
+    if(error){window.__toast?.(error.message,"error");return}
+    load();
+  }
+  const inp={width:"100%",padding:"9px 11px",background:C.bg,border:"1px solid "+C.bd,borderRadius:9,color:C.txt,fontSize:13,outline:"none",boxSizing:"border-box"};
+  return<div style={{marginBottom:12}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Usuarios del equipo</div>
+      <span style={{fontSize:11,color:C.tm}}>{rows.length}</span>
+    </div>
+    <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>Marshalls, conductores de bebidas y dem\u00e1s staff. Aparecen en el Roster (Tee Time) y en el Dispatch (En Vivo).</div>
+    {ld?<div style={{fontSize:12,color:C.tm,padding:8}}>Cargando...</div>:
+      rows.length===0?<div style={{fontSize:12,color:C.tm,padding:"8px 0"}}>Sin usuarios todav\u00eda.</div>:
+      rows.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,border:"1px solid "+C.bd,borderRadius:9,marginBottom:6}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{s.full_name}</span>
+            <span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.grn+"15",color:C.grn}}>{roleL[s.role]||s.role}</span>
+          </div>
+          {s.phone&&<div style={{fontSize:11,color:C.tm,marginTop:1}}>{s.phone}</div>}
+        </div>
+        <button onClick={()=>del(s.id)} style={{width:30,height:30,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("trash",13,C.acc)}}/>
+      </div>)}
+    {adding?<div style={{padding:11,background:C.bg,border:"1px solid "+C.grn+"40",borderRadius:10,marginTop:6}}>
+      <input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Nombre" style={{...inp,marginBottom:8}}/>
+      <input value={ph} onChange={e=>setPh(e.target.value)} placeholder="Celular (10 d\u00edgitos)" inputMode="tel" style={{...inp,marginBottom:8}}/>
+      <select value={rl} onChange={e=>setRl(e.target.value)} style={{...inp,marginBottom:10}}>{ROLES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={add} disabled={sv} style={{flex:1,padding:10,background:"linear-gradient(135deg,"+C.grn+",#00a07f)",border:"none",borderRadius:9,color:"#fff",fontSize:13,fontWeight:700,cursor:sv?"default":"pointer",opacity:sv?.6:1}}>{sv?"Guardando...":"Guardar"}</button>
+        <button onClick={()=>{setAdding(false);setNm("");setPh("")}} style={{padding:"10px 14px",background:"none",border:"1px solid "+C.bd,borderRadius:9,color:C.tm,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+      </div>
+    </div>:
+    <button onClick={()=>setAdding(true)} style={{width:"100%",padding:10,marginTop:6,background:C.grn+"15",border:"1px dashed "+C.grn+"50",borderRadius:10,color:C.grn,fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Agregar usuario</button>}
+  </div>;
+}
+
 // v20.85: Accordion para Ajustes del course_admin con pautas visuales identicas al
 // Player Profile (linea ~6232). Un solo openSec a la vez. Header siempre visible con
 // icon coloreado en container 32x32 (radius 10, bg color+'10'), label + chevron rotate.
@@ -8475,6 +8531,7 @@ function AdminAjustesAccordion({course,onOut,onRefresh,ctxOut}){
 
   const SECTIONS=[
     {k:"cuenta",icon:ic("user",18,C.grn),label:t("Usuarios"),color:C.grn,content:<>
+      <AdminStaffCard course={course}/>
       <AdminAccountCard/>
       <ChangePassword/>
     </>},
@@ -11664,6 +11721,57 @@ function HoleGeoEditor({course, onClose}){
   </div>;
 }
 
+// V21: Dispatch Center — manda mensaje al equipo (course_staff) por rol via WhatsApp/Twilio.
+// Cascaron: si Twilio no esta configurado el edge fn regresa twilio_configured:false (y registra el intento).
+function DispatchModal({course,onClose}){
+  const[staff,setStaff]=useState([]);
+  const[role,setRole]=useState(null);
+  const[msg,setMsg]=useState("");
+  const[sending,setSending]=useState(false);
+  const ROLES=[["marshal","Marshal"],["ranger","Ranger"],["beverage_cart","Bebidas"],["caddie","Caddie"],["cart_attendant","Carritos"],["starter","Starter"],["maintenance","Mant."],["pro","Pro"],["other","Otro"]];
+  const roleL=Object.fromEntries(ROLES);
+  useEffect(()=>{sb.from("course_staff").select("id,full_name,role,phone,available").eq("course_id",course.id).eq("active",true).then(({data})=>setStaff(data||[]))},[course.id]);
+  const availByRole=(r)=>staff.filter(s=>s.role===r&&s.available&&s.phone).length;
+  const rolesPresent=ROLES.filter(([k])=>staff.some(s=>s.role===k));
+  const targetCount=role?availByRole(role):0;
+  const QUICK=["Favor de confirmar su posici\u00f3n.","Grupo lento, apurar el paso por favor.","Pedido de bebidas listo para entregar.","Re\u00fananse en el clubhouse."];
+  async function send(){
+    if(!role){window.__toast?.("Elige un rol","warn");return}
+    if(!msg.trim()){window.__toast?.("Escribe un mensaje","warn");return}
+    if(targetCount===0){window.__toast?.("Nadie disponible en ese rol","warn");return}
+    setSending(true);
+    try{
+      const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
+      const res=await fetch(SB_FN_URL+"/dispatch-message",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({course_id:course.id,role,message:msg.trim()})});
+      const d=await res.json();setSending(false);
+      if(d&&d.twilio_configured===false){window.__toast?.("Dispatch listo \u00b7 falta configurar Twilio (n\u00famero WhatsApp dedicado)","info");onClose();return}
+      if(d&&d.success){window.__toast?.("Enviado a "+d.sent+" de "+d.recipient_count,"success");onClose();return}
+      window.__toast?.((d&&(d.reason||d.error))||"No se pudo enviar","error");
+    }catch(e){setSending(false);window.__toast?.("Error de red","error")}
+  }
+  const inp={width:"100%",padding:"10px 12px",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box"};
+  return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:2600,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:500,background:C.bg,borderRadius:"18px 18px 0 0",padding:18,maxHeight:"88vh",overflowY:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("bell",18,C.grn)}}/><div style={{fontSize:16,fontWeight:800,color:C.txt}}>Dispatch</div></div>
+        <button onClick={onClose} style={{width:34,height:34,borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer"}}>\u00d7</button>
+      </div>
+      <div style={{fontSize:12,color:C.tm,marginBottom:12}}>Manda un mensaje por WhatsApp al equipo seg\u00fan su rol (solo disponibles).</div>
+      <div style={{fontSize:11,fontWeight:700,color:C.ts,marginBottom:6}}>ROL</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+        {rolesPresent.length===0?<div style={{fontSize:12,color:C.tm}}>Sin usuarios. Agr\u00e9galos en Campo \u2192 Usuarios.</div>:
+         rolesPresent.map(([k,l])=>{const n=availByRole(k);const on=role===k;return<button key={k} onClick={()=>setRole(k)} style={{padding:"7px 12px",borderRadius:20,border:"1px solid "+(on?C.grn:C.bd),background:on?C.grn+"18":C.cd,color:on?C.grn:C.txt,fontSize:12,fontWeight:700,cursor:"pointer"}}>{l} \u00b7 {n}</button>})}
+      </div>
+      <div style={{fontSize:11,fontWeight:700,color:C.ts,marginBottom:6}}>MENSAJE</div>
+      <textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={3} placeholder="Escribe el mensaje..." style={{...inp,resize:"vertical",marginBottom:8}}/>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
+        {QUICK.map((q,i)=><button key={i} onClick={()=>setMsg(q)} style={{padding:"5px 10px",borderRadius:14,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:11,cursor:"pointer"}}>{q.length>26?q.slice(0,26)+"\u2026":q}</button>)}
+      </div>
+      <button onClick={send} disabled={sending} style={{width:"100%",padding:13,background:"linear-gradient(135deg,"+C.grn+",#00a07f)",border:"none",borderRadius:12,color:"#fff",fontSize:14,fontWeight:800,cursor:sending?"default":"pointer",opacity:sending?.6:1}}>{sending?"Enviando...":(role&&targetCount>0?("Enviar \u00b7 "+targetCount+(targetCount===1?" persona":" personas")):"Enviar")}</button>
+    </div>
+  </div>;
+}
+
 function LiveMap({course}){
   const mapRef=useRef(null), mapObj=useRef(null), markersRef=useRef({}), sosMarkersRef=useRef({}), fittedRef=useRef(false);
   const[positions,setPositions]=useState([]);
@@ -11674,6 +11782,8 @@ function LiveMap({course}){
   const[err,setErr]=useState(null);
   const[lastUpdate,setLastUpdate]=useState(null);
   const[geoOpen,setGeoOpen]=useState(false);
+  const[dispatchOpen,setDispatchOpen]=useState(false);
+  const[marshalOpen,setMarshalOpen]=useState(false);
   const loadLeaflet=()=>new Promise((resolve,reject)=>{
     if(window.L){resolve();return}
     if(!document.getElementById("leaflet-css")){
@@ -11800,7 +11910,11 @@ function LiveMap({course}){
         <button onClick={refreshAll} aria-label="Refrescar" style={{width:38,height:38,borderRadius:12,border:"1px solid "+C.bd,background:C.cd,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><span dangerouslySetInnerHTML={{__html:ic("refresh",16,C.acc)}}/></button>
       </div>
     </div>
-    <div ref={mapRef} style={{width:"100%",height:420,borderRadius:16,overflow:"hidden",border:"1px solid "+C.bd,background:C.cd}}/>
+    <div style={{display:"flex",gap:8,marginBottom:10}}>
+      <button onClick={()=>setDispatchOpen(true)} style={{flex:1,height:42,borderRadius:12,border:"1px solid "+C.grn+"40",background:`linear-gradient(135deg,${C.grn}18,${C.grn}0c)`,color:C.grn,fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("bell",16,C.grn)}}/>Dispatch</button>
+      <button onClick={()=>setMarshalOpen(true)} style={{flex:1,height:42,borderRadius:12,border:"1px solid "+C.gld+"40",background:`linear-gradient(135deg,${C.gld}18,${C.gld}0c)`,color:C.gld,fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span style={{fontSize:14}}>⛳</span>Marshal</button>
+    </div>
+    <div ref={mapRef} style={{width:"100%",height:"62vh",minHeight:380,borderRadius:16,overflow:"hidden",border:"1px solid "+C.bd,background:C.cd}}/>
     {loading&&<div style={{marginTop:10,fontSize:12,color:C.ts,textAlign:"center"}}>{t("Cargando mapa...")}</div>}
     {err&&!loading&&<div style={{marginTop:10,padding:"10px 12px",background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:12,fontSize:12,color:C.acc}}>{err}</div>}
     {!loading&&!err&&positions.length===0&&<div style={{marginTop:10,padding:"10px 12px",background:C.gld+"10",border:"1px solid "+C.gld+"30",borderRadius:12,fontSize:12,color:C.ts}}>{t("Ningún jugador con GPS activo en este momento.")}</div>}
@@ -11867,6 +11981,8 @@ function LiveMap({course}){
         </div>}
     </div>
     {geoOpen&&<HoleGeoEditor course={course} onClose={()=>setGeoOpen(false)}/>}
+    {dispatchOpen&&<DispatchModal course={course} onClose={()=>setDispatchOpen(false)}/>}
+    {marshalOpen&&<MarshalView course={course} date={new Date().toISOString().split("T")[0]} onExit={()=>setMarshalOpen(false)}/>}
   </div>;
 }
 
