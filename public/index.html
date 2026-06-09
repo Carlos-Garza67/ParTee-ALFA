@@ -7716,7 +7716,7 @@ function AdminRoster({course, onExit}){
   
   const inpSm={padding:"8px 10px",background:C.bg,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:13,outline:"none",width:"100%"};
   
-  return<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+  return ReactDOM.createPortal(<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
     {/* Header sticky */}
     <div style={{position:"sticky",top:0,zIndex:10,background:C.bg,borderBottom:"1px solid "+C.bd,padding:"14px 18px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
@@ -7873,7 +7873,7 @@ function AdminRoster({course, onExit}){
         </div>
       </div>
     </div>}
-  </div>
+  </div>, document.body)
 }
 
 
@@ -7882,7 +7882,7 @@ function AdminRoster({course, onExit}){
 // del día ordenados por urgencia (very_slow → slow → on_pace → finished).
 // Cada card: hoyo actual vs esperado + botón "+1 hoyo" táctil grande.
 // Auto-refresh 30s + clock tick 1s.
-function MarshalView({course, date, onExit}){
+function MarshalView({course, date, onExit, embedded}){
   const[data,setData]=useState(null);
   const[ld,setLd]=useState(true);
   const[busyId,setBusyId]=useState(null);
@@ -8483,7 +8483,7 @@ function AdminStaffCard({course}){
     setNm("");setPh("");setRl("marshal");setAdding(false);load();
   }
   async function del(id){
-    if(!window.confirm("\u00bfEliminar usuario?"))return;
+    if(!window.confirm("¿Eliminar usuario?"))return;
     const{error}=await sb.from("course_staff").delete().eq("id",id);
     if(error){window.__toast?.(error.message,"error");return}
     load();
@@ -8494,9 +8494,9 @@ function AdminStaffCard({course}){
       <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Usuarios del equipo</div>
       <span style={{fontSize:11,color:C.tm}}>{rows.length}</span>
     </div>
-    <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>Marshalls, conductores de bebidas y dem\u00e1s staff. Aparecen en el Roster (Tee Time) y en el Dispatch (En Vivo).</div>
+    <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>Marshalls, conductores de bebidas y demás staff. Aparecen en el Roster (Tee Time) y en el Dispatch (En Vivo).</div>
     {ld?<div style={{fontSize:12,color:C.tm,padding:8}}>Cargando...</div>:
-      rows.length===0?<div style={{fontSize:12,color:C.tm,padding:"8px 0"}}>Sin usuarios todav\u00eda.</div>:
+      rows.length===0?<div style={{fontSize:12,color:C.tm,padding:"8px 0"}}>Sin usuarios todavía.</div>:
       rows.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,border:"1px solid "+C.bd,borderRadius:9,marginBottom:6}}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -8509,7 +8509,7 @@ function AdminStaffCard({course}){
       </div>)}
     {adding?<div style={{padding:11,background:C.bg,border:"1px solid "+C.grn+"40",borderRadius:10,marginTop:6}}>
       <input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Nombre" style={{...inp,marginBottom:8}}/>
-      <input value={ph} onChange={e=>setPh(e.target.value)} placeholder="Celular (10 d\u00edgitos)" inputMode="tel" style={{...inp,marginBottom:8}}/>
+      <input value={ph} onChange={e=>setPh(e.target.value)} placeholder="Celular (10 dígitos)" inputMode="tel" style={{...inp,marginBottom:8}}/>
       <select value={rl} onChange={e=>setRl(e.target.value)} style={{...inp,marginBottom:10}}>{ROLES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
       <div style={{display:"flex",gap:8}}>
         <button onClick={add} disabled={sv} style={{flex:1,padding:10,background:"linear-gradient(135deg,"+C.grn+",#00a07f)",border:"none",borderRadius:9,color:"#fff",fontSize:13,fontWeight:700,cursor:sv?"default":"pointer",opacity:sv?.6:1}}>{sv?"Guardando...":"Guardar"}</button>
@@ -11734,7 +11734,7 @@ function DispatchModal({course,onClose}){
   const availByRole=(r)=>staff.filter(s=>s.role===r&&s.available&&s.phone).length;
   const rolesPresent=ROLES.filter(([k])=>staff.some(s=>s.role===k));
   const targetCount=role?availByRole(role):0;
-  const QUICK=["Favor de confirmar su posici\u00f3n.","Grupo lento, apurar el paso por favor.","Pedido de bebidas listo para entregar.","Re\u00fananse en el clubhouse."];
+  const QUICK=["Favor de confirmar su posición.","Grupo lento, apurar el paso por favor.","Pedido de bebidas listo para entregar.","Reúnanse en el clubhouse."];
   async function send(){
     if(!role){window.__toast?.("Elige un rol","warn");return}
     if(!msg.trim()){window.__toast?.("Escribe un mensaje","warn");return}
@@ -11744,7 +11744,7 @@ function DispatchModal({course,onClose}){
       const sess=await sb.auth.getSession();const tk=sess.data.session?.access_token;
       const res=await fetch(SB_FN_URL+"/dispatch-message",{method:"POST",headers:{"Authorization":"Bearer "+tk,"apikey":SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({course_id:course.id,role,message:msg.trim()})});
       const d=await res.json();setSending(false);
-      if(d&&d.twilio_configured===false){window.__toast?.("Dispatch listo \u00b7 falta configurar Twilio (n\u00famero WhatsApp dedicado)","info");onClose();return}
+      if(d&&d.twilio_configured===false){window.__toast?.("Dispatch listo · falta configurar Twilio (número WhatsApp dedicado)","info");onClose();return}
       if(d&&d.success){window.__toast?.("Enviado a "+d.sent+" de "+d.recipient_count,"success");onClose();return}
       window.__toast?.((d&&(d.reason||d.error))||"No se pudo enviar","error");
     }catch(e){setSending(false);window.__toast?.("Error de red","error")}
@@ -11754,20 +11754,20 @@ function DispatchModal({course,onClose}){
     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:500,background:C.bg,borderRadius:"18px 18px 0 0",padding:18,maxHeight:"88vh",overflowY:"auto"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("bell",18,C.grn)}}/><div style={{fontSize:16,fontWeight:800,color:C.txt}}>Dispatch</div></div>
-        <button onClick={onClose} style={{width:34,height:34,borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer"}}>\u00d7</button>
+        <button onClick={onClose} style={{width:34,height:34,borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer"}}>×</button>
       </div>
-      <div style={{fontSize:12,color:C.tm,marginBottom:12}}>Manda un mensaje por WhatsApp al equipo seg\u00fan su rol (solo disponibles).</div>
+      <div style={{fontSize:12,color:C.tm,marginBottom:12}}>Manda un mensaje por WhatsApp al equipo según su rol (solo disponibles).</div>
       <div style={{fontSize:11,fontWeight:700,color:C.ts,marginBottom:6}}>ROL</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
-        {rolesPresent.length===0?<div style={{fontSize:12,color:C.tm}}>Sin usuarios. Agr\u00e9galos en Campo \u2192 Usuarios.</div>:
-         rolesPresent.map(([k,l])=>{const n=availByRole(k);const on=role===k;return<button key={k} onClick={()=>setRole(k)} style={{padding:"7px 12px",borderRadius:20,border:"1px solid "+(on?C.grn:C.bd),background:on?C.grn+"18":C.cd,color:on?C.grn:C.txt,fontSize:12,fontWeight:700,cursor:"pointer"}}>{l} \u00b7 {n}</button>})}
+        {rolesPresent.length===0?<div style={{fontSize:12,color:C.tm}}>Sin usuarios. Agrégalos en Campo → Usuarios.</div>:
+         rolesPresent.map(([k,l])=>{const n=availByRole(k);const on=role===k;return<button key={k} onClick={()=>setRole(k)} style={{padding:"7px 12px",borderRadius:20,border:"1px solid "+(on?C.grn:C.bd),background:on?C.grn+"18":C.cd,color:on?C.grn:C.txt,fontSize:12,fontWeight:700,cursor:"pointer"}}>{l} · {n}</button>})}
       </div>
       <div style={{fontSize:11,fontWeight:700,color:C.ts,marginBottom:6}}>MENSAJE</div>
       <textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={3} placeholder="Escribe el mensaje..." style={{...inp,resize:"vertical",marginBottom:8}}/>
       <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
-        {QUICK.map((q,i)=><button key={i} onClick={()=>setMsg(q)} style={{padding:"5px 10px",borderRadius:14,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:11,cursor:"pointer"}}>{q.length>26?q.slice(0,26)+"\u2026":q}</button>)}
+        {QUICK.map((q,i)=><button key={i} onClick={()=>setMsg(q)} style={{padding:"5px 10px",borderRadius:14,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:11,cursor:"pointer"}}>{q.length>26?q.slice(0,26)+"…":q}</button>)}
       </div>
-      <button onClick={send} disabled={sending} style={{width:"100%",padding:13,background:"linear-gradient(135deg,"+C.grn+",#00a07f)",border:"none",borderRadius:12,color:"#fff",fontSize:14,fontWeight:800,cursor:sending?"default":"pointer",opacity:sending?.6:1}}>{sending?"Enviando...":(role&&targetCount>0?("Enviar \u00b7 "+targetCount+(targetCount===1?" persona":" personas")):"Enviar")}</button>
+      <button onClick={send} disabled={sending} style={{width:"100%",padding:13,background:"linear-gradient(135deg,"+C.grn+",#00a07f)",border:"none",borderRadius:12,color:"#fff",fontSize:14,fontWeight:800,cursor:sending?"default":"pointer",opacity:sending?.6:1}}>{sending?"Enviando...":(role&&targetCount>0?("Enviar · "+targetCount+(targetCount===1?" persona":" personas")):"Enviar")}</button>
     </div>
   </div>;
 }
