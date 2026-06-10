@@ -14479,7 +14479,44 @@ function LandingPage({onEnter}){
   return <><style dangerouslySetInnerHTML={{__html:LANDING_CSS}}/><div id="lp-root" className="lp-root" onClick={onClick} dangerouslySetInnerHTML={{__html:LANDING_HTML}}/></>;
 }
 
-function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,setTab]=useState(0);const[scr,setScr]=useState("home");const[co,setCo]=useState(null);const[sl,setSl]=useState(null);const[okd,setOkd]=useState(null);const[payResult,setPayResult]=useState(null);const[installEvt,setInstallEvt]=useState(null);const[showInstall,setShowInstall]=useState(true);const[showAuth,setShowAuth]=useState(()=>{try{if(sessionStorage.getItem("partee_show_login")==="1"){sessionStorage.removeItem("partee_show_login");return true}}catch(e){}return false});
+// ===== Legal acceptance (Términos y Condiciones + Aviso de Privacidad) · gate universal post-login =====
+const LEGAL_TERMS_VERSION="2026-04";
+const LEGAL_PRIVACY_VERSION="2026-04";
+function LegalGate({onAccepted}){
+  const[okT,setOkT]=useState(false);
+  const[okP,setOkP]=useState(false);
+  const[busy,setBusy]=useState(false);
+  const[err,setErr]=useState("");
+  const[tt,setTt]=useState(null);
+  const accept=async()=>{
+    if(!(okT&&okP)||busy)return;
+    setBusy(true);setErr("");
+    try{
+      const{error}=await sb.rpc("record_legal_acceptance",{p_terms_version:LEGAL_TERMS_VERSION,p_privacy_version:LEGAL_PRIVACY_VERSION});
+      if(error){setErr(t("No se pudo registrar la aceptación. Intenta de nuevo."));setBusy(false);return;}
+      if(onAccepted)onAccepted();
+    }catch(e){setErr(t("No se pudo registrar la aceptación. Intenta de nuevo."));setBusy(false);}
+  };
+  const row=(checked,setCk,pre,docLabel,docType)=>
+    <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",marginBottom:12}}>
+      <input type="checkbox" checked={checked} onChange={x=>setCk(x.target.checked)} style={{marginTop:3,width:18,height:18,accentColor:C.acc,flexShrink:0,cursor:"pointer"}}/>
+      <span style={{fontSize:13.5,color:C.txt,lineHeight:1.5}}>{pre} <button type="button" onClick={e=>{e.preventDefault();setTt(docType)}} style={{background:"none",border:"none",padding:0,color:C.acc,fontWeight:700,textDecoration:"underline",cursor:"pointer",fontSize:13.5}}>{docLabel}</button>.</span>
+    </label>;
+  const ready=okT&&okP;
+  return <><div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+    <div style={{width:"100%",maxWidth:440,background:C.cd,border:`1px solid ${C.bd}`,borderRadius:18,padding:"28px 24px",boxShadow:"0 20px 60px rgba(0,0,0,.35)"}}>
+      <div style={{textAlign:"center",marginBottom:18}}><ParteeLogo h={40} mc={C.acc} tc={C.txt} bg={C.bg}/></div>
+      <h2 style={{color:C.txt,fontSize:20,fontWeight:800,margin:"0 0 8px",textAlign:"center"}}>{t("Un último paso")}</h2>
+      <p style={{color:C.ts,fontSize:13.5,lineHeight:1.55,textAlign:"center",margin:"0 0 22px"}}>{t("Para usar Partee necesitas leer y aceptar nuestros documentos legales.")}</p>
+      {row(okT,setOkT,t("He leído y acepto los"),t("Términos y Condiciones"),"terms")}
+      {row(okP,setOkP,t("He leído y acepto el"),t("Aviso de Privacidad"),"privacy")}
+      {err&&<p style={{color:C.acc,fontSize:12.5,textAlign:"center",margin:"4px 0 10px"}}>{err}</p>}
+      <button onClick={accept} disabled={busy||!ready} style={{width:"100%",marginTop:8,padding:15,border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",background:ready?`linear-gradient(135deg,${C.acc},#d63d55)`:C.c2,cursor:(busy||!ready)?"not-allowed":"pointer",opacity:(busy||!ready)?.55:1,transition:"opacity .2s,background .2s"}}>{busy?t("Guardando…"):t("Aceptar y continuar")}</button>
+      <p style={{color:C.tm,fontSize:11,textAlign:"center",marginTop:14}}>{t("Tu aceptación queda registrada con fecha y versión para fines legales.")}</p>
+    </div>
+  </div>{tt&&<TermsModal type={tt} onClose={()=>setTt(null)}/>}</>;
+}
+function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,setTab]=useState(0);const[scr,setScr]=useState("home");const[co,setCo]=useState(null);const[sl,setSl]=useState(null);const[okd,setOkd]=useState(null);const[payResult,setPayResult]=useState(null);const[installEvt,setInstallEvt]=useState(null);const[showInstall,setShowInstall]=useState(true);const[showAuth,setShowAuth]=useState(()=>{try{if(sessionStorage.getItem("partee_show_login")==="1"){sessionStorage.removeItem("partee_show_login");return true}}catch(e){}return false});const[legalNeeds,setLegalNeeds]=useState(null);useEffect(()=>{if(!s){setLegalNeeds(null);return}let dead=false;sb.rpc("legal_gate_status",{p_terms_version:LEGAL_TERMS_VERSION,p_privacy_version:LEGAL_PRIVACY_VERSION}).then(({data,error})=>{if(!dead)setLegalNeeds(error?false:!!(data&&data.needs))}).catch(()=>{if(!dead)setLegalNeeds(false)});return ()=>{dead=true}},[s]);
   const needsOnboarding=p?.user_role==="player"&&!p?.onboarding_complete;
   useEffect(()=>{const h=e=>{e.preventDefault();setInstallEvt(e)};window.addEventListener("beforeinstallprompt",h);return()=>window.removeEventListener("beforeinstallprompt",h)},[]);
   const{toast:_t,confirm:_c}=useToast();
@@ -14494,7 +14531,7 @@ function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,
   if(recovery)return<ResetPasswordForm/>;
   if(!s)return (showAuth||window.__PARTEE_LINK_EXPIRED)?<Login onHome={()=>setShowAuth(false)}/>:<LandingPage onEnter={()=>setShowAuth(true)}/>;
   // v18.3.15: si hay sesión pero p aún no carga, mostrar loading en lugar de flashear la app principal
-  if(s&&!p)return<BootSplash/>;
+  if(s&&!p)return<BootSplash/>;if(legalNeeds===null)return<BootSplash/>;if(legalNeeds===true)return<LegalGate onAccepted={()=>setLegalNeeds(false)}/>;
   if(p?.is_deleted)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>{t("Cuenta eliminada")}</h2><button onClick={()=>sb.auth.signOut().then(()=>location.reload())} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Salir")}</button></div></div>;
   if(s&&p&&(p.user_role==="pending"||!p.user_role))return<GoogleRoleSelector/>;
   if(needsOnboarding)return<PlayerOnboarding/>;
