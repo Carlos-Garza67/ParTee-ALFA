@@ -5408,16 +5408,16 @@ function TourneoTab(props){
         const playerB=me?opp:players[1];
         const mps=matchPlayStatus(playerA,playerB,scores,holes);
         if(!mps)return null;
-        const isWinDisplay=mps.decided||mps.played===holes.length;
+        const isWinDisplay=mps.decided||mps.played===holes.length;const lt=C===LIGHT;
         return <div style={{marginBottom:14}}>
-          <div style={{background:`linear-gradient(145deg,rgba(12,45,90,.5),rgba(22,37,68,.4),${isWinDisplay?"rgba(255,196,0,.1)":"rgba(0,184,148,.08)"})`,border:"1px solid "+(isWinDisplay?C.gld+"40":"rgba(255,255,255,.1)"),borderRadius:18,padding:"18px 14px",textAlign:"center",marginBottom:10,position:"relative",overflow:"hidden"}}>
-            <div style={{fontSize:9,fontWeight:700,color:C.tm,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>{isWinDisplay?"🏆 Resultado":"Estado del match"}</div>
+          <div style={{background:lt?`linear-gradient(145deg,${isWinDisplay?"rgba(200,155,30,.12)":"rgba(0,184,148,.12)"},#ffffff 62%)`:`linear-gradient(145deg,rgba(12,45,90,.5),rgba(22,37,68,.4),${isWinDisplay?"rgba(255,196,0,.1)":"rgba(0,184,148,.08)"})`,border:"1px solid "+(isWinDisplay?(lt?"rgba(200,155,30,.45)":C.gld+"40"):(lt?"rgba(0,184,148,.28)":"rgba(255,255,255,.1)")),borderRadius:18,padding:"18px 14px",textAlign:"center",marginBottom:10,position:"relative",overflow:"hidden"}}>
+            <div style={{fontSize:9,fontWeight:700,color:lt?C.ts:C.tm,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>{isWinDisplay?"🏆 Resultado":"Estado del match"}</div>
             <div style={{fontSize:22,fontWeight:800,color:isWinDisplay?C.gld:C.txt,letterSpacing:"-.02em",lineHeight:1.15}}>{mps.status}</div>
-            <div style={{fontSize:11,color:C.tm,marginTop:6}}>{mps.sub}</div>
+            <div style={{fontSize:11,color:lt?C.ts:C.tm,marginTop:6}}>{mps.sub}</div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
             {[{pl:playerA,isMe:playerA.user_id===s.user.id,won:mps.aWon},{pl:playerB,isMe:playerB.user_id===s.user.id,won:mps.bWon}].map((pp,i)=>
-              <div key={i} style={{padding:11,borderRadius:14,textAlign:"center",background:pp.isMe?"linear-gradient(145deg,rgba(0,184,148,.08),rgba(85,239,196,.04))":"rgba(255,255,255,.025)",border:"1px solid "+(pp.isMe?"rgba(0,184,148,.22)":"rgba(255,255,255,.08)"),display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+              <div key={i} style={{padding:11,borderRadius:14,textAlign:"center",background:pp.isMe?(lt?"linear-gradient(145deg,rgba(0,184,148,.14),rgba(0,184,148,.06))":"linear-gradient(145deg,rgba(0,184,148,.08),rgba(85,239,196,.04))"):(lt?"#ffffff":"rgba(255,255,255,.025)"),border:"1px solid "+(pp.isMe?(lt?"rgba(0,184,148,.30)":"rgba(0,184,148,.22)"):(lt?"rgba(0,0,0,.08)":"rgba(255,255,255,.08)")),display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
                 <div style={{width:32,height:32,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",background:pp.isMe?`linear-gradient(135deg,${C.grn},#55efc4)`:"linear-gradient(135deg,#3a4a5e,#5a6d82)"}}>{(pp.pl.player_name||"?").charAt(0).toUpperCase()}</div>
                 <div style={{fontSize:10,fontWeight:700,color:pp.isMe?C.grn:C.txt,letterSpacing:".04em"}}>{pp.pl.player_name}{pp.isMe?" · "+t("(Tu)"):""}</div>
                 {pp.pl.player_pid&&<div style={{fontSize:9,color:C.gld,fontWeight:600,letterSpacing:".04em",..._s.mono}}>{pp.pl.player_pid}</div>}
@@ -5434,13 +5434,13 @@ function TourneoTab(props){
               const youWon=(r.result==="A"&&playerA.user_id===s.user.id)||(r.result==="B"&&playerB.user_id===s.user.id);
               const oppWon=r.result&&!youWon&&r.result!=="halved";
               const halved=r.result==="halved";
-              const bg=youWon?"linear-gradient(135deg,rgba(0,184,148,.16),rgba(85,239,196,.08))":oppWon?"rgba(58,74,94,.4)":halved?"transparent":"rgba(255,255,255,.02)";
-              const bd=youWon?"rgba(0,184,148,.4)":oppWon?"rgba(255,255,255,.15)":halved?C.gld+"66":"rgba(255,255,255,.05)";
+              const bg=youWon?"linear-gradient(135deg,rgba(0,184,148,.16),rgba(85,239,196,.08))":oppWon?(lt?"rgba(15,23,42,.07)":"rgba(58,74,94,.4)"):halved?"transparent":(lt?"rgba(0,0,0,.03)":"rgba(255,255,255,.02)");
+              const bd=youWon?"rgba(0,184,148,.4)":oppWon?(lt?"rgba(0,0,0,.14)":"rgba(255,255,255,.15)"):halved?C.gld+"66":(lt?"rgba(0,0,0,.06)":"rgba(255,255,255,.05)");
               const cl=youWon?C.grn:oppWon?C.txt:halved?C.gld:C.ts;
               return <div key={i} style={{aspectRatio:"1",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:cl,background:bg,border:"1px solid "+bd}}>{r.hole}</div>;
             })}
           </div>
-          {mps.decided&&mps.played<holes.length&&<div style={{padding:"11px 12px",borderRadius:14,background:"linear-gradient(145deg,rgba(12,45,90,.3),rgba(0,184,148,.06))",border:"1px solid rgba(0,184,148,.18)",fontSize:11,color:C.tm,textAlign:"center",lineHeight:1.45,marginBottom:10}}>El match ya está decidido. <strong style={{color:C.grn,fontWeight:700}}>Completen los hoyos restantes</strong> para registrar el scorecard y handicap WHS.</div>}
+          {mps.decided&&mps.played<holes.length&&<div style={{padding:"11px 12px",borderRadius:14,background:lt?"linear-gradient(145deg,rgba(0,184,148,.10),#ffffff 70%)":"linear-gradient(145deg,rgba(12,45,90,.3),rgba(0,184,148,.06))",border:"1px solid rgba(0,184,148,"+(lt?".30":".18")+")",fontSize:11,color:lt?C.ts:C.tm,textAlign:"center",lineHeight:1.45,marginBottom:10}}>El match ya está decidido. <strong style={{color:C.grn,fontWeight:700}}>Completen los hoyos restantes</strong> para registrar el scorecard y handicap WHS.</div>}
         </div>;
       })():
       <div style={{marginBottom:14}}><div style={{..._s.section,color:C.txt}} dangerouslySetInnerHTML={{__html:ic("trophy",14,C.gld)+" Leaderboard"}}/>
