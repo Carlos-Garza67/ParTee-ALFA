@@ -4993,7 +4993,7 @@ function matchPlayStatus(playerA,playerB,scoresMap,holes){
 
 const _delTorneoIds=new Set();
 function SwipeRow({children,onDelete,border}){const ref=useRef(null);const sx=useRef(0);const cx=useRef(0);const sw=useRef(false);const op=useRef(false);const TS=e=>{sx.current=e.touches[0].clientX;sw.current=true;if(ref.current)ref.current.style.transition="none"};const TM=e=>{if(!sw.current)return;const d=e.touches[0].clientX-sx.current;const base=op.current?-68:0;cx.current=Math.max(Math.min(base+d,0),-72);if(ref.current)ref.current.style.transform=`translateX(${cx.current}px)`};const TE=()=>{sw.current=false;if(!ref.current)return;ref.current.style.transition="transform .25s ease";if(cx.current<-36){cx.current=-68;op.current=true;ref.current.style.transform="translateX(-68px)"}else{cx.current=0;op.current=false;ref.current.style.transform="translateX(0)"}};return React.createElement("div",{style:{overflow:"hidden",borderRadius:14,marginBottom:8,border:border||"none"}},React.createElement("div",{ref,onTouchStart:TS,onTouchMove:TM,onTouchEnd:TE,style:{display:"flex",willChange:"transform"}},React.createElement("div",{style:{minWidth:"100%",flexShrink:0}},children),React.createElement("div",{onClick:()=>{op.current=false;cx.current=0;if(ref.current){ref.current.style.transition="transform .25s ease";ref.current.style.transform="translateX(0)"}window.__confirm?.(t("¿Eliminar esta partida?"),onDelete)},style:{width:68,flexShrink:0,background:`linear-gradient(135deg,${C.acc},#d63d55)`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}},React.createElement("span",{dangerouslySetInnerHTML:{__html:ic("x",18,"#fff")}}))))}
-function TourneoTab(){
+function TourneoTab(props){
   const{s,p}=useA();const[torneos,setTorneos]=useState([]);const[ld,setLd]=useState(true);const[view,setView]=useState("list");const[at,setAt]=useState(null);
   const[step,setStep]=useState(1);const[gMode,setGMode]=useState("");const[gFmt,setGFmt]=useState("");const[tName,setTName]=useState("");const[courses,setCourses]=useState([]);const[selCourse,setSelCourse]=useState(null);const[friends,setFriends]=useState([]);const[selFr,setSelFr]=useState([]);const[teamAssign,setTeamAssign]=useState({});const[myBookings,setMyBookings]=useState([]);const[selBkId,setSelBkId]=useState(null);const[autoFilledName,setAutoFilledName]=useState(false);const[fromGroupId,setFromGroupId]=useState(null);const[groupMembers,setGroupMembers]=useState([]);const[inheritedCourse,setInheritedCourse]=useState(null);const[inheritedMaxPlayers,setInheritedMaxPlayers]=useState(null);
   const[players,setPlayers]=useState([]);const[holes,setHoles]=useState([]);const[scores,setScores]=useState({});
@@ -5074,6 +5074,7 @@ function TourneoTab(){
   async function loadTorneos(){setLd(true);const{data:tpR}=await sb.from("tournament_players").select("tournament_id").eq("user_id",s.user.id);const tids=[...new Set((tpR||[]).map(t=>t.tournament_id))];if(tids.length>0){const{data}=await sb.from("tournaments").select("*").in("id",tids).eq("tournament_type","versus_match").order("created_at",{ascending:false});setTorneos((data||[]).filter(x=>!_delTorneoIds.has(x.id)))}else setTorneos([]);setLd(false)}
   async function quickDelete(tn){await _deleteT(tn,null)}
   const[bkRef,setBkRef]=useState(null);
+  useEffect(()=>{if(props&&props.onView)props.onView(view==="detail")},[view]);useEffect(()=>()=>{if(props&&props.onView)props.onView(false)},[]);
   useEffect(()=>{
     // Handler reutilizable para conversión grupo→partida (se dispara al montar y también al recibir partee:vtab)
     const handleFromGroup=async()=>{
@@ -5721,7 +5722,7 @@ function TourneoTab(){
 // Ahora: vTab="torneos" = Torneos REALES (TournamentsScreen embedded · público)
 //        vTab="matches" = Partidas Versus (TourneoTab)
 //        vTab="grupos"  = Grupos sociales (MatchScreen embedded)
-function VersusTab(){const[vTab,setVTab]=useState("torneos");const{s,p}=useA();useEffect(()=>{const h=(e)=>{if(e.detail?.tab)setVTab(e.detail.tab)};window.addEventListener("partee:vtab",h);return()=>window.removeEventListener("partee:vtab",h)},[]);
+function VersusTab(){const[vTab,setVTab]=useState("torneos");const[detailOpen,setDetailOpen]=useState(false);const{s,p}=useA();useEffect(()=>{const h=(e)=>{if(e.detail?.tab)setVTab(e.detail.tab)};window.addEventListener("partee:vtab",h);return()=>window.removeEventListener("partee:vtab",h)},[]);
   // v20.39 · hints alineados a estética glass+SVG (antes: emojis+italic, fuera de tono).
   const subTabs=[
     {k:"torneos",l:ic("trophy",16)+" "+t("Torneos"),hint:t("Torneos oficiales con bolsa de premios"),icon:"trophy",color:C.gld},
@@ -5731,10 +5732,10 @@ function VersusTab(){const[vTab,setVTab]=useState("torneos");const{s,p}=useA();u
   const activeTab=subTabs.find(x=>x.k===vTab)||subTabs[0];
   return<div>
     {/* v19.58: sección 'Retos Pendientes' eliminada — feature retirado */}
-    <div style={{display:"flex",gap:6,padding:"12px 20px 0"}}>{subTabs.map(tb=><button key={tb.k} onClick={()=>setVTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:vTab===tb.k?"none":"1px solid "+C.bd,background:vTab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:vTab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:vTab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}} dangerouslySetInnerHTML={{__html:tb.l}}/>)}</div>
-    <div style={{padding:"10px 20px 0"}}><div style={{display:"flex",alignItems:"center",gap:10,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:12,padding:"10px 12px 10px 14px",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:activeTab.color}}/><span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(activeTab.icon,14,activeTab.color)}}/><div style={{fontSize:11.5,color:C.ts,lineHeight:1.4,fontWeight:500}}>{activeTab.hint}</div></div></div>
+    {!detailOpen&&<React.Fragment><div style={{display:"flex",gap:6,padding:"12px 20px 0"}}>{subTabs.map(tb=><button key={tb.k} onClick={()=>setVTab(tb.k)} style={{flex:1,padding:10,borderRadius:12,border:vTab===tb.k?"none":"1px solid "+C.bd,background:vTab===tb.k?`linear-gradient(135deg,${C.acc},#d63d55)`:C.glass||C.w04,color:vTab===tb.k?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:vTab===tb.k?C.shAcc||"0 6px 20px rgba(233,69,96,.40)":"none"}} dangerouslySetInnerHTML={{__html:tb.l}}/>)}</div>
+    <div style={{padding:"10px 20px 0"}}><div style={{display:"flex",alignItems:"center",gap:10,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:12,padding:"10px 12px 10px 14px",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:activeTab.color}}/><span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(activeTab.icon,14,activeTab.color)}}/><div style={{fontSize:11.5,color:C.ts,lineHeight:1.4,fontWeight:500}}>{activeTab.hint}</div></div></div></React.Fragment>}
     {vTab==="torneos"&&<TournamentsScreen/>}
-    {vTab==="matches"&&<TourneoTab/>}
+    {vTab==="matches"&&<TourneoTab onView={setDetailOpen}/>}
     {vTab==="grupos"&&<MatchScreen embedded/>}</div>}
 
 function RankingScreen({onBack}){
