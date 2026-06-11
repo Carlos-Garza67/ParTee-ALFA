@@ -5505,8 +5505,8 @@ function TourneoTab(props){
         </div>})()}
       {/* v18.3.0 Sprint 3 Fase 3 — TOGGLE entre vista Hoyo-a-Hoyo y Tabla 18 hoyos */}
       {canEdit&&holes.length>0&&myPid&&<div style={{display:"flex",gap:6,marginBottom:12,padding:4,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:12}}>
-        <button onClick={()=>setScoreView("hole")} style={{flex:1,padding:"8px 12px",background:scoreView==="hole"?C.acc:"transparent",border:"none",borderRadius:8,color:scoreView==="hole"?"#fff":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}>📍 {t("Hoyo a hoyo")}</button>
-        <button onClick={()=>setScoreView("table")} style={{flex:1,padding:"8px 12px",background:scoreView==="table"?C.acc:"transparent",border:"none",borderRadius:8,color:scoreView==="table"?"#fff":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}>📊 {t("Tabla")} {holes.length} {t("hoyos")}</button>
+        <button onClick={()=>setScoreView("hole")} style={{flex:1,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:scoreView==="hole"?C.acc:"transparent",border:"none",borderRadius:8,color:scoreView==="hole"?"#fff":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("flag",14,scoreView==="hole"?"#fff":C.ts)}}/><span>{t("Hoyo a hoyo")}</span></button>
+        <button onClick={()=>setScoreView("table")} style={{flex:1,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:scoreView==="table"?C.acc:"transparent",border:"none",borderRadius:8,color:scoreView==="table"?"#fff":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("grid",14,scoreView==="table"?"#fff":C.ts)}}/><span>{t("Tabla")} {holes.length} {t("hoyos")}</span></button>
       </div>}
       {/* MOBILE SCORE INPUT - Hole by Hole */}
       {scoreView==="hole"&&canEdit&&holes.length>0&&myPid&&(()=>{
