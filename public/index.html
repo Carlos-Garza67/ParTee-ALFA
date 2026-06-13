@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v21.0 (Dispatch Center + gestion de usuarios del equipo. (1) EN VIVO: mapa agrandado a 62vh + boton Dispatch -> modal para mandar mensaje al equipo (course_staff) por rol via WhatsApp/Twilio. CASCARON TWILIO: edge fn dispatch-message lista; si TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_FROM no estan seteados regresa twilio_configured:false y registra el intento en course_dispatch_log; al setear los secrets + numero dedicado empieza a enviar sin tocar codigo. MarshalView (pace manual) FUNDIDO en En Vivo via boton Marshal, ya no vive en Reservas. (2) CAMPO > Usuarios: nuevo AdminStaffCard para alta de team members (solo nombre/celular/rol). (3) RESERVAS: quitados botones Marshal + Roster, queda solo Check-in full-width. (4) TEE TIME > Roster: AdminRoster ahora con toggle Disponible/No disp. por staff. Migracion v21_dispatch_and_staff_availability: course_staff +columna available (separada de active=empleo), get_course_roster devuelve available + available_now, tabla course_dispatch_log con RLS admin-read, anon pierde DML en course_staff.)","color:#f0c040;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v21.45 (Dispatch Center + gestion de usuarios del equipo. (1) EN VIVO: mapa agrandado a 62vh + boton Dispatch -> modal para mandar mensaje al equipo (course_staff) por rol via WhatsApp/Twilio. CASCARON TWILIO: edge fn dispatch-message lista; si TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_FROM no estan seteados regresa twilio_configured:false y registra el intento en course_dispatch_log; al setear los secrets + numero dedicado empieza a enviar sin tocar codigo. MarshalView (pace manual) FUNDIDO en En Vivo via boton Marshal, ya no vive en Reservas. (2) CAMPO > Usuarios: nuevo AdminStaffCard para alta de team members (solo nombre/celular/rol). (3) RESERVAS: quitados botones Marshal + Roster, queda solo Check-in full-width. (4) TEE TIME > Roster: AdminRoster ahora con toggle Disponible/No disp. por staff. Migracion v21_dispatch_and_staff_availability: course_staff +columna available (separada de active=empleo), get_course_roster devuelve available + available_now, tabla course_dispatch_log con RLS admin-read, anon pierde DML en course_staff.)","color:#f0c040;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.91 (Kill switch defensivo contra 'Failed to fetch' / 'Load failed' en Login. Si Supabase auth no responde por SW viejo cacheado, CORS preflight fail, DNS local, o cualquier network error, el Login detecta el patron en el msg y muestra boton '🔄 Limpiar caché y reintentar'. El boton llama window.__parteeRecover() que hace cleanup nuclear: unregister TODOS los Service Workers, delete TODOS los caches del browser, limpia tokens sb-* y supabase.auth.token de localStorage, sessionStorage.clear, hard reload con ?recovered=ts. Tambien accesible manualmente desde DevTools con window.__parteeRecover(). Mitiga el deadlock SW viejo bloquea fetch → no descarga HTML nuevo → no descarga SW nuevo.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.86 (Fix bug del badge ! en la tab Campo. Antes: el badge se encendia con cualquier listing_status != 'active', incluido pending_review. Esto era semanticamente incorrecto: pending_review significa que el course_admin ya completo todo y Partee debe aprobar; NO es un pendiente del admin. El badge generaba ansiedad falsa porque el admin veia el ! y entraba a Campo a buscar que le faltaba, sin encontrar nada. Fix: badge solo aparece para draft o suspended (estados donde el admin SI debe actuar). El status dot junto al logo + chip 'EN REVISION' en barra superior siguen comunicando el estado en pending_review.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.85 (Ajustes del course_admin refactorizada con pautas visuales identicas al Player Profile. Nuevo componente AdminAjustesAccordion: 6 secciones colapsables (Mi cuenta, Cobros y pagos, Suscripcion, Notificaciones, Apariencia, Sesion y cuenta) en patron accordion. Header siempre visible con icon coloreado en container 32x32 (radius 10, bg color+10), label fontSize 14 fontWeight 700, chevron rotate 180deg al expandir. Body con C.el background + borderRadius continuo. Mi cuenta arranca abierta por default. Quitado el patron de sub-headers UPPERCASE planos. Removido el colapso interno de AdminRegularNotifsControls (ahora el accordion exterior maneja el colapso, evita doble-collapse). Cobros + suscripcion + sesion/cuenta agrupados en sus propias secciones del accordion.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -8472,6 +8472,8 @@ function AdminStaffCard({course}){
   const[sv,setSv]=useState(false);
   const ROLES=[["marshal","Marshal"],["beverage_cart","Bebidas"],["ranger","Ranger"],["caddie","Caddie"],["cart_attendant","Carritos"],["starter","Starter"],["pro","Pro"],["maintenance","Mant."],["other","Otro"]];
   const roleL=Object.fromEntries(ROLES);
+  // v21.44: color por rol para chip + avatar de iniciales
+  const roleC={marshal:C.grn,beverage_cart:C.gld,ranger:C.secBlu||"#4a72c4",caddie:C.secTeal||"#14b8a6",cart_attendant:C.secVio||"#8b6fd4",starter:C.acc,pro:C.gld,maintenance:C.ts,other:C.tm};
   async function load(){const{data}=await sb.from("course_staff").select("id,full_name,phone,role,available").eq("course_id",course.id).eq("active",true).order("role").order("full_name");setRows(data||[]);setLd(false)}
   useEffect(()=>{load()},[course.id]);
   async function add(){
@@ -8484,41 +8486,169 @@ function AdminStaffCard({course}){
     window.__toast?.("Usuario agregado","success");
     setNm("");setPh("");setRl("marshal");setAdding(false);load();
   }
-  async function del(id){
-    if(!window.confirm("¿Eliminar usuario?"))return;
-    const{error}=await sb.from("course_staff").delete().eq("id",id);
-    if(error){window.__toast?.(error.message,"error");return}
-    load();
+  // v21.44: confirm branded (window.__confirm) en vez del window.confirm nativo; muestra el nombre
+  function del(s){
+    const go=async()=>{
+      const{error}=await sb.from("course_staff").delete().eq("id",s.id);
+      if(error){window.__toast?.(error.message,"error");return}
+      window.__toast?.("Usuario eliminado","success");load();
+    };
+    if(window.__confirm)window.__confirm("¿Eliminar a "+(s.full_name||"este usuario")+"?",go,null,{confirmLabel:"Eliminar"});
+    else go();
   }
+  const initials=(n)=>{const p=(n||"").trim().split(/\s+/);return((p[0]&&p[0][0]||"")+(p[1]&&p[1][0]||"")).toUpperCase()||"·"};
+  const fmtPh=(p)=>{const d=(p||"").replace(/\D/g,"");return d.length===10?d.slice(0,2)+" "+d.slice(2,6)+" "+d.slice(6):p};
   const inp={width:"100%",padding:"9px 11px",background:C.bg,border:"1px solid "+C.bd,borderRadius:9,color:C.txt,fontSize:13,outline:"none",boxSizing:"border-box"};
   return<div style={{marginBottom:12}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
       <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Usuarios del equipo</div>
-      <span style={{fontSize:11,color:C.tm}}>{rows.length}</span>
+      {rows.length>0&&<span style={{fontSize:11,fontWeight:700,color:C.tm,background:C.bg,border:"1px solid "+C.bd,borderRadius:999,padding:"2px 9px",minWidth:20,textAlign:"center"}}>{rows.length}</span>}
     </div>
     <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>Marshalls, conductores de bebidas y demás staff. Aparecen en el Roster (Tee Time) y en el Dispatch (En Vivo).</div>
     {ld?<div style={{fontSize:12,color:C.tm,padding:8}}>Cargando...</div>:
-      rows.length===0?<div style={{fontSize:12,color:C.tm,padding:"8px 0"}}>Sin usuarios todavía.</div>:
-      rows.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,border:"1px solid "+C.bd,borderRadius:9,marginBottom:6}}>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{s.full_name}</span>
-            <span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.grn+"15",color:C.grn}}>{roleL[s.role]||s.role}</span>
-          </div>
-          {s.phone&&<div style={{fontSize:11,color:C.tm,marginTop:1}}>{s.phone}</div>}
+      rows.length===0?
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,padding:"24px 12px",background:C.bg,border:"1px dashed "+C.bd,borderRadius:10,marginBottom:6}}>
+          <div style={{opacity:.45,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("users",24,C.tm)}}/>
+          <div style={{fontSize:12,color:C.tm}}>Sin usuarios todavía</div>
+        </div>:
+      rows.map(s=>{const rc=roleC[s.role]||C.grn;return<div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,marginBottom:6}}>
+        <div style={{width:36,height:36,borderRadius:10,flexShrink:0,background:rc+"1c",color:rc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,letterSpacing:.3,position:"relative"}}>
+          {initials(s.full_name)}
+          <span title={s.available?"Disponible":"No disponible"} style={{position:"absolute",bottom:-2,right:-2,width:10,height:10,borderRadius:5,background:s.available?C.grn:C.tm,border:"2px solid "+C.el}}/>
         </div>
-        <button onClick={()=>del(s.id)} style={{width:30,height:30,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("trash",13,C.acc)}}/>
-      </div>)}
-    {adding?<div style={{padding:11,background:C.bg,border:"1px solid "+C.grn+"40",borderRadius:10,marginTop:6}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:13,fontWeight:700,color:C.txt}}>{s.full_name}</span>
+            <span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:5,background:rc+"1c",color:rc,letterSpacing:.4,textTransform:"uppercase"}}>{roleL[s.role]||s.role}</span>
+          </div>
+          {s.phone&&<div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:C.tm,marginTop:3}}><span style={{opacity:.7,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("phone",11,C.tm)}}/>{fmtPh(s.phone)}</div>}
+        </div>
+        <button onClick={()=>del(s)} title="Eliminar usuario" style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("trash",13,C.acc)}}/>
+      </div>})}
+    {adding?<div style={{padding:12,background:C.bg,border:"1px solid "+C.grn+"40",borderRadius:10,marginTop:6}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:9,textTransform:"uppercase"}}>Nuevo usuario</div>
       <input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Nombre" style={{...inp,marginBottom:8}}/>
-      <input value={ph} onChange={e=>setPh(e.target.value)} placeholder="Celular (10 dígitos)" inputMode="tel" style={{...inp,marginBottom:8}}/>
+      <input value={ph} onChange={e=>setPh(e.target.value.replace(/\D/g,"").slice(0,10))} placeholder="Celular (10 dígitos)" inputMode="tel" style={{...inp,marginBottom:8}}/>
       <select value={rl} onChange={e=>setRl(e.target.value)} style={{...inp,marginBottom:10}}>{ROLES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
       <div style={{display:"flex",gap:8}}>
         <button onClick={add} disabled={sv} style={{flex:1,padding:10,background:"linear-gradient(135deg,"+C.grn+",#00a07f)",border:"none",borderRadius:9,color:"#fff",fontSize:13,fontWeight:700,cursor:sv?"default":"pointer",opacity:sv?.6:1}}>{sv?"Guardando...":"Guardar"}</button>
         <button onClick={()=>{setAdding(false);setNm("");setPh("")}} style={{padding:"10px 14px",background:"none",border:"1px solid "+C.bd,borderRadius:9,color:C.tm,fontSize:13,cursor:"pointer"}}>Cancelar</button>
       </div>
     </div>:
-    <button onClick={()=>setAdding(true)} style={{width:"100%",padding:10,marginTop:6,background:C.grn+"15",border:"1px dashed "+C.grn+"50",borderRadius:10,color:C.grn,fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Agregar usuario</button>}
+    <button onClick={()=>setAdding(true)} style={{width:"100%",padding:10,marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.grn+"15",border:"1px dashed "+C.grn+"50",borderRadius:10,color:C.grn,fontSize:13,fontWeight:700,cursor:"pointer"}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("plus",15,C.grn)}}/>Agregar usuario</button>}
+  </div>;
+}
+
+// v21.45: Equipo y accesos — gestion de permisos (Fase 1). El owner invita miembros (course_team)
+// con acceso por area. Cobros/Configuracion (tab Campo) quedan owner-only por construccion.
+function AdminTeamAccessCard({course}){
+  const AREAS=[["resumen","Resumen"],["reservas","Tee Time"],["en_vivo","En Vivo"],["ventas","Ventas"],["insights","Insights"]];
+  const areaL=Object.fromEntries(AREAS);
+  const[members,setMembers]=useState([]);
+  const[ld,setLd]=useState(true);
+  const[open,setOpen]=useState(false);
+  const[email,setEmail]=useState("");const[nm,setNm]=useState("");
+  const[perms,setPerms]=useState({reservas:true});
+  const[busy,setBusy]=useState(false);
+  const[invite,setInvite]=useState(null);          // {email, link}
+  const[editId,setEditId]=useState(null);const[editPerms,setEditPerms]=useState({});
+  async function call(action,payload){
+    const tk=(await sb.auth.getSession()).data.session?.access_token;
+    const res=await fetch(SB_FN_URL+"/team-access",{method:"POST",headers:{Authorization:"Bearer "+tk,apikey:SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({action,...(payload||{})})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||"Error");
+    return data;
+  }
+  async function load(){try{const d=await call("list");setMembers(d.members||[])}catch(e){window.__toast?.(e.message,"error")}setLd(false)}
+  useEffect(()=>{load()},[course.id]);
+  async function doInvite(){
+    if(!email.trim()){window.__toast?.("Correo requerido","warn");return}
+    if(!Object.values(perms).some(Boolean)){window.__toast?.("Habilita al menos un área","warn");return}
+    setBusy(true);
+    try{const d=await call("invite",{email:email.trim(),full_name:nm.trim(),permissions:perms});
+      setInvite({email:email.trim(),link:d.invite_link});
+      setEmail("");setNm("");setPerms({reservas:true});setOpen(false);load();
+      window.__toast?.("Invitación creada","success");
+    }catch(e){window.__toast?.(e.message,"error")}
+    setBusy(false);
+  }
+  async function saveEdit(id){
+    setBusy(true);
+    try{await call("update",{member_id:id,permissions:editPerms});setEditId(null);load();window.__toast?.("Permisos actualizados","success")}
+    catch(e){window.__toast?.(e.message,"error")}
+    setBusy(false);
+  }
+  function doRevoke(m){
+    if(window.__confirm)window.__confirm("¿Quitar acceso a "+(m.full_name||m.email)+"?",async()=>{
+      try{await call("revoke",{member_id:m.id});load();window.__toast?.("Acceso removido","success")}catch(e){window.__toast?.(e.message,"error")}
+    },null,{confirmLabel:"Quitar acceso"});
+  }
+  const copyLink=(lnk)=>{try{navigator.clipboard.writeText(lnk);window.__toast?.("Link copiado","success")}catch(e){window.__toast?.("Copia manual","info")}};
+  const initials=(n,e)=>{const s=(n||e||"?").trim();const p=s.split(/\s+/);return((p[0]&&p[0][0]||"")+(p[1]&&p[1][0]||"")).toUpperCase()||s[0].toUpperCase()};
+  const inp={width:"100%",padding:"9px 11px",background:C.bg,border:"1px solid "+C.bd,borderRadius:9,color:C.txt,fontSize:13,outline:"none",boxSizing:"border-box"};
+  // chips de areas (toggle)
+  const AreaToggles=({val,onTog})=><div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2}}>{AREAS.map(([k,l])=>{const on=!!val[k];return<button key={k} onClick={()=>onTog(k)} style={{padding:"5px 11px",borderRadius:999,border:"1px solid "+(on?C.grn:C.bd),background:on?C.grn+"18":C.bg,color:on?C.grn:C.tm,fontSize:11,fontWeight:700,cursor:"pointer"}}>{on?"✓ ":""}{l}</button>})}</div>;
+
+  return<div style={{marginBottom:12}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Equipo y accesos</div>
+      {members.length>0&&<span style={{fontSize:11,fontWeight:700,color:C.tm,background:C.bg,border:"1px solid "+C.bd,borderRadius:999,padding:"2px 9px",minWidth:20,textAlign:"center"}}>{members.length}</span>}
+    </div>
+    <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>Invita a tu equipo a entrar al panel con acceso limitado por área. Cobros y Configuración quedan solo para ti.</div>
+
+    {invite&&<div style={{padding:11,background:C.grn+"0e",border:"1px solid "+C.grn+"40",borderRadius:10,marginBottom:10}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.txt,marginBottom:4}}>Invitación lista para {invite.email}</div>
+      <div style={{fontSize:11,color:C.tm,marginBottom:8,lineHeight:1.4}}>Comparte este link para que active su cuenta y entre al panel:</div>
+      {invite.link?<div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <div style={{flex:1,minWidth:0,fontSize:11,color:C.txt,background:C.bg,border:"1px solid "+C.bd,borderRadius:8,padding:"8px 10px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{invite.link}</div>
+        <button onClick={()=>copyLink(invite.link)} style={{padding:"8px 12px",background:C.grn,border:"none",borderRadius:8,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>Copiar</button>
+      </div>:<div style={{fontSize:11,color:C.tm}}>Se envió por correo. (Si no llega, revisa la config de email.)</div>}
+      <button onClick={()=>setInvite(null)} style={{marginTop:8,background:"none",border:"none",color:C.tm,fontSize:11,fontWeight:600,cursor:"pointer",padding:0}}>Cerrar</button>
+    </div>}
+
+    {ld?<div style={{fontSize:12,color:C.tm,padding:8}}>Cargando...</div>:
+      members.length===0&&!open?
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,padding:"22px 12px",background:C.bg,border:"1px dashed "+C.bd,borderRadius:10,marginBottom:6}}>
+          <div style={{opacity:.45,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("users",24,C.tm)}}/>
+          <div style={{fontSize:12,color:C.tm}}>Sin miembros con acceso todavía</div>
+        </div>:
+      members.map(m=>{const pending=!m.accepted_at;const granted=AREAS.filter(([k])=>m.permissions&&m.permissions[k]);return<div key={m.id} style={{padding:"10px 11px",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,marginBottom:6}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:10,flexShrink:0,background:(pending?C.gld:C.grn)+"1c",color:pending?C.gld:C.grn,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800}}>{initials(m.full_name,m.email)}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <span style={{fontSize:13,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}>{m.full_name||m.email}</span>
+              <span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:5,background:(pending?C.gld:C.grn)+"1c",color:pending?C.gld:C.grn,letterSpacing:.4,textTransform:"uppercase"}}>{pending?"Invitado":"Activo"}</span>
+            </div>
+            {m.full_name&&<div style={{fontSize:11,color:C.tm,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.email}</div>}
+          </div>
+          <button onClick={()=>{setEditId(editId===m.id?null:m.id);setEditPerms({...(m.permissions||{})})}} title="Editar accesos" style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("edit",13,C.txt)}}/>
+          <button onClick={()=>doRevoke(m)} title="Quitar acceso" style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("trash",13,C.acc)}}/>
+        </div>
+        {editId===m.id?<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd}}>
+          <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:6,textTransform:"uppercase"}}>Accesos</div>
+          <AreaToggles val={editPerms} onTog={(k)=>setEditPerms({...editPerms,[k]:!editPerms[k]})}/>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button onClick={()=>saveEdit(m.id)} disabled={busy} style={{flex:1,padding:9,background:C.grn,border:"none",borderRadius:9,color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"default":"pointer",opacity:busy?.6:1}}>{busy?"Guardando...":"Guardar"}</button>
+            <button onClick={()=>setEditId(null)} style={{padding:"9px 14px",background:"none",border:"1px solid "+C.bd,borderRadius:9,color:C.tm,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+          </div>
+        </div>:
+        granted.length>0?<div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>{granted.map(([k,l])=><span key={k} style={{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:5,background:C.grn+"14",color:C.grn}}>{l}</span>)}</div>:
+        <div style={{fontSize:10,color:C.tm,marginTop:8,fontStyle:"italic"}}>Sin accesos asignados</div>}
+      </div>})}
+
+    {open?<div style={{padding:12,background:C.bg,border:"1px solid "+C.grn+"40",borderRadius:10,marginTop:6}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:9,textTransform:"uppercase"}}>Invitar miembro</div>
+      <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Correo" inputMode="email" style={{...inp,marginBottom:8}}/>
+      <input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Nombre (opcional)" style={{...inp,marginBottom:10}}/>
+      <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.5,marginBottom:4,textTransform:"uppercase"}}>Accesos</div>
+      <AreaToggles val={perms} onTog={(k)=>setPerms({...perms,[k]:!perms[k]})}/>
+      <div style={{display:"flex",gap:8,marginTop:12}}>
+        <button onClick={doInvite} disabled={busy} style={{flex:1,padding:10,background:"linear-gradient(135deg,"+C.grn+",#00a07f)",border:"none",borderRadius:9,color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"default":"pointer",opacity:busy?.6:1}}>{busy?"Invitando...":"Enviar invitación"}</button>
+        <button onClick={()=>{setOpen(false);setEmail("");setNm("")}} style={{padding:"10px 14px",background:"none",border:"1px solid "+C.bd,borderRadius:9,color:C.tm,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+      </div>
+    </div>:
+    <button onClick={()=>setOpen(true)} style={{width:"100%",padding:10,marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.grn+"15",border:"1px dashed "+C.grn+"50",borderRadius:10,color:C.grn,fontSize:13,fontWeight:700,cursor:"pointer"}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("plus",15,C.grn)}}/>Invitar miembro</button>}
   </div>;
 }
 
@@ -8534,6 +8664,7 @@ function AdminAjustesAccordion({course,onOut,onRefresh,ctxOut}){
   const SECTIONS=[
     {k:"cuenta",icon:ic("user",18,C.grn),label:t("Usuarios"),color:C.grn,content:<>
       <AdminStaffCard course={course}/>
+      <AdminTeamAccessCard course={course}/>
       <AdminAccountCard/>
       <ChangePassword/>
     </>},
@@ -11988,12 +12119,16 @@ function LiveMap({course}){
   </div>;
 }
 
-function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);
+function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);const isTeam=p?.user_role==="course_team";const[teamPerms,setTeamPerms]=useState(null);
   const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).single().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
-  useEffect(()=>{loadC()},[p]);const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};
+  useEffect(()=>{loadC()},[p]);
+  useEffect(()=>{if(p?.user_role!=="course_team"){setTeamPerms(null);return}if(!p?.managed_course_id)return;sb.from("course_team_members").select("permissions,accepted_at").eq("user_id",p.id).eq("course_id",p.managed_course_id).maybeSingle().then(({data})=>{setTeamPerms(data?.permissions||{});if(data&&!data.accepted_at)sb.rpc("team_accept")})},[p?.user_role,p?.id,p?.managed_course_id]);
+  useEffect(()=>{if(!isTeam||!teamPerms||!course)return;const order=[0,5,1,2,3];const ft2=course.facility_type||"campo";const AM={0:"resumen",1:"reservas",2:"ventas",3:"insights"};const ok=order.filter(i=>(i===5?(ft2==="campo"&&teamPerms.en_vivo):teamPerms[AM[i]]));setTab(prev=>ok.includes(prev)?prev:(ok[0]??0))},[isTeam,teamPerms,course]);
+  const FI={campo:ic("golf",20),plataforma:ic("target",20),simulador:ic("smartphone",20)};
   // v20.30 Fase E.5: keyboard shortcuts 1-5 para tabs (Notion/Linear vibe). Respeta inputs y modifier keys.
   useEffect(()=>{
     const handler=(e)=>{
+      if(isTeam)return;
       const tag=e.target?.tagName;
       if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||e.target?.isContentEditable)return;
       if(e.metaKey||e.ctrlKey||e.altKey)return;
@@ -12002,18 +12137,18 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
     };
     document.addEventListener("keydown",handler);
     return()=>document.removeEventListener("keydown",handler);
-  },[]);
+  },[isTeam]);
   const navTo=(t,opts={})=>{setTab(t);setAutoEdit(!!opts.autoEdit);setFocusField(opts.focusField||null);if(opts.sub)setNavSub({t,sub:opts.sub})};
   const[navSub,setNavSub]=useState(null); // v20.30 Fase B+C: para que CourseStatusBanner pueda abrir sub-segment específico dentro de wrapper
   const clearAutoEdit=()=>{setAutoEdit(false);setFocusField(null)};
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>Sin locación</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Cerrar Sesión")}</button></div></div>;
   // v20.30 Fase B+C: 8 tabs → 5 tabs con verbo mental único. Antes: Dashboard/Reservas/Slots/Promos/Extras/Pagos/Insights/Perfil
-  const ft=course.facility_type||"campo";const tabs=[{idx:0,i:ic("chart",20,C.txt),l:"Resumen"},...(ft==="campo"?[{idx:5,i:ic("pin",20,C.txt),l:t("En Vivo")}]:[]),{idx:1,i:ic("clock",20,C.txt),l:"Tee Time"},{idx:2,i:ic("dollar",20,C.txt),l:"Ventas"},{idx:3,i:ic("gem",20,C.txt),l:"Insights"},{idx:4,i:ic("user",20,C.txt),l:"Campo"}];
+  const ft=course.facility_type||"campo";const TAREA={0:"resumen",1:"reservas",2:"ventas",3:"insights",5:"en_vivo"};let tabs=[{idx:0,i:ic("chart",20,C.txt),l:"Resumen"},...(ft==="campo"?[{idx:5,i:ic("pin",20,C.txt),l:t("En Vivo")}]:[]),{idx:1,i:ic("clock",20,C.txt),l:"Tee Time"},{idx:2,i:ic("dollar",20,C.txt),l:"Ventas"},{idx:3,i:ic("gem",20,C.txt),l:"Insights"},{idx:4,i:ic("user",20,C.txt),l:"Campo"}];if(isTeam){tabs=tabs.filter(tb=>tb.idx!==4&&teamPerms&&teamPerms[TAREA[tb.idx]])}const allowedIdx=new Set(tabs.map(tb=>tb.idx));
   const lst=course.listing_status||"draft";const LST={draft:{l:"BORRADOR",c:C.acc},pending_review:{l:"EN REVISIÓN",c:C.gld},active:{l:"PUBLICADO",c:C.grn},suspended:{l:"SUSPENDIDO",c:C.acc}}[lst]||{l:"BORRADOR",c:C.acc};
   return<div className="admin-container" style={{background:C.bg}}>
     <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{position:"relative",display:"flex",alignItems:"center"}}><ParteeMark size={24} color={C.grn}/>{/* v20.30 Fase E.3: status dot animado junto al logo, color por listing_status */}<div style={{position:"absolute",right:-2,bottom:-2,width:9,height:9,borderRadius:"50%",background:LST.c,border:"2px solid "+C.bg,boxShadow:"0 0 0 0 "+LST.c+"60",animation:lst==="active"?"parteePulseGrn 2.5s infinite":lst==="pending_review"?"parteePulseGld 2s infinite":"none"}}/></div><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div style={{display:"flex",alignItems:"center",gap:6}}><div onClick={()=>setTab(0)} style={{padding:"3px 9px",borderRadius:7,background:LST.c+"15",border:"1px solid "+LST.c+"35",cursor:lst==="active"?"default":"pointer"}} title={lst==="active"?"":"Ver detalles en Dashboard"}><span style={{fontSize:9,fontWeight:700,color:LST.c,letterSpacing:".05em"}}>{LST.l}</span></div>{p?.subscription_plan&&p.subscription_plan!=="free"&&<PremiumBadge plan={p.subscription_plan}/>}<NotifBell/></div></div>
-    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{tab===1&&<AdminTeeTime course={course} initialSub={navSub?.t===1?navSub.sub:null}/>}{tab===2&&<AdminVentas course={course}/>}{tab===3&&<AdminInsights course={course}/>}{tab===4&&<AdminCampo course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit} initialSub={navSub?.t===4?navSub.sub:null}/>}{tab===5&&<LiveMap course={course}/>}</div>
+    <div className="admin-content" style={{padding:16,paddingBottom:70}}>{allowedIdx.has(0)&&tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo}/>}{allowedIdx.has(1)&&tab===1&&<AdminTeeTime course={course} initialSub={navSub?.t===1?navSub.sub:null}/>}{allowedIdx.has(2)&&tab===2&&<AdminVentas course={course}/>}{allowedIdx.has(3)&&tab===3&&<AdminInsights course={course}/>}{allowedIdx.has(4)&&tab===4&&<AdminCampo course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit} initialSub={navSub?.t===4?navSub.sub:null}/>}{allowedIdx.has(5)&&tab===5&&<LiveMap course={course}/>}</div>
     <div className="bnav admin-bnav" role="navigation">{tabs.map((tb)=>{
       // v20.30 Fase E.1: Counter badges. Campo tab muestra "!" cuando course requiere accion del admin.
       // v20.86: pending_review NO dispara "!". Semantica correcta: pending_review = el admin ya
@@ -14611,6 +14746,7 @@ function Main(){const{s,p,ld,recovery}=useA();const{theme}=useTheme();const[tab,
   if(needsOnboarding)return<PlayerOnboarding/>;
   if(p?.user_role==="platform_admin")return<PlatformAdminApp/>;
   if(p?.user_role==="course_admin")return<AdminApp/>;
+  if(p?.user_role==="course_team")return<AdminApp/>;
   const home=()=>{setScr("home");setCo(null);setSl(null);setTab(0)};
   const sc=theme==="dark"?"#fff":"#111827";
   const vsIcon="<svg width='20' height='20' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><line x1='17' y1='3' x2='7' y2='18' stroke='"+sc+"' stroke-width='2' stroke-linecap='round'/><line x1='7' y1='18' x2='4' y2='16.5' stroke='"+sc+"' stroke-width='2.8' stroke-linecap='round'/><line x1='7' y1='3' x2='17' y2='18' stroke='"+sc+"' stroke-width='2' stroke-linecap='round'/><line x1='17' y1='18' x2='20' y2='16.5' stroke='"+sc+"' stroke-width='2.8' stroke-linecap='round'/><circle cx='17' cy='3' r='1.2' fill='"+sc+"'/><circle cx='7' cy='3' r='1.2' fill='"+sc+"'/></svg>";
