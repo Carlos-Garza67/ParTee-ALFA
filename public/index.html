@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v21.48 (Permisos por area del equipo — Fase 1 + 1b + 2 (escrituras) + pulido de UX. Sub-cuentas course_team con acceso por AREA = tabs del admin. DELEGABLES: Resumen, Tee Time, En Vivo, Ventas, Insights (toggles por miembro en Campo > Usuarios). Campo (Cobros/Suscripcion/Config) = SOLO DUENO. Backend: course_team_members + helpers is_course_owner/is_course_team/team_can + edge fn team-access (solo-dueno) + team_accept; RLS aditiva de lectura. Fase 1b: read-RPCs de las 5 areas aceptan course_team via team_can (incl. reservas: checkin_dashboard/walk_ins/blocks/roster). Fase 2 ESCRITURAS delegadas: En Vivo (resolve_sos, mark_fnb_delivered, mark/unmark_group_hole, dispatch-message v3), Tee Time (checkin/uncheckin_booking, register/cancel_walk_in), Ventas (apply/revert_hot_deal, create_public_tournament, course_inventory CRUD via RLS con WITH CHECK simetrico). OWNER-ONLY (no delegado): slots/bloqueos CRUD, finalize_tournament, envio de campana, membership/pricing CRUD. PULIDO: a los delegados se les ocultan los controles que no les tocan — Ventas oculta subs Cobros/Pricing/Membresias/Campanas; Tee Time oculta Slots/Bloqueos/Roster; Torneos oculta la tira de ciclo de vida + Finalizar (conserva Crear). v21.48: auditoria de lecturas de Resumen/Insights — endurecidos para insights los 3 RPCs de la Intelligence Layer (get_admin_cohort_retention/ltv_summary/player_segments) via team_can, asi los paneles cohortes/LTV/segmentos pueblan para delegado insights; y ocultos los botones owner-only incrustados en cards de lectura: Notificar (DailyPulse), winback/dismiss (ChurnRisk via click de fila), Aplicar Hot Deal (YieldHeatmap drill). Defensa en profundidad: ademas del hide, backend (RPC/RLS) niega toda accion owner-only. Sin course_team aun -> dueno + jugadores intactos.)","color:#f0c040;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v21.49 (Permisos por area del equipo — Fase 1 + 1b + 2 (escrituras) + pulido de UX. Sub-cuentas course_team con acceso por AREA = tabs del admin. DELEGABLES: Resumen, Tee Time, En Vivo, Ventas, Insights (toggles por miembro en Campo > Usuarios). Campo (Cobros/Suscripcion/Config) = SOLO DUENO. Backend: course_team_members + helpers is_course_owner/is_course_team/team_can + edge fn team-access (solo-dueno) + team_accept; RLS aditiva de lectura. Fase 1b: read-RPCs de las 5 areas aceptan course_team via team_can (incl. reservas: checkin_dashboard/walk_ins/blocks/roster). Fase 2 ESCRITURAS delegadas: En Vivo (resolve_sos, mark_fnb_delivered, mark/unmark_group_hole, dispatch-message v3), Tee Time (checkin/uncheckin_booking, register/cancel_walk_in), Ventas (apply/revert_hot_deal, create_public_tournament, course_inventory CRUD via RLS con WITH CHECK simetrico). OWNER-ONLY (no delegado): slots/bloqueos CRUD, finalize_tournament, envio de campana, membership/pricing CRUD. PULIDO: a los delegados se les ocultan los controles que no les tocan — Ventas oculta subs Cobros/Pricing/Membresias/Campanas; Tee Time oculta Slots/Bloqueos; Roster en read-only para delegado reservas (ve staff/equipo + disponibilidad/status como badge, sin agregar/editar/borrar ni toggles; RLS ya niega escrituras de course_team a course_staff/equipment); Torneos oculta la tira de ciclo de vida + Finalizar (conserva Crear). v21.48: auditoria de lecturas de Resumen/Insights — endurecidos para insights los 3 RPCs de la Intelligence Layer (get_admin_cohort_retention/ltv_summary/player_segments) via team_can, asi los paneles cohortes/LTV/segmentos pueblan para delegado insights; y ocultos los botones owner-only incrustados en cards de lectura: Notificar (DailyPulse), winback/dismiss (ChurnRisk via click de fila), Aplicar Hot Deal (YieldHeatmap drill). Defensa en profundidad: ademas del hide, backend (RPC/RLS) niega toda accion owner-only. Sin course_team aun -> dueno + jugadores intactos.)","color:#f0c040;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.91 (Kill switch defensivo contra 'Failed to fetch' / 'Load failed' en Login. Si Supabase auth no responde por SW viejo cacheado, CORS preflight fail, DNS local, o cualquier network error, el Login detecta el patron en el msg y muestra boton '🔄 Limpiar caché y reintentar'. El boton llama window.__parteeRecover() que hace cleanup nuclear: unregister TODOS los Service Workers, delete TODOS los caches del browser, limpia tokens sb-* y supabase.auth.token de localStorage, sessionStorage.clear, hard reload con ?recovered=ts. Tambien accesible manualmente desde DevTools con window.__parteeRecover(). Mitiga el deadlock SW viejo bloquea fetch → no descarga HTML nuevo → no descarga SW nuevo.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.86 (Fix bug del badge ! en la tab Campo. Antes: el badge se encendia con cualquier listing_status != 'active', incluido pending_review. Esto era semanticamente incorrecto: pending_review significa que el course_admin ya completo todo y Partee debe aprobar; NO es un pendiente del admin. El badge generaba ansiedad falsa porque el admin veia el ! y entraba a Campo a buscar que le faltaba, sin encontrar nada. Fix: badge solo aparece para draft o suspended (estados donde el admin SI debe actuar). El status dot junto al logo + chip 'EN REVISION' en barra superior siguen comunicando el estado en pending_review.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.85 (Ajustes del course_admin refactorizada con pautas visuales identicas al Player Profile. Nuevo componente AdminAjustesAccordion: 6 secciones colapsables (Mi cuenta, Cobros y pagos, Suscripcion, Notificaciones, Apariencia, Sesion y cuenta) en patron accordion. Header siempre visible con icon coloreado en container 32x32 (radius 10, bg color+10), label fontSize 14 fontWeight 700, chevron rotate 180deg al expandir. Body con C.el background + borderRadius continuo. Mi cuenta arranca abierta por default. Quitado el patron de sub-headers UPPERCASE planos. Removido el colapso interno de AdminRegularNotifsControls (ahora el accordion exterior maneja el colapso, evita doble-collapse). Cobros + suscripcion + sesion/cuenta agrupados en sus propias secciones del accordion.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -7644,7 +7644,7 @@ function CheckinTablet({course, date, onExit}){
 
 // v20.29 E.1: Admin Roster — gestiona staff (caddies/marshals/pros) + equipment (carts/clubs).
 // CRUD compacto con 2 tabs internos. Llama get_course_roster + direct insert/update/delete.
-function AdminRoster({course, onExit}){
+function AdminRoster({course, onExit}){const{p}=useA();const isTeam=p?.user_role==="course_team";
   const[data,setData]=useState(null);
   const[ld,setLd]=useState(true);
   const[tab,setTab]=useState("staff");
@@ -7752,9 +7752,9 @@ function AdminRoster({course, onExit}){
           <div className="sc"><div className="n" style={{color:C.gld,fontSize:18}}>{sumStaff.marshals}</div><div className="l">Marshals</div></div>
         </div>
         
-        <button onClick={()=>setEditingStaff({role:"caddie",active:true})} style={{width:"100%",padding:10,marginBottom:12,background:C.grn+"15",border:"1px dashed "+C.grn+"50",borderRadius:10,color:C.grn,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+        {!isTeam&&<button onClick={()=>setEditingStaff({role:"caddie",active:true})} style={{width:"100%",padding:10,marginBottom:12,background:C.grn+"15",border:"1px dashed "+C.grn+"50",borderRadius:10,color:C.grn,fontSize:13,fontWeight:700,cursor:"pointer"}}>
           + Agregar staff
-        </button>
+        </button>}
         
         {staff.length===0?
           <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:12}}>Sin staff registrado</div>
@@ -7769,9 +7769,9 @@ function AdminRoster({course, onExit}){
               {s.phone&&<div style={{fontSize:11,color:C.tm,marginTop:2}}>{s.phone}</div>}
               {s.notes&&<div style={{fontSize:10,color:C.tm,marginTop:2,fontStyle:"italic"}}>{s.notes}</div>}
             </div>
-            <button onClick={()=>toggleStaffAvail(s)} title="Disponible / No disponible" style={{padding:"4px 10px",borderRadius:8,background:(s.available?C.grn:C.tm)+"15",border:"1px solid "+(s.available?C.grn:C.tm)+"40",color:(s.available?C.grn:C.tm),fontSize:10,fontWeight:700,cursor:"pointer",flexShrink:0}}>{s.available?"Disponible":"No disp."}</button>
-            <button onClick={()=>setEditingStaff(s)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",14,C.txt)}}/>
-            <button onClick={()=>deleteStaff(s.id)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("trash",14,C.acc)}}/>
+            <button onClick={isTeam?undefined:()=>toggleStaffAvail(s)} title={isTeam?undefined:"Disponible / No disponible"} style={{padding:"4px 10px",borderRadius:8,background:(s.available?C.grn:C.tm)+"15",border:"1px solid "+(s.available?C.grn:C.tm)+"40",color:(s.available?C.grn:C.tm),fontSize:10,fontWeight:700,cursor:isTeam?"default":"pointer",flexShrink:0}}>{s.available?"Disponible":"No disp."}</button>
+            {!isTeam&&<><button onClick={()=>setEditingStaff(s)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",14,C.txt)}}/>
+            <button onClick={()=>deleteStaff(s.id)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("trash",14,C.acc)}}/></>}
           </div>
         </div>)}
       </>:<>
@@ -7782,9 +7782,9 @@ function AdminRoster({course, onExit}){
           <div className="sc"><div className="n" style={{color:C.txt,fontSize:18}}>{sumEq.clubs_available}</div><div className="l">Palos disp.</div></div>
         </div>
         
-        <button onClick={()=>setEditingEq({equipment_type:"golf_cart_electric",status:"available"})} style={{width:"100%",padding:10,marginBottom:12,background:C.acc+"15",border:"1px dashed "+C.acc+"50",borderRadius:10,color:C.acc,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+        {!isTeam&&<button onClick={()=>setEditingEq({equipment_type:"golf_cart_electric",status:"available"})} style={{width:"100%",padding:10,marginBottom:12,background:C.acc+"15",border:"1px dashed "+C.acc+"50",borderRadius:10,color:C.acc,fontSize:13,fontWeight:700,cursor:"pointer"}}>
           + Agregar equipo
-        </button>
+        </button>}
         
         {equipment.length===0?
           <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:12}}>Sin equipo registrado</div>
@@ -7797,9 +7797,9 @@ function AdminRoster({course, onExit}){
               </div>
               {eq.notes&&<div style={{fontSize:10,color:C.tm,marginTop:2,fontStyle:"italic"}}>{eq.notes}</div>}
             </div>
-            <button onClick={()=>toggleEqStatus(eq)} title="Toggle disponible/mantenimiento" style={{padding:"4px 10px",borderRadius:8,background:(statusColors[eq.status]||C.tm)+"15",border:"1px solid "+(statusColors[eq.status]||C.tm)+"40",color:(statusColors[eq.status]||C.tm),fontSize:10,fontWeight:700,cursor:"pointer"}}>{eq.status==="available"?"Disp.":eq.status==="in_use"?"En uso":eq.status==="maintenance"?"Mant.":"Retirado"}</button>
-            <button onClick={()=>setEditingEq(eq)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",14,C.txt)}}/>
-            <button onClick={()=>deleteEq(eq.id)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("trash",14,C.acc)}}/>
+            <button onClick={isTeam?undefined:()=>toggleEqStatus(eq)} title={isTeam?undefined:"Toggle disponible/mantenimiento"} style={{padding:"4px 10px",borderRadius:8,background:(statusColors[eq.status]||C.tm)+"15",border:"1px solid "+(statusColors[eq.status]||C.tm)+"40",color:(statusColors[eq.status]||C.tm),fontSize:10,fontWeight:700,cursor:isTeam?"default":"pointer"}}>{eq.status==="available"?"Disp.":eq.status==="in_use"?"En uso":eq.status==="maintenance"?"Mant.":"Retirado"}</button>
+            {!isTeam&&<><button onClick={()=>setEditingEq(eq)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",14,C.txt)}}/>
+            <button onClick={()=>deleteEq(eq.id)} style={{width:32,height:32,borderRadius:8,background:"none",border:"1px solid "+C.acc+"30",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("trash",14,C.acc)}}/></>}
           </div>
         </div>)}
       </>}
@@ -11433,7 +11433,7 @@ function AdminTeeTime({course,initialSub}){
     {k:"reservas",l:t("Reservas")},
     ...(isTeam?[]:[{k:"slots",l:t("Calendario")}]),
     ...(isTeam?[]:[{k:"bloqueos",l:t("Bloqueos")}]),
-    ...(isTeam?[]:[{k:"roster",l:t("Roster")}])
+    {k:"roster",l:t("Roster")}
   ];
   return<div className="fi">
     <AdminPageHeader title={"TEE TIME · "+t("EN EL CAMPO AHORA")} question={t("¿Qué pasa hoy?")}/>
@@ -11443,7 +11443,7 @@ function AdminTeeTime({course,initialSub}){
     {sub==="reservas"&&<AdminBookings course={course}/>}
     {sub==="slots"&&!isTeam&&<AdminSlots course={course}/>}
     {sub==="bloqueos"&&!isTeam&&<AdminBlockManager course={course}/>}
-    {sub==="roster"&&!isTeam&&<AdminRoster course={course} onExit={()=>setSub("reservas")}/>}
+    {sub==="roster"&&<AdminRoster course={course} onExit={()=>setSub("reservas")}/>}
     </div>
   </div>
 }
