@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v21.46 (Permisos por area del equipo — Fase 1 + 1b. Sub-cuentas course_team con acceso acotado por AREA, donde area = las tabs del admin. DELEGABLES: Resumen, Tee Time, En Vivo, Ventas, Insights (se prenden/apagan por miembro desde Campo > Usuarios > AdminTeamAccessCard). NO DELEGABLE: Campo (Cobros/Suscripcion/Config) = SOLO DUENO por construccion (un course_team nunca ve esa tab, ni forzando el indice). Backend: tabla course_team_members + helpers is_course_owner/is_course_team/team_can (SECURITY DEFINER) + edge fn team-access (solo-dueno: list/invite/update/revoke, courseId derivado del perfil del caller, jamas del cliente) + RPC team_accept. RLS: 5 policies aditivas de lectura (golf_courses/bookings/time_slots/walk_ins/course_staff) gated por helper. Fase 1b — endurecidos los read-RPCs de las 4 areas legibles para aceptar course_team via team_can: Resumen (dashboard_v2/customer_360/daily_pulse), Insights (yield_heatmap/heatmap_drill/churn_risk/weekly_insight), En Vivo (live_positions/course_pace/active_sos/fnb_dispatch/pace_dashboard), Ventas (smart_promo/hot_deal_roi/pricing_rules/memberships/tournaments/extras/campaigns). El miembro delegado VE data real en sus areas. Ventas oculta el sub Cobros para team (payouts, ademas default-denied a nivel RLS). ESCRITURAS siguen Fase 2 (solo course_admin). Sin course_team aun -> dueno + jugadores intactos; el path nuevo solo se activa al primer invite.)","color:#f0c040;font-weight:bold;font-size:13px");
+console.log("%c[Partee] Build v21.48 (Permisos por area del equipo — Fase 1 + 1b + 2 (escrituras) + pulido de UX. Sub-cuentas course_team con acceso por AREA = tabs del admin. DELEGABLES: Resumen, Tee Time, En Vivo, Ventas, Insights (toggles por miembro en Campo > Usuarios). Campo (Cobros/Suscripcion/Config) = SOLO DUENO. Backend: course_team_members + helpers is_course_owner/is_course_team/team_can + edge fn team-access (solo-dueno) + team_accept; RLS aditiva de lectura. Fase 1b: read-RPCs de las 5 areas aceptan course_team via team_can (incl. reservas: checkin_dashboard/walk_ins/blocks/roster). Fase 2 ESCRITURAS delegadas: En Vivo (resolve_sos, mark_fnb_delivered, mark/unmark_group_hole, dispatch-message v3), Tee Time (checkin/uncheckin_booking, register/cancel_walk_in), Ventas (apply/revert_hot_deal, create_public_tournament, course_inventory CRUD via RLS con WITH CHECK simetrico). OWNER-ONLY (no delegado): slots/bloqueos CRUD, finalize_tournament, envio de campana, membership/pricing CRUD. PULIDO: a los delegados se les ocultan los controles que no les tocan — Ventas oculta subs Cobros/Pricing/Membresias/Campanas; Tee Time oculta Slots/Bloqueos/Roster; Torneos oculta la tira de ciclo de vida + Finalizar (conserva Crear). v21.48: auditoria de lecturas de Resumen/Insights — endurecidos para insights los 3 RPCs de la Intelligence Layer (get_admin_cohort_retention/ltv_summary/player_segments) via team_can, asi los paneles cohortes/LTV/segmentos pueblan para delegado insights; y ocultos los botones owner-only incrustados en cards de lectura: Notificar (DailyPulse), winback/dismiss (ChurnRisk via click de fila), Aplicar Hot Deal (YieldHeatmap drill). Defensa en profundidad: ademas del hide, backend (RPC/RLS) niega toda accion owner-only. Sin course_team aun -> dueno + jugadores intactos.)","color:#f0c040;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.91 (Kill switch defensivo contra 'Failed to fetch' / 'Load failed' en Login. Si Supabase auth no responde por SW viejo cacheado, CORS preflight fail, DNS local, o cualquier network error, el Login detecta el patron en el msg y muestra boton '🔄 Limpiar caché y reintentar'. El boton llama window.__parteeRecover() que hace cleanup nuclear: unregister TODOS los Service Workers, delete TODOS los caches del browser, limpia tokens sb-* y supabase.auth.token de localStorage, sessionStorage.clear, hard reload con ?recovered=ts. Tambien accesible manualmente desde DevTools con window.__parteeRecover(). Mitiga el deadlock SW viejo bloquea fetch → no descarga HTML nuevo → no descarga SW nuevo.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.86 (Fix bug del badge ! en la tab Campo. Antes: el badge se encendia con cualquier listing_status != 'active', incluido pending_review. Esto era semanticamente incorrecto: pending_review significa que el course_admin ya completo todo y Partee debe aprobar; NO es un pendiente del admin. El badge generaba ansiedad falsa porque el admin veia el ! y entraba a Campo a buscar que le faltaba, sin encontrar nada. Fix: badge solo aparece para draft o suspended (estados donde el admin SI debe actuar). El status dot junto al logo + chip 'EN REVISION' en barra superior siguen comunicando el estado en pending_review.)","color:#0984e3;font-weight:bold;font-size:13px");
 console.log("%c[Partee] Build v20.85 (Ajustes del course_admin refactorizada con pautas visuales identicas al Player Profile. Nuevo componente AdminAjustesAccordion: 6 secciones colapsables (Mi cuenta, Cobros y pagos, Suscripcion, Notificaciones, Apariencia, Sesion y cuenta) en patron accordion. Header siempre visible con icon coloreado en container 32x32 (radius 10, bg color+10), label fontSize 14 fontWeight 700, chevron rotate 180deg al expandir. Body con C.el background + borderRadius continuo. Mi cuenta arranca abierta por default. Quitado el patron de sub-headers UPPERCASE planos. Removido el colapso interno de AdminRegularNotifsControls (ahora el accordion exterior maneja el colapso, evita doble-collapse). Cobros + suscripcion + sesion/cuenta agrupados en sus propias secciones del accordion.)","color:#0984e3;font-weight:bold;font-size:13px");
@@ -11425,14 +11425,15 @@ function AdminSubNav({items,active,onChange}){
 
 // Tab 1 · TEE TIME — Operación diaria del campo (verbo: HACER)
 function AdminTeeTime({course,initialSub}){
-  const[sub,setSub]=useState(initialSub||"reservas");
-  // Consumir initialSub cuando cambia desde navTo externo
-  useEffect(()=>{if(initialSub)setSub(initialSub)},[initialSub]);
+  const{p}=useA();const isTeam=p?.user_role==="course_team";
+  const[sub,setSub]=useState(isTeam?"reservas":(initialSub||"reservas"));
+  // Consumir initialSub cuando cambia desde navTo externo (no para delegados: subs owner-only ocultas)
+  useEffect(()=>{if(initialSub&&!isTeam)setSub(initialSub)},[initialSub]);
   const items=[
     {k:"reservas",l:t("Reservas")},
-    {k:"slots",l:t("Calendario")},
-    {k:"bloqueos",l:t("Bloqueos")},
-    {k:"roster",l:t("Roster")}
+    ...(isTeam?[]:[{k:"slots",l:t("Calendario")}]),
+    ...(isTeam?[]:[{k:"bloqueos",l:t("Bloqueos")}]),
+    ...(isTeam?[]:[{k:"roster",l:t("Roster")}])
   ];
   return<div className="fi">
     <AdminPageHeader title={"TEE TIME · "+t("EN EL CAMPO AHORA")} question={t("¿Qué pasa hoy?")}/>
@@ -11440,9 +11441,9 @@ function AdminTeeTime({course,initialSub}){
     {/* v20.30 Fase E.2: key={sub} dispara fade-in al cambiar sub-tab */}
     <div key={sub} className="fi">
     {sub==="reservas"&&<AdminBookings course={course}/>}
-    {sub==="slots"&&<AdminSlots course={course}/>}
-    {sub==="bloqueos"&&<AdminBlockManager course={course}/>}
-    {sub==="roster"&&<AdminRoster course={course} onExit={()=>setSub("reservas")}/>}
+    {sub==="slots"&&!isTeam&&<AdminSlots course={course}/>}
+    {sub==="bloqueos"&&!isTeam&&<AdminBlockManager course={course}/>}
+    {sub==="roster"&&!isTeam&&<AdminRoster course={course} onExit={()=>setSub("reservas")}/>}
     </div>
   </div>
 }
@@ -11582,11 +11583,11 @@ function AdminVentas({course}){
     ...(isTeam?[]:[{k:"cobros",l:t("Cobros")}]),
     {k:"historico",l:t("Histórico")},
     {k:"promos",l:t("Promos")},
-    {k:"pricing",l:t("Pricing")},
-    {k:"memberships",l:t("Membresías")},
+    ...(isTeam?[]:[{k:"pricing",l:t("Pricing")}]),
+    ...(isTeam?[]:[{k:"memberships",l:t("Membresías")}]),
     {k:"tournaments",l:t("Torneos")},
     {k:"extras",l:t("Extras")},
-    {k:"campaigns",l:t("Campañas")}
+    ...(isTeam?[]:[{k:"campaigns",l:t("Campañas")}])
   ];
   return<div className="fi">
     <AdminPageHeader title={"VENTAS · "+t("GENERA MÁS INGRESO")} question={t("¿Cómo gano más esta semana?")}/>
@@ -11595,11 +11596,11 @@ function AdminVentas({course}){
     {sub==="cobros"&&!isTeam&&<AdminPayoutsHistory course={course}/>}
     {sub==="historico"&&<AdminSalesHistory course={course}/>}
     {sub==="promos"&&<AdminPromos course={course}/>}
-    {sub==="pricing"&&<AdminPricingRules course={course}/>}
-    {sub==="memberships"&&<AdminMembershipTiers course={course}/>}
+    {sub==="pricing"&&!isTeam&&<AdminPricingRules course={course}/>}
+    {sub==="memberships"&&!isTeam&&<AdminMembershipTiers course={course}/>}
     {sub==="tournaments"&&<AdminTournaments course={course}/>}
     {sub==="extras"&&<AdminInventory course={course}/>}
-    {sub==="campaigns"&&<AdminCampaignsCard course={course}/>}
+    {sub==="campaigns"&&!isTeam&&<AdminCampaignsCard course={course}/>}
     </div>
   </div>
 }
@@ -12370,7 +12371,7 @@ function MembershipsScreen({onBack}){const{s,p}=useA();
 // v20.5: YieldHeatmap — grid 7 días × horas activas con occupancy color-coded.
 // v20.5.1: baseline overlay (delta vs últimas 4 semanas) + auto-refresh + export PNG.
 // Embebido en AdminDash 2.0 entre Lifetime CSV y Top Spenders.
-function YieldHeatmap({course}){
+function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="course_team";
   const[mode,setMode]=useState("forecast");  // forecast es más accionable que historical
   const[data,setData]=useState(null);const[ld,setLd]=useState(true);
   const[drill,setDrill]=useState(null);
@@ -12615,7 +12616,7 @@ function YieldHeatmap({course}){
           <button onClick={()=>setDrill(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
         </div>
 
-        {drill.can_hot_deal&&drill.summary?.hot_deal_eligible_count>0&&<button onClick={applyHotDealToCell} disabled={hotDealBusy} style={{width:"100%",padding:11,marginBottom:12,background:hotDealBusy?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:10,color:hotDealBusy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:hotDealBusy?"default":"pointer",letterSpacing:.3,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{hotDealBusy?"Aplicando…":<>🔥 Aplicar Hot Deal -20% a {drill.summary.hot_deal_eligible_count} slot(s)</>}</button>}
+        {drill.can_hot_deal&&drill.summary?.hot_deal_eligible_count>0&&!isTeam&&<button onClick={applyHotDealToCell} disabled={hotDealBusy} style={{width:"100%",padding:11,marginBottom:12,background:hotDealBusy?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:10,color:hotDealBusy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:hotDealBusy?"default":"pointer",letterSpacing:.3,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{hotDealBusy?"Aplicando…":<>🔥 Aplicar Hot Deal -20% a {drill.summary.hot_deal_eligible_count} slot(s)</>}</button>}
 
         {drillLd?<Skeleton w="100%" h={120}/>:drill.slots.length===0?<div style={{textAlign:"center",padding:24,color:C.tm,fontSize:12}}>Sin slots en esta celda</div>:
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
@@ -13039,7 +13040,7 @@ function CampaignTemplatesModal({course,onClose,onUse}){
 
 // v20.9: DailyPulseCard — agregador diario de eventos accionables. Top of fold en AdminDash.
 // Solo renderiza si has_alerts=true (evita ruido en días sin novedad).
-function DailyPulseCard({course}){
+function DailyPulseCard({course}){const{p}=useA();const isTeam=p?.user_role==="course_team";
   const[data,setData]=useState(null);const[ld,setLd]=useState(true);
   const[busy,setBusy]=useState(false);
 
@@ -13092,7 +13093,7 @@ function DailyPulseCard({course}){
         </div>
         <div style={{fontSize:10,color:C.tm,marginTop:1,..._s.mono}}>{m.bookings_today} hoy · ${fm(m.revenue_today)} · ayer ${fm(m.revenue_yesterday)}</div>
       </div>
-      <button onClick={dispatchPush} disabled={busy} title="Marcar como notificado (en v20.11 será automático cada mañana)" style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+C.bd,background:"transparent",color:busy?C.tm:C.ts,fontSize:10,fontWeight:700,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"…":"📲 Notificar"}</button>
+      {!isTeam&&<button onClick={dispatchPush} disabled={busy} title="Marcar como notificado (en v20.11 será automático cada mañana)" style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+C.bd,background:"transparent",color:busy?C.tm:C.ts,fontSize:10,fontWeight:700,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"…":"📲 Notificar"}</button>}
     </div>
 
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -13110,7 +13111,7 @@ function DailyPulseCard({course}){
 
 // v20.8: ChurnRiskPanel — detecta jugadores at-risk y permite acción inmediata.
 // Lista top players con severity badge, click → modal con winback message + dismiss/contacted.
-function ChurnRiskPanel({course}){
+function ChurnRiskPanel({course}){const{p}=useA();const isTeam=p?.user_role==="course_team";
   const[data,setData]=useState(null);const[ld,setLd]=useState(true);
   const[selected,setSelected]=useState(null);  // user_id seleccionado para winback
   const[winback,setWinback]=useState(null);    // {whatsapp, email, ...}
@@ -13192,7 +13193,7 @@ function ChurnRiskPanel({course}){
       {/* Players list */}
       <div style={{display:"flex",flexDirection:"column",gap:5}}>
         {players.slice(0,8).map(pl=>{const sev=severityColors(pl.severity);
-        return<div key={pl.user_id} onClick={()=>openWinback(pl)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.bg,border:"1px solid "+sev.border,borderRadius:8,cursor:"pointer",transition:"transform .15s"}} onMouseEnter={e=>e.currentTarget.style.transform="translateX(2px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateX(0)"}>
+        return<div key={pl.user_id} onClick={()=>{if(!isTeam)openWinback(pl)}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.bg,border:"1px solid "+sev.border,borderRadius:8,cursor:"pointer",transition:"transform .15s"}} onMouseEnter={e=>e.currentTarget.style.transform="translateX(2px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateX(0)"}>
           <div style={{width:34,height:34,borderRadius:17,background:sev.bg,border:"1px solid "+sev.border,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <span style={{fontSize:13,fontWeight:900,color:sev.fg,..._s.mono}}>{pl.risk_score}</span>
           </div>
@@ -14141,7 +14142,7 @@ function TournamentsScreen({onBack}){const{s,p}=useA();
 
 // v20.4: AdminTournaments — embebido en AdminProfile, similar a AdminMembershipTiers.
 // CRUD de torneos públicos del campo + dashboard mini.
-function AdminTournaments({course}){const[tournaments,setTournaments]=useState([]);const[ld,setLd]=useState(true);const[summary,setSummary]=useState(null);
+function AdminTournaments({course}){const{p}=useA();const isTeam=p?.user_role==="course_team";const[tournaments,setTournaments]=useState([]);const[ld,setLd]=useState(true);const[summary,setSummary]=useState(null);
   const[edit,setEdit]=useState(null);const[saving,setSaving]=useState(false);
   // v20.4.2: expand para mostrar leaderboard inline + finalize busy
   const[expanded,setExpanded]=useState(new Set());
@@ -14294,14 +14295,14 @@ function AdminTournaments({course}){const[tournaments,setTournaments]=useState([
         {isExpanded&&canExpand&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd}}>
           <TournamentLeaderboard tournamentId={t.id} autoRefresh={t.status==="in_progress"}/>
         </div>}
-        {/* Lifecycle buttons */}
-        <div style={{display:"flex",gap:4,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd}}>
+        {/* Lifecycle buttons — owner-only; ocultos a delegados (course_team) */}
+        {!isTeam&&<div style={{display:"flex",gap:4,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd}}>
           {t.status==="draft"&&<button onClick={()=>setStatus(t,"registration_open")} style={{flex:1,padding:6,background:C.grn+"15",border:"1px solid "+C.grn+"40",borderRadius:6,color:C.grn,fontSize:10,fontWeight:700,cursor:"pointer"}}>Abrir inscripciones</button>}
           {t.status==="registration_open"&&<button onClick={()=>setStatus(t,"registration_closed")} style={{flex:1,padding:6,background:C.gld+"15",border:"1px solid "+C.gld+"40",borderRadius:6,color:C.gld,fontSize:10,fontWeight:700,cursor:"pointer"}}>Cerrar inscripciones</button>}
           {(t.status==="registration_closed"||t.status==="registration_open")&&<button onClick={()=>setStatus(t,"in_progress")} style={{flex:1,padding:6,background:C.acc+"15",border:"1px solid "+C.acc+"40",borderRadius:6,color:C.acc,fontSize:10,fontWeight:700,cursor:"pointer"}}>Iniciar</button>}
           {/* v20.4.2: Finalizar real (no solo cambio de status) — distribuye prizes */}
           {t.status==="in_progress"&&<button onClick={()=>finalize(t)} disabled={finalizeBusy===t.id} style={{flex:1,padding:6,background:finalizeBusy===t.id?C.bd:`linear-gradient(135deg,${C.gld},#cd7f32)`,border:"none",borderRadius:6,color:finalizeBusy===t.id?C.tm:"#fff",fontSize:10,fontWeight:800,cursor:finalizeBusy===t.id?"default":"pointer",letterSpacing:.3}}>{finalizeBusy===t.id?"Finalizando…":"🏆 Finalizar y distribuir"}</button>}
-        </div>
+        </div>}
       </div>})}
     </div>}
   </div>
