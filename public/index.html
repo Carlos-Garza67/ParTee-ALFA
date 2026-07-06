@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.7 (Fix 2 bugs del scorecard en vivo: 1) grid de 18 hoyos se desbordaba a 9 columnas (hoyos 9 y 18 cortados); causa: repeat(9,1fr) donde 1fr=minmax(auto,1fr) respeta el min-content y no encoge; fix: repeat(9,minmax(0,1fr))+minWidth:0 fuerza que las 9 quepan. 2) CRITICO el score capturado se borraba al cerrar y reabrir la tarjeta; causa: condicion de carrera en el montaje, el effect de persistencia [scores,cur] corria con scores={} inicial y sobrescribia el localStorage guardado antes de que el effect de carga restaurara; fix: hydratedRef (no persiste hasta restaurar) + guard que nunca sobrescribe datos existentes con un scores vacio. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.6 (Fix interaccion tarjeta en vivo: tras portalizar (v29.4-5) el scorecard ya se veia a pantalla completa, pero al tocar +/- para capturar mandaba al detalle de la reserva sin poder volver. Causa: los portales renderizan en document.body en el DOM, pero en React los eventos siguen burbujeando por el arbol de componentes; el clic subia hasta el onClick openDetail(b) de la tarjeta de booking padre. Fix: stopPropagation en la raiz de los overlays portalizados (LiveScorecard, HoleGeoEditor) y en los backdrops de FnbOrderSheet y GpsPrimingModal (que ademas cerraban Y navegaban al tocar fuera). Ahora capturar golpes, cerrar y tocar el backdrop se quedan dentro del overlay. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.5 (Portaliza los overlays fixed restantes que se montaban dentro de tarjetas/pantallas con ancestros que rompen position:fixed: FnbOrderSheet (Pedir al hoyo, se mezclaba con Reservas al abrirlo desde la tarjeta en vivo), GpsPrimingModal (mismo flujo del jugador) y HoleGeoEditor (panel admin de campo). Los 4 overlays ahora usan ReactDOM.createPortal(...,document.body) como el resto de la app. Barrido: 0 overlays fixed sin portal. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.4 (Fix DEFINITIVO tarjeta en vivo mezclada con Reservas: el fix CSS de v29.3 (.fi both->backwards) fue insuficiente; habia otro ancestro rompiendo el position:fixed del LiveScorecard (confirmado en incognito, no era cache del SW). Solucion definitiva y consistente con el codigo: se envuelve el return del LiveScorecard en ReactDOM.createPortal(...,document.body), sacandolo de CUALQUIER ancestro con transform/contain/filter. Es el mismo patron que ya usan otros 23 overlays de la app; el scorecard y FnbOrderSheet eran de los pocos sin portalizar, por eso el scorecard fallaba mientras el resto funciona. Ahora la tarjeta en vivo cubre toda la pantalla. Baseline 257.)", "color:#43d9ff;font-weight:bold");
@@ -3337,7 +3338,7 @@ function LiveScorecard({booking,onClose}){
   const[showFnb,setShowFnb]=useState(false);
   const manualUntil=useRef(0);
   const lastDetect=useRef(0);
-  const autoRef=useRef(true);const curRef=useRef(1);
+  const autoRef=useRef(true);const curRef=useRef(1);const hydratedRef=useRef(false);
   useEffect(()=>{autoRef.current=autoFollow},[autoFollow]);
   useEffect(()=>{curRef.current=cur},[cur]);
 
@@ -3352,11 +3353,12 @@ function LiveScorecard({booking,onClose}){
         setLoading(false);
       }).catch(()=>{if(alive)setLoading(false)});
     try{const sv=JSON.parse(localStorage.getItem(LSK)||"null");if(sv){if(sv.scores)setScores(sv.scores);if(sv.cur)setCur(sv.cur)}}catch(e){}
+    hydratedRef.current=true;
     return()=>{alive=false};
   },[booking.course_id,booking.id]);
 
   // persistir progreso
-  useEffect(()=>{try{localStorage.setItem(LSK,JSON.stringify({scores,cur}))}catch(e){}},[scores,cur]);
+  useEffect(()=>{if(!hydratedRef.current)return;if(Object.keys(scores).length===0){try{const ex=localStorage.getItem(LSK);if(ex){const p=JSON.parse(ex);if(p&&p.scores&&Object.keys(p.scores).length>0)return}}catch(e){}}try{localStorage.setItem(LSK,JSON.stringify({scores,cur}))}catch(e){}},[scores,cur]);
 
   // auto-detección de hoyo vía GPS (un solo subscribe; lee valores vivos por ref)
   useEffect(()=>{
@@ -3458,7 +3460,7 @@ function LiveScorecard({booking,onClose}){
       <div style={{fontSize:11,color:C.tm,textAlign:"center",marginBottom:20}}>{t("Capturas tus golpes; el hoyo se detecta solo con GPS.")}</div>
 
       {/* Tira de 18 hoyos */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(9,1fr)",gap:5,marginBottom:18}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(9,minmax(0,1fr))",gap:4,marginBottom:18,minWidth:0}}>
         {holes.map(h=>{const sv=scores[h.hole_number];const isc=h.hole_number===cur;const d=sv!=null?sv-h.par:null;
           return <button key={h.hole_number} onClick={()=>goHole(h.hole_number)} style={{aspectRatio:"1",borderRadius:9,border:"1px solid "+(isc?C.grn:C.bd),background:isc?C.grn+"18":sv!=null?C.cd:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:0}}>
             <span style={{fontSize:9,color:C.tm,fontWeight:600}}>{h.hole_number}</span>
