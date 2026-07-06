@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.4 (Fix DEFINITIVO tarjeta en vivo mezclada con Reservas: el fix CSS de v29.3 (.fi both->backwards) fue insuficiente; habia otro ancestro rompiendo el position:fixed del LiveScorecard (confirmado en incognito, no era cache del SW). Solucion definitiva y consistente con el codigo: se envuelve el return del LiveScorecard en ReactDOM.createPortal(...,document.body), sacandolo de CUALQUIER ancestro con transform/contain/filter. Es el mismo patron que ya usan otros 23 overlays de la app; el scorecard y FnbOrderSheet eran de los pocos sin portalizar, por eso el scorecard fallaba mientras el resto funciona. Ahora la tarjeta en vivo cubre toda la pantalla. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.3 (Fix 3 bugs visuales moviles detectados en pruebas E2E Vidanta: 1) CRITICO tarjeta en vivo del jugador (LiveScorecard position:fixed) se renderizaba mezclada con la pantalla de Reservas. Causa raiz: la clase .fi (fade-in de 57 pantallas) usaba animation-fill-mode:both, que retiene transform:translateY(0) tras la animacion; un transform activo crea containing block y ancla el position:fixed al contenedor en vez del viewport. Fix: both->backwards, preserva la animacion de entrada y elimina solo la persistencia del transform; arregla los 46 overlays fixed de raiz. 2) badge CHECKED-IN tapaba el texto del jugador en check-in del campo por falta de flexShrink:0 en los 3 estados del boton. 3) Ultima visita mostraba 0d en rojo fijo (C.acc) sin importar valor; ahora color semantico: verde <=30d, dorado <=90d, rojo >90d, neutro sin dato. Cero cambios estructurales, baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.2 (Fix clima admin: el panel Clima en el campo mostraba un solo cuadro cerca de medianoche. Causa: el fetch de open-meteo pedia forecast_days=1 (solo hoy), asi que a las 23h ya no quedaban horas futuras del dia y el pronostico por horas se quedaba con 1 sola tarjeta, cayendo al render compacto de una hora. Fix de un caracter: forecast_days=2, de modo que cerca del fin del dia el pronostico continua con las primeras horas del dia siguiente y el panel siempre muestra sus 7 tarjetas cruzando la medianoche. El slice de hora ya extrae bien las horas del dia 2. Cero cambios estructurales, baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.1 (Limpieza frontend: 1) FIX REAL en rollback de Path 2 multi-jugador: si el pago embedded cobraba pero create_booking_with_participants fallaba, el refund automatico llamaba a process-refund con un body que v15 rechaza con 400, o sea el refund NUNCA ocurria y el usuario veia Se reembolso el pago sin ser cierto. Ahora usa process-orphan-refund igual que Path 1: refund idempotente via payment_recovery_log, notificacion honesta segun resultado, escalamiento a soporte si el refund falla. 2) Removidas 2 llamadas legacy muertas a process-refund que devolvian 401 sin auth: en removeParticipant y en ReduceBookingDialog; en ambos casos el refund real ya lo ejecuta el cron process-partial-refund via refund_pending y refund_amount, las llamadas eran ruido. 3) Removida entrada legacy split_gap_charged del routeMap de notificaciones, tipo extinto desde v28.9. Con esto el frontend queda sin ninguna referencia viva a process-refund, listo para su tombstone.)", "color:#00b894;font-weight:bold");
@@ -3408,7 +3409,7 @@ function LiveScorecard({booking,onClose}){
     }catch(e){setSaving(false);window.__toast&&window.__toast(t("No se pudo guardar · revisa tu conexión e intenta de nuevo"),"error")}
   }
 
-  return <div style={{position:"fixed",inset:0,zIndex:4000,background:C.bg,display:"flex",flexDirection:"column"}}>
+  return ReactDOM.createPortal(<div style={{position:"fixed",inset:0,zIndex:4000,background:C.bg,display:"flex",flexDirection:"column"}}>
     {/* Header */}
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:"1px solid "+C.bd,flexShrink:0}}>
       <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center",padding:0}} dangerouslySetInnerHTML={{__html:ic("left",24,C.txt)}}/>
@@ -3480,7 +3481,7 @@ function LiveScorecard({booking,onClose}){
     </div>
     </>}
     {showFnb&&<FnbOrderSheet booking={booking} onClose={()=>setShowFnb(false)}/>}
-  </div>;
+  </div>, document.body);
 }
 
 // ===== F&B al hoyo · pedido del jugador durante la ronda (Fase 2) =====
