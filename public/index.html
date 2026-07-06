@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.6 (Fix interaccion tarjeta en vivo: tras portalizar (v29.4-5) el scorecard ya se veia a pantalla completa, pero al tocar +/- para capturar mandaba al detalle de la reserva sin poder volver. Causa: los portales renderizan en document.body en el DOM, pero en React los eventos siguen burbujeando por el arbol de componentes; el clic subia hasta el onClick openDetail(b) de la tarjeta de booking padre. Fix: stopPropagation en la raiz de los overlays portalizados (LiveScorecard, HoleGeoEditor) y en los backdrops de FnbOrderSheet y GpsPrimingModal (que ademas cerraban Y navegaban al tocar fuera). Ahora capturar golpes, cerrar y tocar el backdrop se quedan dentro del overlay. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.5 (Portaliza los overlays fixed restantes que se montaban dentro de tarjetas/pantallas con ancestros que rompen position:fixed: FnbOrderSheet (Pedir al hoyo, se mezclaba con Reservas al abrirlo desde la tarjeta en vivo), GpsPrimingModal (mismo flujo del jugador) y HoleGeoEditor (panel admin de campo). Los 4 overlays ahora usan ReactDOM.createPortal(...,document.body) como el resto de la app. Barrido: 0 overlays fixed sin portal. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.4 (Fix DEFINITIVO tarjeta en vivo mezclada con Reservas: el fix CSS de v29.3 (.fi both->backwards) fue insuficiente; habia otro ancestro rompiendo el position:fixed del LiveScorecard (confirmado en incognito, no era cache del SW). Solucion definitiva y consistente con el codigo: se envuelve el return del LiveScorecard en ReactDOM.createPortal(...,document.body), sacandolo de CUALQUIER ancestro con transform/contain/filter. Es el mismo patron que ya usan otros 23 overlays de la app; el scorecard y FnbOrderSheet eran de los pocos sin portalizar, por eso el scorecard fallaba mientras el resto funciona. Ahora la tarjeta en vivo cubre toda la pantalla. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.3 (Fix 3 bugs visuales moviles detectados en pruebas E2E Vidanta: 1) CRITICO tarjeta en vivo del jugador (LiveScorecard position:fixed) se renderizaba mezclada con la pantalla de Reservas. Causa raiz: la clase .fi (fade-in de 57 pantallas) usaba animation-fill-mode:both, que retiene transform:translateY(0) tras la animacion; un transform activo crea containing block y ancla el position:fixed al contenedor en vez del viewport. Fix: both->backwards, preserva la animacion de entrada y elimina solo la persistencia del transform; arregla los 46 overlays fixed de raiz. 2) badge CHECKED-IN tapaba el texto del jugador en check-in del campo por falta de flexShrink:0 en los 3 estados del boton. 3) Ultima visita mostraba 0d en rojo fijo (C.acc) sin importar valor; ahora color semantico: verde <=30d, dorado <=90d, rojo >90d, neutro sin dato. Cero cambios estructurales, baseline 257.)", "color:#43d9ff;font-weight:bold");
@@ -3410,7 +3411,7 @@ function LiveScorecard({booking,onClose}){
     }catch(e){setSaving(false);window.__toast&&window.__toast(t("No se pudo guardar · revisa tu conexión e intenta de nuevo"),"error")}
   }
 
-  return ReactDOM.createPortal(<div style={{position:"fixed",inset:0,zIndex:4000,background:C.bg,display:"flex",flexDirection:"column"}}>
+  return ReactDOM.createPortal(<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:4000,background:C.bg,display:"flex",flexDirection:"column"}}>
     {/* Header */}
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:"1px solid "+C.bd,flexShrink:0}}>
       <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center",padding:0}} dangerouslySetInnerHTML={{__html:ic("left",24,C.txt)}}/>
@@ -3531,7 +3532,7 @@ function FnbOrderSheet({booking,onClose}){
     if(data&&data.added>0){window.__toast&&window.__toast(t("Pedido enviado · te lo llevan al hoyo"),"success");onClose&&onClose()}
     else window.__toast&&window.__toast(t("No se pudo enviar el pedido · reintenta"),"warn");
   }
-  return ReactDOM.createPortal(<div onClick={()=>!saving&&onClose&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(4px)",zIndex:4300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+  return ReactDOM.createPortal(<div onClick={e=>{e.stopPropagation();if(!saving&&onClose)onClose()}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(4px)",zIndex:4300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
     <div onClick={e=>e.stopPropagation()} className="bsheet-up" style={{background:C.bgPanel||C.cd,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:"var(--app-max,520px)",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <div style={{padding:"10px 0 0",display:"flex",justifyContent:"center"}}><div style={{width:40,height:4,background:C.tm,borderRadius:2,opacity:.4}}/></div>
       <div style={{padding:"12px 18px 8px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
@@ -5348,7 +5349,7 @@ function GpsPrimingModal({onAccept,onClose}){
     t("Se borra sola a los 30 días."),
     t("Puedes apagarlo o borrar todo cuando quieras.")
   ];
-  return ReactDOM.createPortal(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:4200,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+  return ReactDOM.createPortal(<div onClick={e=>{e.stopPropagation();onClose&&onClose()}} style={{position:"fixed",inset:0,zIndex:4200,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:"var(--app-max)",background:C.bg,borderRadius:"22px 22px 0 0",padding:"8px 20px 22px",maxHeight:"92vh",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
       <div style={{width:40,height:4,borderRadius:2,background:C.bd,margin:"6px auto 18px"}}/>
       {/* Hero: círculo con motivo de mapa + pin Partee */}
@@ -12016,7 +12017,7 @@ function HoleGeoEditor({course, onClose}){
   const pendN=holes.filter(h=>h.tee&&h.green&&!h.saved).length;
   const cur=holes[idx];
   const curSaved=cur&&cur.tee&&cur.green&&cur.saved;
-  return ReactDOM.createPortal(<div style={{position:"fixed",inset:0,zIndex:10000,background:C.bg,display:"flex",flexDirection:"column"}}>
+  return ReactDOM.createPortal(<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:10000,background:C.bg,display:"flex",flexDirection:"column"}}>
     <div style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,borderBottom:"1px solid "+C.bd,flexShrink:0}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:15,fontWeight:800,color:C.txt}}>{t("Posiciones GPS de hoyos")}</div>
