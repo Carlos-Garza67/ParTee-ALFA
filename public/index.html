@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.14 (Tooltips de info en metricas del panel admin: nuevo componente InfoDot (icono i que al tocar muestra una nube con el nombre del indicador y como se mide). Formato: SIGLA seguido de nombre en espanol. Aplicado a 8 metricas: AOV, Attach rate, LTV avg, AOV global, Bookings/user, No-shows, Ocupacion prom, AVG TICKET. Baseline sube a 258 por el componente nuevo (intencional). El insight de texto generado por backend no se toca; los tooltips van en las tarjetas de metricas con label fijo.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.13 (Fix 2 issues en panel admin del campo: 1) FECHA ERRONEA: el dashboard mostraba el dia siguiente (7 jul en vez de 6) en las tardes/noches de Mexico; causa: new Date().toISOString().split(T)[0] devuelve la fecha en UTC, y despues de las ~17h en Vallarta (UTC-7) ya es el dia siguiente en UTC. Fix: helper global ymdLocal() que devuelve YYYY-MM-DD en hora LOCAL; reemplazados los 13 usos del patron buggy en todo el archivo. 2) el boton Avisar (mandar push al jugador) en la lista de reservas admin no se ocultaba tras el check-in; ahora gated con !b.checked_in_at (el de la vista de check-in ya estaba gated con !isChecked). Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.12 (Gate de tiempo para extras: el boton + Agregar en el detalle solo aparece antes y durante el juego, no ya finalizado. Se corta cuando ocurra lo PRIMERO de: pasan 6h desde el tee (fin de la ventana de juego, mismo umbral que Mi tarjeta en vivo/inCheckinWin) O ya hay score guardado (detailScore!=null). Distinto criterio que invitar (que se corta EN el tee): extras se permiten durante el juego. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.11 (No permitir invitar jugadores tras la hora del tee: 1) el texto Sin participantes todavia. Invita a jugar. en el detalle seguia invitando a la accion aunque el tee ya paso; ahora muestra Sin participantes. (neutro) si la hora de tee paso. 2) el chip + Partida en la card de la lista usaba !isPast que tras el fix v29.8 es solo-fecha (hoy no cuenta como pasado), asi que seguia apareciendo tras el tee; ahora gated por la hora real de tee. El boton de invitar del detalle ya estaba correctamente gated por !isPast=hoursUntil<=0. Distincion: el dimming de card usa solo-fecha (una ronda de hoy en juego no se atenua), pero invitar usa la hora de tee. Baseline 257.)", "color:#43d9ff;font-weight:bold");
@@ -632,6 +633,19 @@ function PullRefresh({onRefresh,children}){
     {children}
   </div>}
 
+function InfoDot({title,desc}){
+  const[open,setOpen]=useState(false);
+  return<span style={{position:"relative",display:"inline-flex",verticalAlign:"middle",marginLeft:4}}>
+    <span onClick={e=>{e.stopPropagation();setOpen(o=>!o)}} style={{display:"inline-flex",cursor:"pointer",opacity:.6}} dangerouslySetInnerHTML={{__html:ic("info",11,C.tm)}}/>
+    {open&&<>
+      <span onClick={e=>{e.stopPropagation();setOpen(false)}} style={{position:"fixed",inset:0,zIndex:60}}/>
+      <span style={{position:"absolute",bottom:"calc(100% + 6px)",left:"50%",transform:"translateX(-50%)",zIndex:61,width:180,background:C.bgPanel||C.cd,border:"1px solid "+(C.glassBd||C.bd),borderRadius:10,padding:"9px 11px",boxShadow:"0 8px 24px rgba(0,0,0,.3)",textAlign:"left",whiteSpace:"normal"}}>
+        <span style={{display:"block",fontSize:11,fontWeight:800,color:C.txt,marginBottom:3}}>{title}</span>
+        <span style={{display:"block",fontSize:10,color:C.tm,lineHeight:1.4,fontWeight:400}}>{desc}</span>
+      </span>
+    </>}
+  </span>;
+}
 function Skeleton({w="100%",h=14,r=8,mb=8}){return<div className="skeleton" style={{width:w,height:h,borderRadius:r,marginBottom:mb}}/>}
 function EmptyState({icon,iconColor,title,sub,action,actionLabel}){return<div className="empty-state"><div className="empty-icon" style={{background:(iconColor||C.grn)+"12"}} dangerouslySetInnerHTML={{__html:ic(icon||"inbox",28,iconColor||C.grn)}}/><div className="empty-title">{title}</div><div className="empty-sub">{sub}</div>{action&&<button onClick={action} style={{marginTop:14,padding:"10px 22px",background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:12,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:C.shAcc}}>{actionLabel}</button>}</div>}
 function GlassCard({children,style={},accent}){const bg=accent==="r"?C.glassR||C.acc+"08":accent==="g"?C.glassG||C.grn+"06":C.glass||C.w04;const bd=accent==="r"?C.glassRBd||C.acc+"20":accent==="g"?C.glassGBd||C.grn+"15":C.glassBd||C.w10;return<div style={{background:bg,border:"1px solid "+bd,borderRadius:14,boxShadow:C.shCard||"none",...style}}>{children}</div>}
@@ -6991,7 +7005,7 @@ function AdminWalkInsCard({course}){
         <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6,marginBottom:10}}>
           <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>{summary.total_count||0}</div><div style={{fontSize:9,color:C.tm}}>TOTAL 30d</div></div>
           <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.grn}}>${Math.round(summary.total_revenue||0).toLocaleString()}</div><div style={{fontSize:9,color:C.tm}}>REVENUE 30d</div></div>
-          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>${Math.round(summary.avg_ticket||0).toLocaleString()}</div><div style={{fontSize:9,color:C.tm}}>AVG TICKET</div></div>
+          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>${Math.round(summary.avg_ticket||0).toLocaleString()}</div><div style={{fontSize:9,color:C.tm}}>AVG TICKET<InfoDot title="Avg ticket · Ticket promedio" desc="Gasto promedio por reserva en el periodo. Se mide: ingresos entre numero de reservas."/></div></div>
         </div>
         {/* List recent */}
         <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto"}}>
@@ -11425,11 +11439,11 @@ function AdminInventory({course}){const[items,setItems]=useState([]);const[catal
           </div>
           <div style={{textAlign:"center"}}>
             <div style={{fontSize:14,fontWeight:800,color:C.txt,..._s.mono}}>{dash.summary.attach_rate_pct||0}%</div>
-            <div style={{fontSize:9,color:C.tm}}>Attach rate</div>
+            <div style={{fontSize:9,color:C.tm}}>Attach rate<InfoDot title="Attach rate · Tasa de enganche" desc="% de reservas que agregan al menos un extra. Se mide: reservas con extras entre reservas totales."/></div>
           </div>
           <div style={{textAlign:"center"}}>
             <div style={{fontSize:14,fontWeight:800,color:C.txt,..._s.mono}}>${fm(dash.summary.avg_order_value||0)}</div>
-            <div style={{fontSize:9,color:C.tm}}>AOV</div>
+            <div style={{fontSize:9,color:C.tm}}>AOV<InfoDot title="AOV · Valor promedio de orden" desc="Ticket promedio por reserva. Se mide: ingresos totales entre numero de reservas."/></div>
           </div>
         </div>
         {dash.top_items?.length>0&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid "+C.grn+"20"}}>
@@ -13017,7 +13031,7 @@ function ObservedOccupancy({course}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
           <div style={{padding:8,background:C.grn+"10",border:"1px solid "+C.grn+"25",borderRadius:8,textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:C.grn,..._s.mono}}>{s.showup_pct!=null?s.showup_pct+"%":"—"}</div><div style={{fontSize:9,color:C.tm,marginTop:1}}>Se presentaron</div></div>
           <div style={{padding:8,background:C.c2,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:C.txt,..._s.mono}}>{s.total_observed_groups}/{s.total_booked_groups}</div><div style={{fontSize:9,color:C.tm,marginTop:1}}>Grupos observados</div></div>
-          <div style={{padding:8,background:(s.total_no_shows>0?C.acc:C.grn)+"10",border:"1px solid "+(s.total_no_shows>0?C.acc:C.grn)+"25",borderRadius:8,textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:s.total_no_shows>0?C.acc:C.grn,..._s.mono}}>{s.total_no_shows}</div><div style={{fontSize:9,color:C.tm,marginTop:1}}>No-shows</div></div>
+          <div style={{padding:8,background:(s.total_no_shows>0?C.acc:C.grn)+"10",border:"1px solid "+(s.total_no_shows>0?C.acc:C.grn)+"25",borderRadius:8,textAlign:"center"}}><div style={{fontSize:16,fontWeight:900,color:s.total_no_shows>0?C.acc:C.grn,..._s.mono}}>{s.total_no_shows}</div><div style={{fontSize:9,color:C.tm,marginTop:1}}>No-shows<InfoDot title="No-shows · Ausencias" desc="Reservas confirmadas donde el jugador no se presento ni hizo check-in."/></div></div>
         </div>
         <div style={{fontSize:10,color:C.tm,lineHeight:1.5}}>{s.total_no_shows>0?"Hay reservas que no se presentaron según GPS. Considera confirmarlas o abrir overbooking en esos horarios.":"Casi todas las reservas se presentaron."}</div>
       </React.Fragment>}
@@ -13209,7 +13223,7 @@ function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="cou
     {!ld&&summary&&summary.total_booked>0&&<div style={{display:"grid",gridTemplateColumns:overlayActive?"1fr 1fr 1fr 1fr":"1fr 1fr 1fr",gap:6,marginBottom:10}}>
       <div style={{padding:8,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}>
         <div style={{fontSize:16,fontWeight:900,color:summary.avg_occupancy>=50?C.grn:summary.avg_occupancy>=25?C.gld:C.acc,..._s.mono}}>{summary.avg_occupancy}%</div>
-        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Ocupación prom</div>
+        <div style={{fontSize:9,color:C.tm,marginTop:1}}>Ocupación prom<InfoDot title="Ocupacion promedio" desc="% de lugares vendidos vs disponibles. Se mide: reservas confirmadas entre capacidad total de slots."/></div>
       </div>
       {/* v20.5.1: tarjeta de delta global vs baseline */}
       {overlayActive&&summary.avg_delta_pp!=null&&<div style={{padding:8,background:summary.avg_delta_pp>=0?C.grn+"10":C.acc+"10",border:"1px solid "+(summary.avg_delta_pp>=0?C.grn+"30":C.acc+"30"),borderRadius:8,textAlign:"center"}}>
@@ -14186,11 +14200,11 @@ function LtvSummary({course}){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:10}}>
         <div style={{padding:8,background:`linear-gradient(135deg,${C.grn}15,${C.grn}06)`,border:"1px solid "+C.grn+"30",borderRadius:8,textAlign:"center"}}>
           <div style={{fontSize:14,fontWeight:900,color:C.grn,..._s.mono}}>${fm(Math.round(sm.overall_ltv||0))}</div>
-          <div style={{fontSize:9,color:C.tm,marginTop:1}}>LTV avg</div>
+          <div style={{fontSize:9,color:C.tm,marginTop:1}}>LTV avg<InfoDot title="LTV · Valor de vida del cliente" desc="Ingreso total promedio que deja un jugador a lo largo del tiempo. Se mide: ingresos historicos entre numero de jugadores unicos."/></div>
         </div>
         <div style={{padding:8,background:C.bg,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}>
           <div style={{fontSize:14,fontWeight:900,color:C.gld,..._s.mono}}>${fm(Math.round(sm.overall_aov||0))}</div>
-          <div style={{fontSize:9,color:C.tm,marginTop:1}}>AOV global</div>
+          <div style={{fontSize:9,color:C.tm,marginTop:1}}>AOV global<InfoDot title="AOV global · Valor promedio de orden" desc="Ticket promedio por reserva en todo el periodo. Se mide: ingresos totales entre numero de reservas."/></div>
         </div>
         <div style={{padding:8,background:C.bg,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}>
           <div style={{fontSize:14,fontWeight:900,color:C.txt,..._s.mono}}>${fm(Math.round(sm.total_revenue||0))}</div>
@@ -14198,7 +14212,7 @@ function LtvSummary({course}){
         </div>
         <div style={{padding:8,background:C.bg,border:"1px solid "+C.bd,borderRadius:8,textAlign:"center"}}>
           <div style={{fontSize:14,fontWeight:900,color:C.txt,..._s.mono}}>{sm.avg_bookings_per_user||0}</div>
-          <div style={{fontSize:9,color:C.tm,marginTop:1}}>Bookings/user</div>
+          <div style={{fontSize:9,color:C.tm,marginTop:1}}>Bookings/user<InfoDot title="Reservas por jugador" desc="Cuantas veces reserva en promedio cada jugador. Se mide: reservas totales entre jugadores unicos. Indica recurrencia."/></div>
         </div>
       </div>
 
