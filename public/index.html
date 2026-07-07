@@ -15,6 +15,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.16 (Fix layout amontonado en fila de check-in del campo: el nombre se cortaba (Carl...) y el 1 jug + codigo quedaban encimados con el boton en anchos reducidos. Fix: flexWrap en el contenedor de la fila (el boton baja a segunda linea si no cabe), minWidth:160 en la zona avatar+info (evita aplastar el nombre y fuerza el wrap antes), y flexGrow:1 en los 3 botones (check-in, checked-in, tooEarly) para que ocupen el ancho completo cuando bajan. Baseline 258.)", "color:#43d9ff;font-weight:bold");
+console.log("%c[Partee] Build v29.15 (Fix responsive del scorecard en desktop: la tarjeta en vivo ocupaba todo el ancho de pantalla y los 9 hoyos/botones se estiraban enormes en monitores anchos. Fix: header, contenido scrolleable y footer acotados a maxWidth min(640px,100%) centrados con margin auto. En movil = 100% (sin cambio); en desktop = tope de 640px centrado, hoyos con tamano natural. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.14 (Tooltips de info en metricas del panel admin: nuevo componente InfoDot (icono i que al tocar muestra una nube con el nombre del indicador y como se mide). Formato: SIGLA seguido de nombre en espanol. Aplicado a 8 metricas: AOV, Attach rate, LTV avg, AOV global, Bookings/user, No-shows, Ocupacion prom, AVG TICKET. Baseline sube a 258 por el componente nuevo (intencional). El insight de texto generado por backend no se toca; los tooltips van en las tarjetas de metricas con label fijo.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.13 (Fix 2 issues en panel admin del campo: 1) FECHA ERRONEA: el dashboard mostraba el dia siguiente (7 jul en vez de 6) en las tardes/noches de Mexico; causa: new Date().toISOString().split(T)[0] devuelve la fecha en UTC, y despues de las ~17h en Vallarta (UTC-7) ya es el dia siguiente en UTC. Fix: helper global ymdLocal() que devuelve YYYY-MM-DD en hora LOCAL; reemplazados los 13 usos del patron buggy en todo el archivo. 2) el boton Avisar (mandar push al jugador) en la lista de reservas admin no se ocultaba tras el check-in; ahora gated con !b.checked_in_at (el de la vista de check-in ya estaba gated con !isChecked). Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.12 (Gate de tiempo para extras: el boton + Agregar en el detalle solo aparece antes y durante el juego, no ya finalizado. Se corta cuando ocurra lo PRIMERO de: pasan 6h desde el tee (fin de la ventana de juego, mismo umbral que Mi tarjeta en vivo/inCheckinWin) O ya hay score guardado (detailScore!=null). Distinto criterio que invitar (que se corta EN el tee): extras se permiten durante el juego. Baseline 257.)", "color:#43d9ff;font-weight:bold");
@@ -3346,7 +3348,7 @@ function MyStandbysCard(){
 function LiveScorecard({booking,onClose}){
   const{s}=useA();
   const uid=s&&s.user&&s.user.id;
-  const LSK="pt_live_card_"+booking.id;
+  const LSK="pt_live_card_"+booking.id,MW_SC="min(640px,100%)";
   const roundDate=booking.booking_date||new Date().toISOString().slice(0,10);
   const[holes,setHoles]=useState([]);
   const[scores,setScores]=useState({});
@@ -3446,7 +3448,7 @@ function LiveScorecard({booking,onClose}){
 
   return ReactDOM.createPortal(<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:4000,background:C.bg,display:"flex",flexDirection:"column"}}>
     {/* Header */}
-    <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:"1px solid "+C.bd,flexShrink:0}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:"1px solid "+C.bd,flexShrink:0,width:"100%",maxWidth:MW_SC,margin:"0 auto",boxSizing:"border-box"}}>
       <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center",padding:0}} dangerouslySetInnerHTML={{__html:ic("left",24,C.txt)}}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:16,fontWeight:800,color:C.txt}}>{t("Tarjeta en vivo")}</div>
@@ -3461,7 +3463,7 @@ function LiveScorecard({booking,onClose}){
     {loading?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.tm}}>{t("Cargando")}</div>:
     holes.length===0?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.tm,padding:30,textAlign:"center"}}>{t("Sin hoyos configurados")}</div>:
     <>
-    <div style={{flex:1,overflowY:"auto",padding:"16px",WebkitOverflowScrolling:"touch"}}>
+    <div style={{flex:1,overflowY:"auto",padding:"16px",WebkitOverflowScrolling:"touch",width:"100%",maxWidth:MW_SC,margin:"0 auto",boxSizing:"border-box"}}>
       {/* Pill de detección GPS */}
       {detected&&<div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
         {detected.hole===cur
@@ -3511,7 +3513,7 @@ function LiveScorecard({booking,onClose}){
     </div>
 
     {/* Footer */}
-    <div style={{padding:"12px 16px",borderTop:"1px solid "+C.bd,flexShrink:0}}>
+    <div style={{padding:"12px 16px",borderTop:"1px solid "+C.bd,flexShrink:0,width:"100%",maxWidth:MW_SC,margin:"0 auto",boxSizing:"border-box"}}>
       {savedRound?<div style={{width:"100%",padding:15,background:C.grn+"18",border:"1px solid "+C.grn+"40",borderRadius:14,color:C.grn,fontSize:14,fontWeight:800,textAlign:"center"}}>{"\u2713 "+t("Ronda guardada")}</div>:<button onClick={save} disabled={saving||enteredHoles.length===0} style={{width:"100%",padding:15,background:enteredHoles.length===0?C.cd:C.grn,border:"none",borderRadius:14,color:enteredHoles.length===0?C.tm:"#fff",fontSize:15,fontWeight:800,cursor:enteredHoles.length===0?"default":(saving?"wait":"pointer"),boxShadow:enteredHoles.length===0?"none":"0 5px 16px "+C.grn+"40"}}>{saving?t("Guardando..."):t("Finalizar y guardar")}</button>}
     </div>
     </>}
@@ -7218,14 +7220,14 @@ function CheckinTablet({course, date, onExit}){
         const teeColor=isChecked?C.grn:isLate?C.acc:isUpcoming?C.gld:C.txt;
         const busy=busyId===b.id;
         return<div key={b.id} style={{background:cardBg,border:"2px solid "+cardBd,borderRadius:16,padding:14,transition:"all .2s"}}>
-          <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
             {/* Tee time gigante */}
             <div style={{minWidth:80,textAlign:"center",flexShrink:0}}>
               <div style={{fontSize:26,fontWeight:900,color:teeColor,..._s.mono,letterSpacing:"-0.02em",lineHeight:1}}>{b.booking_time?.slice(0,5)}</div>
               <div style={{fontSize:10,color:C.tm,marginTop:3,fontWeight:600}}>{fmtRelMin(minTo)}</div>
             </div>
             {/* Avatar + jugador */}
-            <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:10}}>
+            <div style={{flex:1,minWidth:160,display:"flex",alignItems:"center",gap:10}}>
               {b.player_avatar_url?
                 <img src={b.player_avatar_url} style={{width:44,height:44,borderRadius:22,objectFit:"cover",flexShrink:0,border:"1px solid "+C.bd}} alt=""/>
               :
@@ -7241,7 +7243,7 @@ function CheckinTablet({course, date, onExit}){
             </div>
             {/* Botón check-in / status */}
             {isChecked?
-              <button onClick={()=>doUncheckin(b)} disabled={busy} style={{padding:"12px 18px",background:C.grn,border:"none",borderRadius:14,color:"#fff",fontSize:13,fontWeight:800,cursor:busy?"wait":"pointer",display:"flex",alignItems:"center",gap:8,minWidth:120,flexShrink:0,justifyContent:"center",boxShadow:"0 3px 10px "+C.grn+"40"}}>
+              <button onClick={()=>doUncheckin(b)} disabled={busy} style={{padding:"12px 18px",background:C.grn,border:"none",borderRadius:14,color:"#fff",fontSize:13,fontWeight:800,cursor:busy?"wait":"pointer",display:"flex",alignItems:"center",gap:8,minWidth:120,flexShrink:0,flexGrow:1,justifyContent:"center",boxShadow:"0 3px 10px "+C.grn+"40"}}>
                 <span dangerouslySetInnerHTML={{__html:ic("check",16,"#fff")}}/>
                 <div style={{textAlign:"left"}}>
                   <div style={{fontSize:12,lineHeight:1.1}}>CHECKED-IN</div>
@@ -7250,12 +7252,12 @@ function CheckinTablet({course, date, onExit}){
               </button>
             :
               tooEarly?
-              <div style={{padding:"12px 16px",background:C.tm+"12",border:"1px solid "+C.tm+"30",borderRadius:14,color:C.tm,fontSize:11,fontWeight:700,minWidth:130,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,textAlign:"center",lineHeight:1.2}}>
+              <div style={{padding:"12px 16px",background:C.tm+"12",border:"1px solid "+C.tm+"30",borderRadius:14,color:C.tm,fontSize:11,fontWeight:700,minWidth:130,flexShrink:0,flexGrow:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,textAlign:"center",lineHeight:1.2}}>
                 <span dangerouslySetInnerHTML={{__html:ic("clock",16,C.tm)}}/>
                 <div>Disponible<br/>30 min antes</div>
               </div>
             :
-              <button onClick={()=>doCheckin(b)} disabled={busy} style={{padding:"14px 22px",background:isLate?`linear-gradient(135deg,${C.acc},#d63d55)`:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:14,fontWeight:800,cursor:busy?"wait":"pointer",minWidth:130,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:isLate?"0 4px 14px "+C.acc+"50":"0 4px 14px "+C.grn+"40",opacity:busy?.6:1}}>
+              <button onClick={()=>doCheckin(b)} disabled={busy} style={{padding:"14px 22px",background:isLate?`linear-gradient(135deg,${C.acc},#d63d55)`:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:14,color:"#fff",fontSize:14,fontWeight:800,cursor:busy?"wait":"pointer",minWidth:130,flexShrink:0,flexGrow:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:isLate?"0 4px 14px "+C.acc+"50":"0 4px 14px "+C.grn+"40",opacity:busy?.6:1}}>
                 {busy?<div className="ptr-spin" style={{width:18,height:18,borderTopColor:"#fff"}}/>:<>
                   <span dangerouslySetInnerHTML={{__html:ic("check",18,"#fff")}}/>
                   Check-in
