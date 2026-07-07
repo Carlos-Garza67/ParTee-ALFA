@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.21 (Consistencia de iconos en vista Insights: reemplazados los emojis del rediseno por iconos del set ic() para alinear con el resto de la app. Insight lightbulb (era foco), Sube el precio flame (era fuego), Promociona down (era grafica bajando), summary cards peak flame / dead down. Se conserva a proposito el fuego del boton Aplicar Hot Deal porque es branding de esa funcion, no decorativo. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.20 (Rediseno completo vista Insights Demanda (3 piezas): 1) CONTROLES claros: Proximas 4 semanas / Ultimas 4 semanas / Comparar con antes / Descargar + texto de estado dinamico. 2) YIELD HEATMAP combo A+B: insight accionable arriba, 2 listas de oportunidades (Sube el precio aqui / Promociona aqui, top3 calculados en frontend desde cells), mapa reestructurado a 28 celdas por FRANJA (Madrugadores/Media manana/Mediodia/Tarde) en vez de 105 por hora; drill-down conservado. 3) GPS Quien llego de verdad: numero protagonista + barra visual verde/roja + mensaje de accion condicional (verde si todos llegaron, ambar con recomendacion de overbooking si hubo no-shows), reemplaza las 3 tarjetas redundantes. Todo sin cambios de backend (usa cells, summary.peak/dead y campos GPS ya existentes). Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.18 (Yield heatmap mas intuitivo: 1) tooltip InfoDot en el titulo que explica el concepto (cada celda es dia x hora, color = % ocupacion, para que sirve). 2) subtitulo Cada celda = un dia y hora. Mas verde = mas lleno. 3) leyenda de color ya existia (rangos <25/25-50/50-80/>=80%). 4) NUEVO insight automatico debajo del heatmap: usa summary.peak_dow/peak_hour/peak_pct y dead_dow/dead_hour/dead_pct (ya venian del RPC) para una frase accionable: en forecast Tu horario mas solicitado es X, considera promocionar Y; en historical Tu horario mas fuerte fue X, el mas flojo Y. Solo aparece si hay reservas. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.17 (Glosario al pie del weekly insight admin: como el texto del insight lo genera el backend (prosa markdown, sin labels fijos donde poner InfoDot), se agrega una leyenda de glosario debajo del texto en WeeklyInsightCard. Detecta que siglas/terminos aparecen en el insight (AOV, LTV, Attach rate, No-shows, Ocupacion) y solo muestra esos, con su definicion. Complementa los 8 tooltips InfoDot de v29.14 que estan en las tarjetas de metricas. Baseline 258.)", "color:#43d9ff;font-weight:bold");
@@ -13261,7 +13262,7 @@ function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="cou
 
     {!ld&&summary&&summary.peak_dow!=null&&summary.total_booked>0&&<div style={{padding:"12px 14px",background:C.grn+"0d",border:"1px solid "+C.grn+"25",borderRadius:12,marginBottom:12}}>
       <div style={{display:"flex",gap:9,alignItems:"flex-start"}}>
-        <span style={{flexShrink:0,fontSize:15,marginTop:-1}}>{"\ud83d\udca1"}</span>
+        <span style={{flexShrink:0,display:"inline-flex",marginTop:1}} dangerouslySetInnerHTML={{__html:ic("lightbulb",16,C.grn)}}/>
         {mode==="historical"
           ?<span style={{fontSize:12,color:C.ts||C.txt,lineHeight:1.5}}>{t("Tu horario mas fuerte fue")+" "}<b style={{color:C.grn}}>{peakLbl}</b>{" ("+summary.peak_pct+"%). "}{summary.dead_dow!=null?<span>{t("El mas flojo:")+" "}<b style={{color:C.acc}}>{deadLbl}</b>{" ("+summary.dead_pct+"%)."}</span>:null}</span>
           :<span style={{fontSize:12,color:C.ts||C.txt,lineHeight:1.5}}>{t("Tu horario mas solicitado es")+" "}<b style={{color:C.grn}}>{peakLbl}</b>{" ("+summary.peak_pct+"%). "}{summary.dead_dow!=null?<span>{t("Considera promocionar")+" "}<b style={{color:C.acc}}>{deadLbl}</b>{" ("+summary.dead_pct+"%)."}</span>:null}</span>
@@ -13272,7 +13273,7 @@ function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="cou
     {!ld&&topFull.length>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
       <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:13}}>
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-          <span style={{fontSize:14}}>{"\ud83d\udd25"}</span>
+          <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("flame",16,C.grn)}}/>
           <span style={{fontSize:12,fontWeight:800,color:C.txt}}>{t("Sube el precio aqui")}</span>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -13281,7 +13282,7 @@ function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="cou
       </div>
       <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:13}}>
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-          <span style={{fontSize:14}}>{"\ud83d\udcc9"}</span>
+          <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.acc)}}/>
           <span style={{fontSize:12,fontWeight:800,color:C.txt}}>{t("Promociona aqui")}</span>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -13302,11 +13303,11 @@ function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="cou
         <div style={{fontSize:9,color:C.tm,marginTop:1}}>vs hace 4 sem</div>
       </div>}
       <div style={{padding:8,background:C.grn+"08",border:"1px solid "+C.grn+"25",borderRadius:8,textAlign:"center"}}>
-        <div style={{fontSize:11,fontWeight:800,color:C.grn,marginTop:2}}>🔥 {peakLbl}</div>
+        <div style={{fontSize:11,fontWeight:800,color:C.grn,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("flame",12,C.grn)}}/>{peakLbl}</div>
         <div style={{fontSize:9,color:C.tm,marginTop:1}}>Peak {summary.peak_pct||0}%</div>
       </div>
       <div style={{padding:8,background:C.acc+"08",border:"1px solid "+C.acc+"25",borderRadius:8,textAlign:"center"}}>
-        <div style={{fontSize:11,fontWeight:800,color:C.acc,marginTop:2}}>💤 {deadLbl}</div>
+        <div style={{fontSize:11,fontWeight:800,color:C.acc,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("down",12,C.acc)}}/>{deadLbl}</div>
         <div style={{fontSize:9,color:C.tm,marginTop:1}}>Dead {summary.dead_pct||0}%</div>
       </div>
     </div>}
