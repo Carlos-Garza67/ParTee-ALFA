@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.25 (Termino churn reemplazado por abandono en los 5 textos visibles: titulo del panel Riesgo de abandono, label RIESGO DE ABANDONO en perfil de jugador, Alertas de abandono en panel de jobs y en resumen semanal, y desc de notificacion VIP. Nombres internos de codigo (ChurnRiskPanel, churn_risk, RPCs) intactos. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.24 (Terminos mas claros en panel de inteligencia de clientes: seccion Insights & cohortes renombrada a Conoce a tus jugadores, card Retencion por cohorte a Retencion por mes de llegada (diccionario ingles sincronizado: Retention by arrival month), columnas Cohorte de ambas tablas a Llegaron en, empty state reescrito sin jerga, y segmento Lapsed a Inactivos para consistencia con los tags de cliente que ya usaban ese termino en el resto de la app. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.23 (Recuperacion de score sin finalizar: la tarjeta en vivo solo se podia reabrir con ronda GPS activa, asi que un score capturado pero no finalizado quedaba atrapado en localStorage sin forma de verlo. Ahora el detalle de reserva detecta el draft local (pt_live_card_<id>) cuando no hay scorecard en DB y muestra aviso ambar con hoyos capturados y golpes + boton Abrir tarjeta y finalizar que monta LiveScorecard directo desde el detalle; la tarjeta hidrata el score del dispositivo, al finalizar guarda en DB, limpia el draft y el detalle muestra el score oficial. El boton de guardar no depende del GPS. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.22 (Migracion masiva de emojis hardcodeados a iconos ic() en toda la UI para consistencia de identidad visual: 23 iconos nuevos en el set IC (box chat bot sun cloud rain snow fog storm wind walk crown award ban rocket gift confetti inbox tool droplet wifi parking car), clima convertido a iconos SVG en sus 2 mapeos y 4 renders, labels de config con dangerouslySetInnerHTML (categorias extras, metodos de pago x2, amenities x14, onboarding, badges de fuente, segmentos de clientes), ~150 emojis de UI convertidos o limpiados (prefijos de texto removidos, standalone convertidos a ic con su tamano). SE CONSERVAN a proposito: reacciones REMOJI, badges de logros y medallas (gamificacion=contenido), mensajes que salen de la app (invitacion WhatsApp, SMS staff, plantillas campana), notificaciones push, placeholders de icon custom, fuego de Hot Deal (branding) y simbolos tipograficos del toast. Baseline 258.)", "color:#43d9ff;font-weight:bold");
@@ -6303,7 +6304,7 @@ function Customer360({course,userId,onClose}){
           {/* CHURN RISK */}
           {data.stats?.churn_risk!=null&&<div style={{padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,marginBottom:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.4}}>RIESGO DE CHURN</div>
+              <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.4}}>RIESGO DE ABANDONO</div>
               <div style={{fontSize:18,fontWeight:900,color:churnColor(data.stats.churn_risk),..._s.mono}}>{data.stats.churn_risk}/100</div>
             </div>
             <div style={{height:8,background:C.bg,borderRadius:6,overflow:"hidden"}}>
@@ -8053,7 +8054,7 @@ function AutomationHealthCard({course}){
     {key:"insight",icon:"lightbulb",label:"Weekly Insight",desc:"Narrativa AI semanal",status:data.insight.status,
       detail:data.insight.status==="never"?"Aún no se ha generado":
         `${relTime(data.insight.last_generated_at)} · ${data.insight.last_source==="claude"?"Pinny":data.insight.last_source||"template"}`},
-    {key:"churn",icon:"target",label:"Churn Alerts",desc:"Refresh de alerts at-risk",status:data.churn.status,
+    {key:"churn",icon:"target",label:"Alertas de abandono",desc:"Refresh de alerts at-risk",status:data.churn.status,
       detail:data.churn.status==="never"?"Aún no se han detectado":
         `${relTime(data.churn.last_activity)} · ${data.churn.open_alerts} abierta${data.churn.open_alerts===1?"":"s"}${data.churn.critical_alerts>0?` · ${data.churn.critical_alerts} crítica${data.churn.critical_alerts===1?"":"s"}`:""}`}
   ];
@@ -8140,7 +8141,7 @@ function AdminNotifPrefsCard({course}){
   const toggles=[
     {k:"dp",val:dailyPulse,set:setDailyPulse,icon:"chart",label:"Pulse diario",desc:"Resumen matutino con anomalías del día (revenue drop, hot deals, VIPs at-risk)"},
     {k:"we",val:weeklyEmail,set:setWeeklyEmail,icon:"lightbulb",label:"Insight semanal por email",desc:"Cada lunes 8am — narrativa AI del rendimiento del campo"},
-    {k:"ca",val:criticalAlerts,set:setCriticalAlerts,icon:"alert",label:"Alertas críticas inmediatas",desc:"Notificación instantánea cuando un VIP entra en riesgo de churn"},
+    {k:"ca",val:criticalAlerts,set:setCriticalAlerts,icon:"alert",label:"Alertas críticas inmediatas",desc:"Notificación instantánea cuando un VIP entra en riesgo de abandono"},
     {k:"cs",val:campaignSummary,set:setCampaignSummary,icon:"mail",label:"Resumen de campañas",desc:"Stats post-envío: opens, clicks, bounces"}
   ];
 
@@ -10856,7 +10857,7 @@ function ProUpgradeModal({course,currentPlan,isPro,onClose,source}){
             <div style={{fontSize:13,color:C.txt,lineHeight:1.7}}>
               <div style={{marginBottom:4}}><b>Pulse diario</b> · anomalías matutinas AI</div>
               <div style={{marginBottom:4}}><b>Insight semanal</b> · narrativa de Pinny los lunes</div>
-              <div style={{marginBottom:4}}><b>Alertas de churn</b> · VIPs en riesgo en tiempo real</div>
+              <div style={{marginBottom:4}}><b>Alertas de abandono</b> · VIPs en riesgo en tiempo real</div>
               <div style={{marginBottom:4}}><b>Stats de campañas</b> · opens/clicks/bounces</div>
               <div style={{marginBottom:4}}><b>Comisión reducida</b> · de 8.5% a 5.5%</div>
               <div><b>Soporte prioritario</b> · onboarding asistido</div>
@@ -13957,7 +13958,7 @@ function ChurnRiskPanel({course}){const{p}=useA();const isTeam=p?.user_role==="c
     <div style={{..._s.flexB,marginBottom:10}}>
       <div>
         <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
-          <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("target",14)}}/>Riesgo de churn
+          <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("target",14)}}/>Riesgo de abandono
         </div>
         <div style={{fontSize:9,color:C.tm,marginTop:1}}>Jugadores en riesgo de no regresar — score basado en patrón histórico</div>
       </div>
