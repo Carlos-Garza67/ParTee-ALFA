@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.13 (Fix 2 issues en panel admin del campo: 1) FECHA ERRONEA: el dashboard mostraba el dia siguiente (7 jul en vez de 6) en las tardes/noches de Mexico; causa: new Date().toISOString().split(T)[0] devuelve la fecha en UTC, y despues de las ~17h en Vallarta (UTC-7) ya es el dia siguiente en UTC. Fix: helper global ymdLocal() que devuelve YYYY-MM-DD en hora LOCAL; reemplazados los 13 usos del patron buggy en todo el archivo. 2) el boton Avisar (mandar push al jugador) en la lista de reservas admin no se ocultaba tras el check-in; ahora gated con !b.checked_in_at (el de la vista de check-in ya estaba gated con !isChecked). Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.12 (Gate de tiempo para extras: el boton + Agregar en el detalle solo aparece antes y durante el juego, no ya finalizado. Se corta cuando ocurra lo PRIMERO de: pasan 6h desde el tee (fin de la ventana de juego, mismo umbral que Mi tarjeta en vivo/inCheckinWin) O ya hay score guardado (detailScore!=null). Distinto criterio que invitar (que se corta EN el tee): extras se permiten durante el juego. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.11 (No permitir invitar jugadores tras la hora del tee: 1) el texto Sin participantes todavia. Invita a jugar. en el detalle seguia invitando a la accion aunque el tee ya paso; ahora muestra Sin participantes. (neutro) si la hora de tee paso. 2) el chip + Partida en la card de la lista usaba !isPast que tras el fix v29.8 es solo-fecha (hoy no cuenta como pasado), asi que seguia apareciendo tras el tee; ahora gated por la hora real de tee. El boton de invitar del detalle ya estaba correctamente gated por !isPast=hoursUntil<=0. Distincion: el dimming de card usa solo-fecha (una ronda de hoy en juego no se atenua), pero invitar usa la hora de tee. Baseline 257.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.10 (Resumen de handicap en el detalle de reserva: chip HCP en el header del detalle (mismo dato y formato que Perfil: Number(p.handicap).toFixed(1)) para consulta rapida sin ir a Perfil. Disponible siempre, junto a la tarjeta de score. Baseline 257.)", "color:#43d9ff;font-weight:bold");
@@ -583,7 +584,7 @@ const ThemeCtx=createContext({theme:"dark",toggle:()=>{}});
 const useTheme=()=>useContext(ThemeCtx);
 function applyCSS(t){const v=t==="dark"?DARK:LIGHT;const r=document.documentElement;r.setAttribute("data-theme",t);r.style.setProperty("--app-bg",v.bg);r.style.setProperty("--nav-bg",v.nav);r.style.setProperty("--bd",v.bd);r.style.setProperty("--card-bg",v.cd);r.style.setProperty("--card2-bg",v.c2);r.style.setProperty("--txt",v.txt);r.style.setProperty("--txt-s",v.ts);r.style.setProperty("--txt-m",v.tm);r.style.setProperty("--player-card-bg",t==="dark"?"linear-gradient(145deg,rgba(12,45,90,.5),rgba(22,37,68,.4),rgba(0,184,148,.08))":"linear-gradient(145deg,rgba(4,120,87,.5),rgba(6,95,70,.5),rgba(0,184,148,.12))");}
 const TL={public:t("Publico"),private:t("Privado"),"semi-private":t("Semi")};const TC={public:C.grn,private:C.acc,"semi-private":C.gld};
-const DN=["Dom","Lun","Mar","Mie","Jue","Vie","Sab"];const fm=n=>Number(n).toLocaleString("es-MX");
+const DN=["Dom","Lun","Mar","Mie","Jue","Vie","Sab"];const ymdLocal=(dd)=>{const d=dd?new Date(dd):new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")},fm=n=>Number(n).toLocaleString("es-MX");
 const MX_TZ=[{v:"America/Mexico_City",l:t("Centro (CDMX, GDL, MTY)"),s:"CST"},{v:"America/Mazatlan",l:t("Pacífico (Mazatlán, BCS, Sinaloa)"),s:"MST"},{v:"America/Tijuana",l:t("Noroeste (Tijuana, BC)"),s:"PST"},{v:"America/Cancun",l:t("Sureste (Cancún, QRoo)"),s:"EST"}];
 const MX_STATES=["Aguascalientes","Baja California","Baja California Sur","Campeche","Chiapas","Chihuahua","Ciudad de México","Coahuila","Colima","Durango","Estado de México","Guanajuato","Guerrero","Hidalgo","Jalisco","Michoacán","Morelos","Nayarit","Nuevo León","Oaxaca","Puebla","Querétaro","Quintana Roo","San Luis Potosí","Sinaloa","Sonora","Tabasco","Tamaulipas","Tlaxcala","Veracruz","Yucatán","Zacatecas"];
 const MEMBERSHIP_PERKS=[{k:"range_ilimitado",icon:"target",label:"Práctica ilimitada en range",vt:"none"},{k:"carrito_incluido",icon:"cart",label:"Carrito de golf incluido",vt:"none"},{k:"caddie_incluido",icon:"user",label:"Caddie incluido",vt:"none"},{k:"desc_proshop",icon:"tag",label:"Descuento en pro shop",vt:"pct"},{k:"desc_alimentos",icon:"utensils",label:"Descuento en alimentos y bebidas",vt:"pct"},{k:"locker",icon:"lock",label:"Locker personal",vt:"none"},{k:"guarda_palos",icon:"golf",label:"Guarda-palos (bag storage)",vt:"none"},{k:"clases_pro",icon:"lightbulb",label:"Clases con el pro incluidas",vt:"num",vlabel:"clases"},{k:"eventos_exclusivos",icon:"trophy",label:"Eventos y torneos exclusivos",vt:"none"},{k:"invitados_preferente",icon:"users",label:"Invitados con tarifa preferente",vt:"pct"},{k:"casa_club",icon:"building",label:"Acceso a casa club",vt:"none"},{k:"estacionamiento_vip",icon:"pin",label:"Estacionamiento preferente / valet",vt:"none"},{k:"reciprocidad",icon:"handshake",label:"Reciprocidad con otros clubes",vt:"text",vlabel:"¿con qué clubes?"},{k:"renta_equipo",icon:"disc",label:"Descuento en renta de equipo",vt:"pct"}];
@@ -593,7 +594,7 @@ function fmtInTz(dateStr,timeStr,srcTz,destTz){const utc=teeToUTC(dateStr,timeSt
 const detectTz=()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return"America/Mexico_City"}};
 const greet=()=>{const h=new Date().getHours();return h<12?t("Buenos días"):h<19?t("Buenas tardes"):t("Buenas noches")};
 const fmtNames={stroke_play:"Stroke Play",stableford:"Stableford",match_play:"Match Play",scramble:"Scramble",four_ball:"Four-Ball"};
-const n7=()=>Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toISOString().split("T")[0]});
+const n7=()=>Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return ymdLocal(d)});
 
 const LISTING_STATUS={draft:{l:t("Borrador"),c:"#a0aec0",d:t("Completa los pasos para enviarla a revisión")},pending_review:{l:t("En Revisión"),c:"#fdcb6e",d:t("Nuestro equipo está revisando tu locación")},active:{l:t("Publicada"),c:"#00d18f",d:t("Visible para jugadores")},suspended:{l:t("Suspendida"),c:"#e94560",d:t("Contacta a soporte para reactivar")}};
 // v19.47: removido getCourseReadiness (huérfano, reemplazado por getCourseCompleteness)
@@ -1298,7 +1299,7 @@ function Home({onPick}){const{s,p}=useA();const[cs,setCs]=useState([]);const[ld,
 function Detail({c,onBack,onBook}){const{s,p}=useA();const[slots,setSlots]=useState([]);const[dt,setDt]=useState(n7()[0]);const[ld,setLd]=useState(true);const[fav,setFav]=useState(false);const[revs,setRevs]=useState([]);const[sr,setSr]=useState(false);const[rt,setRt]=useState(0);const[cm,setCm]=useState("");const[sub,setSub]=useState(false);const[promos,setPromos]=useState([]);const[friendsHere,setFriendsHere]=useState([]);
   useEffect(()=>{setLd(true);sb.from("time_slots").select("*").eq("course_name",c.course_name).eq("slot_date",dt).order("slot_time").then(({data})=>{setSlots(data||[]);setLd(false)})},[dt]);
   useEffect(()=>{sb.from("reviews").select("*,user_profiles(full_name)").eq("course_id",c.id).order("created_at",{ascending:false}).limit(10).then(({data})=>setRevs(data||[]));if(s){sb.from("course_favorites").select("id").eq("course_id",c.id).eq("user_id",s.user.id).then(({data})=>setFav(data?.length>0));
-    sb.from("friends").select("friend_id").eq("user_id",s.user.id).eq("status","accepted").then(async({data:fr})=>{if(!fr||!fr.length)return;const fids=fr.map(f=>f.friend_id);const{data:bks}=await sb.from("bookings").select("user_id").eq("course_id",c.id).eq("status","confirmed").in("user_id",fids);const uids=[...new Set((bks||[]).map(b=>b.user_id))];if(!uids.length)return;const{data:profiles}=await sb.from("user_profiles").select("id,full_name,nickname,avatar_url").in("id",uids);setFriendsHere(profiles||[])})};const td=new Date().toISOString().split("T")[0];sb.from("promotions").select("*").eq("course_id",c.id).eq("is_active",true).gte("valid_until",td).lte("valid_from",td).then(({data})=>setPromos(data||[]))},[]);
+    sb.from("friends").select("friend_id").eq("user_id",s.user.id).eq("status","accepted").then(async({data:fr})=>{if(!fr||!fr.length)return;const fids=fr.map(f=>f.friend_id);const{data:bks}=await sb.from("bookings").select("user_id").eq("course_id",c.id).eq("status","confirmed").in("user_id",fids);const uids=[...new Set((bks||[]).map(b=>b.user_id))];if(!uids.length)return;const{data:profiles}=await sb.from("user_profiles").select("id,full_name,nickname,avatar_url").in("id",uids);setFriendsHere(profiles||[])})};const td=ymdLocal();sb.from("promotions").select("*").eq("course_id",c.id).eq("is_active",true).gte("valid_until",td).lte("valid_from",td).then(({data})=>setPromos(data||[]))},[]);
   const rv=async()=>{if(!s||!rt)return;setSub(true);await sb.from("reviews").upsert({user_id:s.user.id,course_id:c.id,rating:rt,comment:cm||null},{onConflict:"user_id,course_id"});const{data}=await sb.from("reviews").select("*,user_profiles(full_name)").eq("course_id",c.id).order("created_at",{ascending:false}).limit(10);setRevs(data||[]);setSr(false);setSub(false);setRt(0);setCm("")};
   const tf=async()=>{if(!s)return;if(fav){await sb.from("course_favorites").delete().eq("course_id",c.id).eq("user_id",s.user.id);setFav(false)}else{await sb.from("course_favorites").insert({course_id:c.id,user_id:s.user.id});hap();setFav(true)}};
   const slotBtn=(x)=>{const isFull=x.status==="booked"||(x.booking_count||0)>=2||(x.booked_count||0)>=8;const spots=8-(x.booked_count||0);const bkLeft=2-(x.booking_count||0);const isPartial=!isFull&&((x.booked_count||0)>0||(x.booking_count||0)>0);return<button key={x.id} onClick={()=>{if(isFull)return window.__toast?.("Slot completo","warn");onBook(c,x)}} style={{background:isFull?C.acc+"08":C.glass||C.w04,border:"1px solid "+(isFull?C.acc+"30":isPartial?C.gld+"30":C.glassBd||C.bd),borderRadius:14,padding:"10px 14px",textAlign:"center",cursor:isFull?"not-allowed":"pointer",minWidth:90,boxShadow:isFull?"none":C.shCard||"none",opacity:isFull?.5:1}}><div style={{fontSize:15,fontWeight:700,color:isFull?C.acc:C.txt}}>{x.slot_time?.slice(0,5)}</div>{isFull?<div style={{fontSize:10,fontWeight:700,color:C.acc,marginTop:2}}>{t("Completo")}</div>:<><div style={{fontSize:12,fontWeight:600,color:x.is_offer?C.acc:C.grn,marginTop:2}}>${fm(x.price)}</div>{isPartial&&<div style={{fontSize:9,color:C.gld,marginTop:1}}>{spots} lug. · {bkLeft} res.</div>}</>}</button>};
@@ -3798,7 +3799,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
   // v18.0.5: UNION de bookings del usuario (como creator) + bookings donde soy participante aceptado.
   async function load(){
     setLd(true);
-    const td=new Date().toISOString().split("T")[0];
+    const td=ymdLocal();
     const ownedQ=(()=>{let q=sb.from("bookings").select("*,golf_courses(facility_type)").eq("user_id",s.user.id);if(tab==="up")q=q.gte("booking_date",td).neq("status","cancelled");else q=q.lt("booking_date",td);return q})();
     const partQ=sb.from("booking_participants").select("booking:booking_id(*,golf_courses(facility_type))").eq("user_id",s.user.id).in("status",["accepted","accepted_pending_payment"]);
     const[ownedRes,partRes]=await Promise.all([ownedQ,partQ]);
@@ -4218,7 +4219,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         </div>
       </div>;
     })}{acceptingInv&&<AcceptInvitationModal invitation={acceptingInv} onClose={()=>setAcceptingInv(null)} onResponded={()=>{setAcceptingInv(null);loadInvitations();load();}}/>}</>}
-    {tab!=="requests"&&<div style={{background:"transparent",marginLeft:-16,marginRight:-16,padding:"6px 20px 0",borderRadius:0,minHeight:200}}>{ld?<div><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70}/></div>:bs.length===0?<EmptyState icon="calendar" iconColor={C.grn} title={t("Sin reservas")} sub={t("Explora campos y reserva tu primer tee time")}/>:bs.map(b=>{const st=stc[b.status]||{l:b.status,c:C.gld};const isPast=(()=>{const td=new Date();const today=td.getFullYear()+"-"+String(td.getMonth()+1).padStart(2,"0")+"-"+String(td.getDate()).padStart(2,"0");return String(b.booking_date).slice(0,10)<today})();const inCheckinWin=(()=>{if(b.status!=="confirmed")return false;if(b.golf_courses?.facility_type!=="campo")return false;const _td=new Date().toISOString().split("T")[0];if(b.booking_date!==_td)return false;const teeDT=new Date(b.booking_date+"T"+((b.booking_time||"12:00").slice(0,5)));const mins=(teeDT.getTime()-Date.now())/60000;return mins<=30&&mins>=-360})();return<div key={b.id} onClick={()=>openDetail(b)} style={{background:C.glass||C.w04,borderRadius:16,padding:0,marginBottom:10,border:"1px solid "+(C.glassBd||C.bd),boxShadow:C.shCard||"none",cursor:"pointer",display:"flex",overflow:"hidden",opacity:isPast?.6:1}}><div style={{width:4,background:st.c,flexShrink:0,borderRadius:"16px 0 0 16px"}}/><div style={{flex:1,padding:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{b.course_name}</h4><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"3px 10px",borderRadius:8,fontWeight:700}}>{st.l}</span></div>
+    {tab!=="requests"&&<div style={{background:"transparent",marginLeft:-16,marginRight:-16,padding:"6px 20px 0",borderRadius:0,minHeight:200}}>{ld?<div><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70} mb={10}/><Skeleton w="100%" h={70}/></div>:bs.length===0?<EmptyState icon="calendar" iconColor={C.grn} title={t("Sin reservas")} sub={t("Explora campos y reserva tu primer tee time")}/>:bs.map(b=>{const st=stc[b.status]||{l:b.status,c:C.gld};const isPast=(()=>{const td=new Date();const today=td.getFullYear()+"-"+String(td.getMonth()+1).padStart(2,"0")+"-"+String(td.getDate()).padStart(2,"0");return String(b.booking_date).slice(0,10)<today})();const inCheckinWin=(()=>{if(b.status!=="confirmed")return false;if(b.golf_courses?.facility_type!=="campo")return false;const _td=ymdLocal();if(b.booking_date!==_td)return false;const teeDT=new Date(b.booking_date+"T"+((b.booking_time||"12:00").slice(0,5)));const mins=(teeDT.getTime()-Date.now())/60000;return mins<=30&&mins>=-360})();return<div key={b.id} onClick={()=>openDetail(b)} style={{background:C.glass||C.w04,borderRadius:16,padding:0,marginBottom:10,border:"1px solid "+(C.glassBd||C.bd),boxShadow:C.shCard||"none",cursor:"pointer",display:"flex",overflow:"hidden",opacity:isPast?.6:1}}><div style={{width:4,background:st.c,flexShrink:0,borderRadius:"16px 0 0 16px"}}/><div style={{flex:1,padding:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{b.course_name}</h4><span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"3px 10px",borderRadius:8,fontWeight:700}}>{st.l}</span></div>
       {b.booking_code&&<div style={{fontSize:10,..._s.mono,color:C.tm,letterSpacing:1,marginBottom:3}}>{b.booking_code}</div>}<div style={{display:"flex",gap:12,fontSize:12,color:C.ts,alignItems:"center"}}><span dangerouslySetInnerHTML={{__html:ic("calendar",13,C.txt)}}/><span>{b.booking_date}</span><span dangerouslySetInnerHTML={{__html:ic("clock",13,C.txt)}}/><span>{b.booking_time?.slice(0,5)}</span><span dangerouslySetInnerHTML={{__html:ic("user",13,C.txt)}}/><span>{b.party_size}</span></div><div style={{display:"flex",justifyContent:"space-between",marginTop:6}}><span style={{fontSize:14,fontWeight:800,color:C.grn}}>${fm(b.total_cost)} MXN</span><div style={{display:"flex",gap:4,alignItems:"center"}}>{isPast&&b.status==="confirmed"&&<span onClick={e=>{e.stopPropagation();setCourse(null);openDetail(b)}} style={{fontSize:9,color:C.gld,background:C.gld+"12",border:"1px solid "+C.gld+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>⭐ Calificar</span>}{(()=>{const teeDT=new Date((b.booking_date||"")+"T"+((b.booking_time||"12:00").slice(0,5)));return teeDT.getTime()>Date.now()})()&&b.status==="confirmed"&&b.golf_courses?.facility_type==="campo"&&<span onClick={e=>{e.stopPropagation();window.__createMatchFromBooking={id:b.id,course_id:b.course_id,course_name:b.course_name,date:b.booking_date,time:b.booking_time};window.__navigate?.("tab:2")}} style={{fontSize:9,color:C.grn,background:C.grn+"12",border:"1px solid "+C.grn+"25",borderRadius:6,padding:"3px 7px",fontWeight:700,cursor:"pointer"}}>+ {t("Partida")}</span>}<span style={{color:C.ts,fontSize:14}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div></div>{inCheckinWin&&<div style={{marginTop:12}}><CheckinButton booking={b}/></div>}</div></div>})}</div>}
 
     {/* v20.2: Bottom sheet "Agregar extras" — catálogo del campo agrupado por categoría */}
@@ -5439,7 +5440,7 @@ function MyGPSSection(){
     })();
     // red de seguridad: si la consulta no resuelve, no quedar en "Cargando" para siempre (cae a off usable)
     const fb=setTimeout(()=>{if(alive)setConsent(c=>c===null?false:c)},6000);
-    const today=new Date().toISOString().split("T")[0];
+    const today=ymdLocal();
     sb.from("bookings").select("id,course_id,course_name,booking_date").eq("user_id",uid).eq("status","confirmed").eq("booking_date",today).limit(1).then(({data})=>{if(alive)setTodayBooking((data&&data[0])||null)}).catch(()=>{});
     if(window.__parteeGPS){window.__parteeGPS.onState(st=>{if(alive)setGpsActive(st.active)});setGpsActive(window.__parteeGPS.status().active)}
     return()=>{alive=false;clearTimeout(fb)};
@@ -7705,8 +7706,8 @@ function AdminBookings({course}){
   // status + payment, search por nombre/código/email/player_id, counter "X de Y",
   // export CSV usa la lista filtrada.
   // v20.28 A.3: Modo Check-in (tablet) accesible vía botón en header.
-  const today=new Date().toISOString().split("T")[0];
-  const dayOffset=(n)=>{const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split("T")[0]};
+  const today=ymdLocal();
+  const dayOffset=(n)=>{const d=new Date();d.setDate(d.getDate()+n);return ymdLocal(d)};
   const[viewMode,setViewMode]=useState("day");      // "day" | "range"
   const[selDate,setSelDate]=useState(today);
   const[rangeFrom,setRangeFrom]=useState(today);
@@ -7771,7 +7772,7 @@ function AdminBookings({course}){
   const stc={confirmed:{l:t("Confirmada"),c:C.grn},cancelled:{l:t("Cancelada"),c:C.acc},pending:{l:t("Pendiente"),c:C.gld},no_show:{l:"No-show",c:C.acc}};
   const DN_local=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
   const dayLabel=(d)=>{const dt=new Date(d+"T12:00:00");return DN_local[dt.getDay()]+" "+dt.getDate()+" "+dt.toLocaleDateString("es-MX",{month:"short"})};
-  const navDay=(d)=>{const dt=new Date(selDate+"T12:00:00");dt.setDate(dt.getDate()+d);setSelDate(dt.toISOString().split("T")[0]);setQuickFilter("custom")};
+  const navDay=(d)=>{const dt=new Date(selDate+"T12:00:00");dt.setDate(dt.getDate()+d);setSelDate(ymdLocal(dt));setQuickFilter("custom")};
   
   // Stats agregados sobre filtered (no sobre bks crudo)
   const confirmedFilt=filtered.filter(b=>b.status==="confirmed");
@@ -7915,7 +7916,7 @@ function AdminBookings({course}){
           <div style={{width:28,height:28,borderRadius:14,background:C.grn+"25",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("user",14,C.grn)}}/>
           <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.txt}}>{up.full_name||up.nickname||"Jugador"}</div>{up.player_id&&<div style={{fontSize:10,color:C.tm}}>ID {up.player_id}</div>}</div>
           <div style={{display:"flex",gap:4}}>
-            {b.user_id&&<button onClick={e=>{e.stopPropagation();doNotify(b)}} disabled={notifyId===b.id} title="Avisar al jugador" style={{height:28,padding:"0 10px",borderRadius:14,background:C.grn+"15",border:"1px solid "+C.grn+"30",display:"flex",alignItems:"center",gap:5,cursor:notifyId===b.id?"wait":"pointer",color:C.grn,fontSize:11,fontWeight:700}}><span dangerouslySetInnerHTML={{__html:ic("bell",12,C.grn)}}/>Avisar</button>}
+            {b.user_id&&!b.checked_in_at&&<button onClick={e=>{e.stopPropagation();doNotify(b)}} disabled={notifyId===b.id} title="Avisar al jugador" style={{height:28,padding:"0 10px",borderRadius:14,background:C.grn+"15",border:"1px solid "+C.grn+"30",display:"flex",alignItems:"center",gap:5,cursor:notifyId===b.id?"wait":"pointer",color:C.grn,fontSize:11,fontWeight:700}}><span dangerouslySetInnerHTML={{__html:ic("bell",12,C.grn)}}/>Avisar</button>}
           </div>
         </div>}
         <div style={{..._s.flexB,width:"100%"}}>
@@ -9319,7 +9320,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
     setLd(false)}
   // Scorecard creation functions
   async function startCreate(){setCreate(true);setCreateMode(null);setSelBk(null);setManualCourse(null);setManualDate("");setManualScore("");
-    const td=new Date().toISOString().split("T")[0];
+    const td=ymdLocal();
     const[{data:bks},{data:validC},{data:campos},{data:myTp}]=await Promise.all([
       sb.from("bookings").select("*").eq("user_id",s.user.id).eq("status","confirmed").lte("booking_date",td).not("course_id","is",null).order("booking_date",{ascending:false}).limit(40),
       sb.from("golf_courses").select("id,facility_type").in("facility_type",["campo","simulador"]),
@@ -10512,14 +10513,14 @@ function SlotDetailDrawer({slotId,course,onClose,onChange}){
   </div>;
 }
 
-function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]=useState(true);const[selDate,setSelDate]=useState(new Date().toISOString().split("T")[0]);const[gen,setGen]=useState(false);const[editSlot,setEditSlot]=useState(null);const[editPrice,setEditPrice]=useState("");
+function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]=useState(true);const[selDate,setSelDate]=useState(ymdLocal());const[gen,setGen]=useState(false);const[editSlot,setEditSlot]=useState(null);const[editPrice,setEditPrice]=useState("");
   const[view,setView]=useState("calendar"); // v20.25: 'calendar' = TeeSheetPro · 'list' = legacy
   useEffect(()=>{load()},[selDate]);
   async function load(){setLd(true);const{data}=await sb.from("time_slots").select("*").eq("course_name",course.course_name).eq("slot_date",selDate).order("slot_time");setSlots(data||[]);setLd(false)}
   async function deleteSlot(id){const go=async()=>{await sb.from("time_slots").delete().eq("id",id);loadData();window.__toast?.(t("Slot eliminado"),"success")};if(window.__confirm)window.__confirm(t("¿Eliminar este slot?"),go);else go()}
-  const navDay=(d)=>{const dt=new Date(selDate+"T12:00:00");dt.setDate(dt.getDate()+d);setSelDate(dt.toISOString().split("T")[0])};
+  const navDay=(d)=>{const dt=new Date(selDate+"T12:00:00");dt.setDate(dt.getDate()+d);setSelDate(ymdLocal(dt))};
   const dayLabel=(d)=>{const dt=new Date(d+"T12:00:00");return DN[dt.getDay()]+" "+dt.getDate()+" "+dt.toLocaleDateString("es-MX",{month:"short"})};
-  const today=new Date().toISOString().split("T")[0];
+  const today=ymdLocal();
   const toggleSlot=async(sl)=>{const ns=sl.status==="available"?"blocked":"available";await sb.from("time_slots").update({status:ns}).eq("id",sl.id);load()};
   const savePrice=async()=>{if(!editSlot||!editPrice)return;await sb.from("time_slots").update({price:parseFloat(editPrice)}).eq("id",editSlot.id);setEditSlot(null);load()};
   const generateSlots=async()=>{
@@ -12647,7 +12648,7 @@ function LiveMap({course}){
     {subTab==="mensajes"&&<WaInbox course={course} only="staff"/>}
     {geoOpen&&<HoleGeoEditor course={course} onClose={()=>setGeoOpen(false)}/>}
     {dispatchOpen&&<DispatchModal course={course} onClose={()=>setDispatchOpen(false)}/>}
-    {marshalOpen&&<MarshalView course={course} date={new Date().toISOString().split("T")[0]} onExit={()=>setMarshalOpen(false)}/>}
+    {marshalOpen&&<MarshalView course={course} date={ymdLocal()} onExit={()=>setMarshalOpen(false)}/>}
     {rosterOpen&&<AdminRoster course={course} onExit={()=>setRosterOpen(false)}/>}
     {assignFor&&ReactDOM.createPortal(
       <div onClick={()=>setAssignFor(null)} style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
