@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v29.29 (Fix visual de la banda de posicionamiento de tarifas: la zona central En linea usaba C.bd con alpha y era invisible sobre la card (se veia como dos barras rotas con hueco), y las proporciones matematicas hacian dominar una zona. Ahora zonas fijas 33/34/33 con colores visibles (grn/tm/gld con alpha legible) y el marcador se posiciona proporcionalmente DENTRO de su zona (barato escala 50%-92% del mercado, en linea +-8%, caro 108%-150%); la banda comunica lo cualitativo y las tarjetas dan los numeros exactos. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.28 (Posicionamiento de tarifas rediseno B estas-aqui + filtros de ambito: banda del mercado en 3 zonas proporcionales (mas barato / en linea +-8% / mas caro) con marcador de tu precio medio encima, 3 tarjetas (tu rango, mercado prom, diferencia %) y veredicto de cuadrante. Pills Mi categoria / Mi region gobiernan TODA la pestana Mercado (comparativa + tarifas comparan contra el mismo grupo): categoria = mismo course_type nacional, region = mismo estado; en ambos facility_type es filtro duro para nunca comparar campos contra simuladores u otros venues. Agregacion ponderada por venue_count cuando el ambito junta varias filas del benchmark. Nota de contexto dinamica (Comparado con X · N campos · solo venues de tu tipo · datos anonimos). Empty states honestos por ambito cuando no hay 3+ campos (k-anonimato); antes el fallback comparaba silenciosamente contra otra region. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.27 (Pestana Mercado: seccion Pricing sugerido eliminada por contraponerse con Ventas > Precios (pricing por franja ya vive ahi y en Demanda) y sustituida por POSICIONAMIENTO DE TARIFAS: compara tus green fees min-max contra avg_fee_min/max del benchmark anonimo de tu categoria con barras visuales de rango, % de diferencia vs el punto medio del mercado, y veredicto de cuadrante precio x ocupacion (premium funciona / precio frena demanda / espacio para subir / precio no es el freno / en linea). Empty states si faltan green fees propios o benchmark. Removida toda la maquinaria del pricing accionable (applyColdDeal, drill, hot/cold) y 9 traducciones huerfanas; el unico RPC de la pestana queda get_admin_yield_heatmap para las oportunidades. Baseline 258.)", "color:#43d9ff;font-weight:bold");
 console.log("%c[Partee] Build v29.26 (Rediseno completo pestana Mercado (PremiumInsights): 1) COMPARATIVA con ventanas comparables al benchmark (ocupacion propia proximos 7 dias vs mercado 7d, ticket y reservas 30d vs 30d) + nota de muestra (Comparado con N campos, datos anonimos). 2) OPORTUNIDADES data-driven en vez de reglas fijas: Early Bird solo si franja 6-9am va debil vs resto del dia con cifras reales del forecast, F&B solo si el campo no lo ofrece (cifra etiquetada como estimacion de industria), Partidas solo si 0 creadas en 60 dias (dato real de match_requests); mensaje positivo si nada aplica; CTA Ver franjas en Demanda navega de pestana. 3) PRICING SUGERIDO ahora sobre proximas 4 semanas (RPC get_admin_yield_heatmap forecast, no historico completo): celdas >=80% sugieren subir 15% con CTA a Demanda, celdas <=20% traen boton Hot Deal -20% ACCIONABLE (drill de la franja + slots elegibles 3-72h + apply_hot_deal_to_slots con confirm, source market_tab). Ademas: filtro fragil por course_name reemplazado por course_id, loadData migrado a RPC server-side + queries acotadas. Sin backend nuevo. Baseline 258.)", "color:#43d9ff;font-weight:bold");
@@ -10013,19 +10014,21 @@ function PremiumInsights({course,goTo,unlocked}){const{s}=useA();const{sub,isPre
       else if(below&&occD>=0){verdict=t("Estas debajo del mercado y con buena ocupacion: hay espacio para subir tarifas.");vColor=C.grn}
       else if(below&&occD<0){verdict=t("Estas debajo del mercado y aun asi la ocupacion va floja: el precio no parece ser el freno.");vColor=C.gld}
       else{verdict=t("Tus tarifas van en linea con tu categoria.");vColor=C.grn}
-      const lo=Math.min(myMid,mkMin)*0.85,hi=Math.max(myMid,mkMax)*1.15,span=Math.max(hi-lo,1);
-      const zL=Math.min(Math.max((mkMid*0.92-lo)/span*100,4),92),zR=Math.min(Math.max((hi-mkMid*1.08)/span*100,4),92-zL);
-      const zM=Math.max(100-zL-zR,4);
-      const pos=Math.min(Math.max((myMid-lo)/span*100,3),97);
+      const zLo=mkMid*0.92,zHi=mkMid*1.08;
+      let pos;
+      if(myMid<zLo){const lo=mkMid*0.5;pos=Math.min(Math.max((myMid-lo)/Math.max(zLo-lo,1),0),1)*33}
+      else if(myMid>zHi){const hi=mkMid*1.5;pos=67+Math.min(Math.max((myMid-zHi)/Math.max(hi-zHi,1),0),1)*33}
+      else{pos=33+((myMid-zLo)/Math.max(zHi-zLo,1))*34}
+      pos=Math.min(Math.max(pos,3),97);
       return<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:14}}>
         <div style={{position:"relative",height:76,margin:"0 6px 4px"}}>
           <div style={{position:"absolute",top:32,left:0,right:0,height:13,borderRadius:7,overflow:"hidden",display:"flex"}}>
-            <div style={{width:zL+"%",background:C.grn+"45"}}/>
-            <div style={{width:zM+"%",background:C.bd+"55"}}/>
-            <div style={{width:zR+"%",background:C.gld+"45"}}/>
+            <div style={{width:"33%",background:C.grn+"50"}}/>
+            <div style={{width:"34%",background:C.tm+"35"}}/>
+            <div style={{width:"33%",background:C.gld+"50"}}/>
           </div>
           <span style={{position:"absolute",top:50,left:0,fontSize:9.5,color:C.grn}}>{t("Mas barato")}</span>
-          <span style={{position:"absolute",top:50,left:(zL+zM/2)+"%",transform:"translateX(-50%)",fontSize:9.5,color:C.tm,whiteSpace:"nowrap"}}>{t("En linea")}</span>
+          <span style={{position:"absolute",top:50,left:"50%",transform:"translateX(-50%)",fontSize:9.5,color:C.tm,whiteSpace:"nowrap"}}>{t("En linea")}</span>
           <span style={{position:"absolute",top:50,right:0,fontSize:9.5,color:C.gld}}>{t("Mas caro")}</span>
           <div style={{position:"absolute",top:0,left:pos+"%",transform:"translateX(-50%)",textAlign:"center",whiteSpace:"nowrap"}}>
             <div style={{fontSize:10.5,fontWeight:800,color:C.txt}}>{t("Tu campo")}</div>
