@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v29.65 (Decision de producto de Carlos: fuera el catalogo global de extras — cada venue tiene productos unicos y el catalogo generico no puede adivinarlos. El boton de Extras vuelve a ser + Crear directo al form de producto propio (sin menu intermedio de v29.64); el modal del catalogo queda sin punto de entrada (setAddModal(true) eliminado, cero referencias colgantes; el codigo del modal queda muerto — limpieza opcional futura). Items del catalogo YA activados (Callaway) siguen en course_inventory funcionando y editables con overrides. Empty state: Toca + Crear para hacer tu primer producto. Importar (CSV crea items propios via import_inventory_batch) y Paquete intactos. Baseline 267.)", "color:#43d9ff;font-weight:bold");
+console.log("%c[Partee] Build v29.66 (Picker de emojis para el icono de producto — pedido por Carlos: teclear emojis es dificil. Nuevo componente EmojiPick: grid de 36 emojis curados para productos de venue (golf, bebidas, comida, equipo, premios, servicios), chips de 30px tocables, el seleccionado resaltado en verde, tocar de nuevo lo quita. Montado en ambos editores: form de item propio (bajo la fila NOMBRE+ICONO) y modal de item del catalogo (bajo custom_icon). El input de texto se conserva para pegar un emoji custom. Baseline 268 (+EmojiPick).)", "color:#43d9ff;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -7232,6 +7232,12 @@ function AdminDash({course,onRefresh,navTo,weather}){const[custInbox,setCustInbo
 
 // v20.23 — AdminWalkInsCard: registro on-site sin booking previo.
 // Render dentro de AdminBookings al inicio. Quick modal de captura: party_size + amount + payment method.
+function EmojiPick({value,onChange}){
+  const EMO=["⛳","🏌️","🥎","🎯","🧤","🧢","👕","👟","🕶️","🎒","☂️","🧦","🍺","🍻","🍹","🍷","🥤","💧","☕","🧃","🍔","🌮","🍕","🥪","🍟","🌭","🥗","🍿","🍫","🍦","🎁","🏆","🥇","🎫","📦","⚡"];
+  return<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
+    {EMO.map(e=><button key={e} type="button" onClick={()=>onChange(value===e?"":e)} style={{width:30,height:30,borderRadius:8,border:"1.5px solid "+(value===e?C.grn:C.bd+"70"),background:value===e?C.grn+"18":"transparent",fontSize:16,cursor:"pointer",padding:0,lineHeight:1}}>{e}</button>)}
+  </div>;
+}
 function ProductPhotos({urls,onChange,courseId}){
   const[up,setUp]=useState(false);
   const list=Array.isArray(urls)?urls:[];
@@ -12262,7 +12268,7 @@ function AdminInventory({course}){const[impOpen,setImpOpen]=useState(false);cons
           <label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("STOCK MÍNIMO (alerta)")}</label>
           <input type="number" value={edit.min_stock} onChange={e=>setEdit({...edit,min_stock:e.target.value})} style={{...inp0,marginTop:4}}/>
         </div>
-        <div style={{marginBottom:12}}><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("ICONO")+" (emoji)"}</label><input value={edit.custom_icon} onChange={e=>setEdit({...edit,custom_icon:e.target.value})} placeholder={edit.extras_catalog?.icon||"📦"} maxLength={4} style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"9px 10px",color:C.txt,marginTop:4,width:80,textAlign:"center",fontSize:18,boxSizing:"border-box"}}/></div>
+        <div style={{marginBottom:12}}><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("ICONO")+" (emoji)"}</label><input value={edit.custom_icon} onChange={e=>setEdit({...edit,custom_icon:e.target.value})} placeholder={edit.extras_catalog?.icon||"📦"} maxLength={4} style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:"9px 10px",color:C.txt,marginTop:4,width:80,textAlign:"center",fontSize:18,boxSizing:"border-box"}}/><EmojiPick value={edit.custom_icon} onChange={v=>setEdit(x=>({...x,custom_icon:v}))}/></div>
         <div style={{marginBottom:12}}><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("FOTOS DEL PRODUCTO")}</label><ProductPhotos urls={edit.custom_image_urls||[]} onChange={a=>setEdit(v=>({...v,custom_image_urls:a}))} courseId={course.id}/></div>
         <button onClick={saveEdit} disabled={savingEdit} style={{width:"100%",padding:12,background:savingEdit?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:savingEdit?C.tm:"#fff",fontSize:13,fontWeight:800,cursor:savingEdit?"default":"pointer"}}>{savingEdit?"Guardando…":"Guardar cambios"}</button>
       </div>
@@ -12284,6 +12290,7 @@ function AdminInventory({course}){const[impOpen,setImpOpen]=useState(false);cons
             <div style={{flex:1}}><label style={lblN}>NOMBRE*</label><input value={nw.name} onChange={e=>setNw({...nw,name:e.target.value})} placeholder="Ej: Cubeta de micheladas" style={{...inpN,marginTop:5}}/></div>
             <div style={{width:62}}><label style={lblN}>ICONO</label><input value={nw.icon} onChange={e=>setNw({...nw,icon:e.target.value})} placeholder="📦" maxLength={4} style={{...inpN,marginTop:5,textAlign:"center",padding:"10px 4px"}}/></div>
           </div>
+          <EmojiPick value={nw.icon} onChange={v=>setNw(x=>({...x,icon:v}))}/>
           <div style={{marginBottom:12}}>
             <label style={lblN}>{t("FOTOS DEL PRODUCTO")+" "}<span style={{fontWeight:400,textTransform:"none"}}>({t("hasta 6; la primera es la portada")})</span></label>
             <ProductPhotos urls={nw.image_urls||[]} onChange={a=>setNw(v=>({...v,image_urls:a}))} courseId={course.id}/>
