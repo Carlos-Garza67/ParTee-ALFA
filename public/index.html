@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v29.56 (Ubicacion por direccion para plataformas/simuladores — senalado por Carlos: un negocio urbano no piensa en lat/lng. Para no-campo la seccion Coordenadas del perfil se convierte en Ubicacion en el mapa: boton Ubicar con mi direccion que geocodifica el address ya capturado (+ city/state) via Nominatim/OpenStreetMap (gratis, sin API key, countrycodes=mx) y setea lat/lng automaticamente con toast del lugar encontrado; confirmacion visual Ubicado en lat,lng; y detalle colapsado Ajustar coordenadas manualmente como fallback. Los campos conservan la captura manual original con su hint de Google Maps. Sin CSP que bloquee el fetch. Baseline 266.)", "color:#43d9ff;font-weight:bold");
+console.log("%c[Partee] Build v29.57 (Fix RLS al subir fotos de producto: la policy venue_photos_upload_admin exige que la primera carpeta del path sea el managed_course_id del admin ((storage.foldername)[1]=course_id) y ProductPhotos subia a products/{course_id}/... — invertido a {course_id}/products/{ts}-{rand}.ext. Error reportado por Carlos: new row violates row-level security policy al agregar fotos en Bolas Volvik. Fix de una linea, sin cambios de backend. Incluye v29.56 (ubicacion por direccion no-campo) y v29.55 (carrusel de fotos + edicion visual de items globales). Baseline 266.)", "color:#43d9ff;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -7229,7 +7229,7 @@ function ProductPhotos({urls,onChange,courseId}){
     for(const f of Array.from(files||[]).slice(0,6-list.length)){
       if(f.size>4*1024*1024){window.__toast?.(t("Imagen muy pesada (max 4MB)"),"warn");continue}
       const ext=(f.name.split(".").pop()||"jpg").toLowerCase();
-      const path="products/"+courseId+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,7)+"."+ext;
+      const path=courseId+"/products/"+Date.now()+"-"+Math.random().toString(36).slice(2,7)+"."+ext;
       const{error:ue}=await sb.storage.from("venue-photos").upload(path,f,{contentType:f.type});
       if(ue){window.__toast?.(t("No se pudo subir")+": "+ue.message,"warn");continue}
       const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);
