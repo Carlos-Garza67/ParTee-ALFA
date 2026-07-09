@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v29.61 (UX del boton Avisar fuera de ventana — pedido por Carlos: en vez de ocultarlo, el boton queda VISIBLE pero apagado (opacity .55, gris) hasta 1 hora antes del tee, y al tocarlo muestra toast informativo: Podras enviarle recordatorios cuando este cerca la hora de su reservacion. Aplicado en la fila de AdminBookings (IIFE con _can, colores/borde/icono condicionados, title dinamico Disponible 1 hora antes de la reserva) y en el bloque del CheckinTablet (wrapper con opacity + onClick interceptado). El backend too_early de v29.60 queda como red de seguridad. NOTA: la captura de Carlos corria v29.59 (boton visible + toast generico); esta version es el comportamiento definitivo. Baseline 267.)", "color:#43d9ff;font-weight:bold");
+console.log("%c[Partee] Build v29.62 (Fix toast info invisible en tema claro — reportado por Carlos: el cuadro del aviso salia en blanco. Causa: .toast.info usa background var(--card-bg) pero heredaba color #fff del .toast base — texto blanco sobre fondo blanco en tema claro (el tipo info fue disenado en tema oscuro). Fix de una linea: .toast.info ahora declara color var(--txt) — legible en ambos temas. Afecta a todos los toasts tipo info de la app, incluido el nuevo Podras enviarle recordatorios cuando este cerca la hora de su reservacion. Baseline 267.)", "color:#43d9ff;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -183,7 +183,7 @@ window.__al=function(){};
 *:focus-visible{outline:2px solid var(--acc,#e94560);outline-offset:2px;border-radius:4px}
 .toast-wrap{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:90%;max-width:380px}
 .toast{pointer-events:auto;padding:14px 20px;border-radius:14px;color:#fff;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.15);display:flex;align-items:center;gap:10px;animation:toast-in .35s cubic-bezier(.34,1.56,.64,1);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-.toast.success{background:rgba(0,184,148,.92)}.toast.error{background:rgba(233,69,96,.92)}.toast.info{background:var(--card-bg,rgba(26,26,46,.92));border:1px solid var(--bd,rgba(255,255,255,.1))}.toast.warn{background:rgba(253,203,110,.92);color:#1a1a2e}
+.toast.success{background:rgba(0,184,148,.92)}.toast.error{background:rgba(233,69,96,.92)}.toast.info{background:var(--card-bg,rgba(26,26,46,.92));border:1px solid var(--bd,rgba(255,255,255,.1));color:var(--txt,#fff)}.toast.warn{background:rgba(253,203,110,.92);color:#1a1a2e}
 .toast-out{animation:toast-out .3s ease-in forwards}
 @keyframes toast-in{from{opacity:0;transform:translateY(-20px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-20px) scale(.9)}}
