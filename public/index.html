@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v30.12 (Adjuntar codigo de descuento con un toque desde el preview del borrador — chips -10/-15/-20/-25 visibles sin entrar a Editar; inserta la linea al mensaje via update_admin_campaign y recarga con el chip dorado + canjes)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v30.12 (Adjuntar codigo con un toque desde el preview del borrador + fix de escapes unicode que salian literales en los chips del codigo)","color:#00b894;font-weight:bold");
 console.log("%c[Partee] Build v30.11 (Codigos de campana ANTI-FORWARD: candado de destinatario en preview v4 y redeem v3 — solo jugadores en el snapshot de la campana pueden canjear; mensajes personal-code en editor, preview y validacion del jugador)","color:#00b894;font-weight:bold");
 console.log("%c[Partee] Build v30.10 (Codigos de descuento por campana: attach/detach en el editor de borradores con auto-insercion al mensaje, chip de codigo + canjes en el detalle, scope de venue en validate/redeem/checkout v25/candado 2 — solo canjeable en el venue emisor, 1 uso por jugador)","color:#00b894;font-weight:bold");
 console.log("%c[Partee] Build v30.09 (Confirmacion de envio de campana explicita: panel Si enviar ahora / Cancelar en vez del boton ambar que cambiaba de texto; ventana de 12s)","color:#00b894;font-weight:bold");
@@ -14645,7 +14645,7 @@ function CampaignDetailModal({campaignId,onClose,onSent}){
           <label style={{fontSize:9,fontWeight:800,color:C.tm,letterSpacing:.5}}>{t("DESCUENTO CON C\u00d3DIGO")}</label>
           {data.promo?<div style={{display:"flex",alignItems:"center",gap:8,margin:"6px 0 12px",padding:"9px 11px",background:C.gld+"0d",border:"1px solid "+C.gld+"40",borderRadius:9,flexWrap:"wrap"}}>
             <span style={{fontSize:13,fontWeight:900,color:C.gld,letterSpacing:1.5,..._s.mono}}>{data.promo.code}</span>
-            <span style={{fontSize:10.5,color:C.ts,flex:1}}>\u2212{Math.round(data.promo.discount_pct)}% \u00b7 {t("solo destinatarios \u00b7 1 uso c/u")} \u00b7 {t("vence")} {data.promo.valid_until}</span>
+            <span style={{fontSize:10.5,color:C.ts,flex:1}}>−{Math.round(data.promo.discount_pct)}% · {t("solo destinatarios \u00b7 1 uso c/u")} · {t("vence")} {data.promo.valid_until}</span>
             <button disabled={codeBusy} onClick={async()=>{if(codeBusy)return;setCodeBusy(true);const{data:r}=await sb.rpc("detach_campaign_promo_code",{p_campaign_id:campaignId});setCodeBusy(false);if(!r?.success){window.__toast?.(t("No se pudo quitar"),"warn");return}load()}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:10,fontWeight:700,cursor:"pointer"}}>{t("Quitar")}</button>
           </div>
           :<div style={{display:"flex",gap:5,alignItems:"center",margin:"6px 0 12px",flexWrap:"wrap"}}>
@@ -14662,7 +14662,7 @@ function CampaignDetailModal({campaignId,onClose,onSent}){
           <div style={{fontSize:11,color:C.ts,whiteSpace:"pre-wrap",lineHeight:1.5}}>{data.campaign.body}</div>
           {data.promo?<div style={{display:"flex",alignItems:"center",gap:7,marginTop:8,paddingTop:8,borderTop:"1px dashed "+C.bd,flexWrap:"wrap"}}>
             <span style={{fontSize:9,fontWeight:800,color:C.gld,background:C.gld+"12",border:"1px solid "+C.gld+"35",padding:"3px 8px",borderRadius:6,letterSpacing:1,..._s.mono}}>{data.promo.code}</span>
-            <span style={{fontSize:10,color:C.tm}}>\u2212{Math.round(data.promo.discount_pct)}% \u00b7 <b style={{color:(data.promo.uses||0)>0?(C.grnTxt||C.grn):C.tm}}>{data.promo.uses||0} {(data.promo.uses||0)===1?t("canje"):t("canjes")}</b> \u00b7 {t("vence")} {data.promo.valid_until}</span>
+            <span style={{fontSize:10,color:C.tm}}>−{Math.round(data.promo.discount_pct)}% · <b style={{color:(data.promo.uses||0)>0?(C.grnTxt||C.grn):C.tm}}>{data.promo.uses||0} {(data.promo.uses||0)===1?t("canje"):t("canjes")}</b> · {t("vence")} {data.promo.valid_until}</span>
           </div>
           :data.campaign.status==="draft"&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px dashed "+C.bd}}>
             <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
