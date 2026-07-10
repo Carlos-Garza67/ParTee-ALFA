@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v29.98 (Panel de pedidos tambien en CAMPO — cierre del reporte de Carlos: la campana sono (Nuevo pedido Hoyo 6 · 2x Volvik · $200, cliqueable) pero el admin del campo no tenia donde ver ni gestionar el pedido: el BayOrdersPanel montaba solo en facility_type!==campo (nacio en Fase B para plataformas). FIX: montaje universal en AdminBookings (el badge HOYO por pedido ya existia desde v29.69, el flujo entregar/cobrar tarjeta es identico) + titulo por tipo: campo = Pedidos del carrito, plataforma/simulador = Pedidos a bahias/cabinas. Con esto el circulo comercial E2E queda simetrico en los 3 tipos de venue: pedir (hoyo o bahia) → campana → panel → entregar → cobrar a tarjeta → settlement con desglose. Baseline 269.)", "color:#43d9ff;font-weight:bold");
+console.log("%c[Partee] Build v29.99 (Cierre limpio post-ronda — ultimo detalle de Carlos tras el E2E de campo completo (pedido hoyo 6 → campana → panel Pedidos del carrito → entregado → cobrado $200 a la 4242 → total 1100 al settlement → tarjeta 40 golpes al WHS): al terminar la ronda seguian apareciendo Pedir al carrito y el prompt Estoy en el campo. SENAL DE CIERRE doble: al finalizar la tarjeta LiveScorecard escribe flag local pt_round_done_<booking_id> (instantaneo) y ademas existe scorecard con booking_id en servidor (multi-dispositivo). CheckinButton: nuevo estado roundDone (flag local o query scorecards limit 1) → return null (ni geofence ni iniciar ni accesos). BayPanel: mismo roundDone (solo campo) → el header del carrito (titulo + boton Pedir) se oculta via display none — MIS PEDIDOS se conserva como historial. Baseline 269.)", "color:#43d9ff;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -3494,7 +3494,12 @@ function BayPanel({booking,onRefresh}){
   const canOrder=!!booking?.checked_in_at||Date.now()>=new Date(String(booking?.booking_date||"").slice(0,10)+"T"+String(booking?.booking_time||"12:00").slice(0,5)).getTime();
   const teeMs=new Date(String(booking?.booking_date||"").slice(0,10)+"T"+String(booking?.booking_time||"12:00").slice(0,5)).getTime();
   const canSelfCheckin=!isCourse&&!booking?.checked_in_at&&booking?.status==="confirmed"&&Date.now()>=teeMs-30*60000;
-  const[ciBusy,setCiBusy]=useState(false);const[holeSel,setHoleSel]=useState(null);
+  const[ciBusy,setCiBusy]=useState(false);const[holeSel,setHoleSel]=useState(null);const[roundDone,setRoundDone]=useState(false);
+  useEffect(()=>{let alive=true;if(!isCourse||!booking?.id)return;
+    try{if(localStorage.getItem("pt_round_done_"+booking.id)){setRoundDone(true);return}}catch(e){}
+    sb.from("scorecards").select("id").eq("booking_id",booking.id).limit(1).then(({data})=>{if(alive&&data&&data.length)setRoundDone(true)});
+    return()=>{alive=false};
+  },[booking?.id,isCourse]);
   const unitB=ft==="simulador"?t("cabina"):t("bahia");
   const[orders,setOrders]=useState([]);
   const[shopOpen,setShopOpen]=useState(false);const[catSel,setCatSel]=useState("todo");const[expandId,setExpandId]=useState(null);
@@ -3557,7 +3562,7 @@ function BayPanel({booking,onRefresh}){
     }} style={{width:"100%",padding:"13px 15px",marginBottom:8,borderRadius:12,border:"none",background:C.grn,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:ciBusy?.6:1}}>
       <span dangerouslySetInnerHTML={{__html:ic("check",15,"#fff")}}/>{ciBusy?"...":t("Ya llegué — hacer check-in")}
     </button>}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:8}}>
+    <div style={{display:(isCourse&&roundDone)?"none":"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:8}}>
       <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"10px 16px",display:"flex",alignItems:"center",gap:10,minWidth:0}}>
         <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("pin",18,C.grn)}}/>
         {isCourse
@@ -3711,7 +3716,7 @@ function LiveScorecard({booking,onClose}){
       if(error||!sc){setSaving(false);const dup=error&&(error.code==="23505"||/duplicate|unique/i.test(error.message||""));if(dup){setSavedRound(true);window.__toast&&window.__toast(t("Esta ronda ya fue guardada"),"info")}else{window.__toast&&window.__toast(t("No se pudo guardar · revisa tu conexión e intenta de nuevo"),"error")}return}
       const hd=enteredHoles.map(h=>({scorecard_id:sc.id,hole_number:h.hole_number,par:h.par,strokes:scores[h.hole_number]}));
       if(hd.length)await sb.from("scorecard_holes").insert(hd);
-      try{localStorage.removeItem(LSK)}catch(e){}
+      try{localStorage.removeItem(LSK);localStorage.setItem("pt_round_done_"+booking.id,"1")}catch(e){}
       try{window.__parteeGPS&&window.__parteeGPS.stop("user")}catch(e){}
       window.__toast&&window.__toast(t("¡Tarjeta guardada! Tu handicap se actualizó"),"success");
       trackEvent("ronda_finalizada",{course:booking.course_name,course_id:booking.course_id,total_strokes:totStr,vs_par:vsPar,holes_played:enteredHoles.length,source:"live"});
@@ -3951,6 +3956,12 @@ function CheckinButton({booking}){
   const[cardOpen,setCardOpen]=useState(false);
   const[fnbOpen,setFnbOpen]=useState(false);
   const[atCourse,setAtCourse]=useState(false); // detectado dentro del geofence del campo
+  const[roundDone,setRoundDone]=useState(false);
+  useEffect(()=>{let alive=true;
+    try{if(localStorage.getItem("pt_round_done_"+booking.id)){setRoundDone(true);return}}catch(e){}
+    sb.from("scorecards").select("id").eq("booking_id",booking.id).limit(1).then(({data})=>{if(alive&&data&&data.length){setRoundDone(true);try{localStorage.setItem("pt_round_done_"+booking.id,"1")}catch(e){}}});
+    return()=>{alive=false};
+  },[booking.id]);
   const sampledRef=useRef(false);
   const uid=s&&s.user&&s.user.id;
   useEffect(()=>{
@@ -4027,6 +4038,7 @@ function CheckinButton({booking}){
     window.__toast&&window.__toast(t("Ronda finalizada"),"success");
   };
   const goConsent=e=>{e.stopPropagation();window.__navigate&&window.__navigate("tab:4");window.__toast&&window.__toast(t("Activa el GPS en la sección Preferencias de tu perfil"),"info")};
+  if(roundDone)return null;
   if(consent===null)return null;
   if(!consent)return <button onClick={goConsent} style={{width:"100%",padding:11,background:"transparent",border:"1px dashed "+C.grn+"55",borderRadius:12,color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
     <span dangerouslySetInnerHTML={{__html:ic("pin",14,C.grn)}}/><span>{t("Activar GPS para check-in")}</span></button>;
