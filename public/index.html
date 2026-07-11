@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v30.27 (Limpieza de deuda menor del code-review: 25 lecturas .single() migradas a .maybeSingle() para no lanzar excepcion ante 0 filas — los 6 .insert().select().single() se conservan por garantia de 1 fila; fecha del review prompt parseada en hora local en vez de UTC para no adelantarse ~6h en MX)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v30.28 (FIX pantalla legal Un ultimo paso se congelaba al abrir Terminos/Aviso: el boton del enlace vivia DENTRO del <label> del checkbox — cualquier click en un descendiente del label se reenvia al checkbox por comportamiento nativo (preventDefault no lo frena), toggleaba el check y competia con la apertura del modal. Ahora el label envuelve solo el checkbox; enlace afuera con stopPropagation. Ademas z-index del contenido del modal subido a 301)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -1156,7 +1156,7 @@ const useA=()=>useContext(Ctx);
 
 function TermsModal({type,onClose}){
   const isTerms=type==="terms";
-  return<div className="bsheet-overlay" style={{zIndex:300}} onClick={onClose}><div onClick={e=>e.stopPropagation()} className="bsheet">
+  return<div className="bsheet-overlay" style={{zIndex:300}} onClick={onClose}><div onClick={e=>e.stopPropagation()} className="bsheet" style={{zIndex:301}}>
     <div style={{..._s.flexB,marginBottom:16}}><h2 style={{color:C.txt,fontSize:18,fontWeight:800,margin:0}}>{isTerms?t("Términos y Condiciones"):t("Aviso de Privacidad")}</h2><button onClick={onClose} style={{background:"none",border:"none",color:C.ts,fontSize:20,cursor:"pointer"}}>✕</button></div>
     {isTerms?<div style={{fontSize:12,color:C.ts,lineHeight:1.8}}>
       <p><strong style={{color:C.txt}}>1. Aceptación.</strong> Al usar Partee aceptas estos términos. Si no estás de acuerdo, no uses la plataforma.</p>
@@ -17123,10 +17123,12 @@ function LegalGate({onAccepted}){
     }catch(e){setErr(t("No se pudo registrar la aceptación. Intenta de nuevo."));setBusy(false);}
   };
   const row=(checked,setCk,pre,docLabel,docType)=>
-    <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:14,textAlign:"left"}}>
-      <input type="checkbox" checked={checked} onChange={x=>setCk(x.target.checked)} style={{width:18,height:18,accentColor:C.acc,flexShrink:0,cursor:"pointer"}}/>
-      <span style={{fontSize:13.5,color:C.txt,lineHeight:1.5}}>{pre}<br/><button type="button" onClick={e=>{e.preventDefault();setTt(docType)}} style={{background:"none",border:"none",padding:0,color:C.acc,fontWeight:700,textDecoration:"underline",cursor:"pointer",fontSize:13.5}}>{docLabel}</button>.</span>
-    </label>;
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,textAlign:"left"}}>
+      <label style={{display:"inline-flex",cursor:"pointer",flexShrink:0}}>
+        <input type="checkbox" checked={checked} onChange={x=>setCk(x.target.checked)} style={{width:18,height:18,accentColor:C.acc,cursor:"pointer"}}/>
+      </label>
+      <span style={{fontSize:13.5,color:C.txt,lineHeight:1.5}}>{pre}<br/><button type="button" onClick={e=>{e.preventDefault();e.stopPropagation();setTt(docType)}} style={{background:"none",border:"none",padding:0,color:C.acc,fontWeight:700,textDecoration:"underline",cursor:"pointer",fontSize:13.5}}>{docLabel}</button>.</span>
+    </div>;
   const ready=okT&&okP;
   return <><div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
     <div style={{width:"100%",maxWidth:440,background:C.cd,border:`1px solid ${C.bd}`,borderRadius:18,padding:"28px 24px",boxShadow:"0 20px 60px rgba(0,0,0,.35)"}}>
