@@ -15,6 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
+console.log("%c[Partee] Build v30.18 (Reservas solo muestran al creador como Anfitrion 1/1 — el modo solo no crea participantes por diseno; ademas barrido FINAL de dialogos nativos: 15 fallbacks else-if(confirm) y el patron invertido de removeParticipant eliminados — 0 confirm/prompt nativos en todo el archivo)","color:#00b894;font-weight:bold");
 console.log("%c[Partee] Build v30.17 (FIX boton Importar inventario: el render de InventoryImportModal estaba incrustado dentro del helper lockPanel del gate PRO — en venues Pro el gate nunca se pinta y el modal jamas montaba; movido al return principal de AdminInventory)","color:#00b894;font-weight:bold");
 console.log("%c[Partee] Build v30.16 (Iconos de clima visibles en dark mode: nubes/niebla gris #94a3b8, lluvia azul, nieve claro, tormenta violeta — antes currentColor heredaba oscuro sobre fondo oscuro)","color:#00b894;font-weight:bold");
 console.log("%c[Partee] Build v30.15 (LIQUIDACION completa ambos lados — Cobros del venue desglosa consumo del carrito en cada payout; panel Liquidar de plataforma con detalle por booking e historial de pagos SPEI; backend: trigger payout v2 auto-corrige montos e incorpora consumo Stripe, settle-payments v7 detecta errores reales, bug Higuera de 60 dias resuelto)","color:#00b894;font-weight:bold");
@@ -2291,6 +2292,7 @@ function InvitePlayersSheet({booking,friends,onClose,onInvited}){
 
 // ParticipantsSection: lista de jugadores en una reserva con sus estados. Solo visible al dueño.
 function ParticipantsSection({booking,isOwner,onChanged}){
+  const{p:_meP}=useA(); // v30.18: perfil propio para pintar al creador en reservas solo
   const{s}=useA();
   const[parts,setParts]=useState([]);
   const[ld,setLd]=useState(true);
@@ -2348,8 +2350,8 @@ function ParticipantsSection({booking,isOwner,onChanged}){
   const hoursLeft=(teeDateTime.getTime()-Date.now())/3600000;
   const canReduce=isOwner&&rejectedParts.length>0&&hoursLeft>2&&booking.party_size>1;
   const removeParticipant=async(pid)=>{
-    if(!window.__confirm){if(!confirm(t("¿Remover este jugador?")))return}
-    else{window.__confirm(t("¿Remover este jugador? Si ya había pagado, se procesará un refund."),async()=>{
+    if(!window.__confirm){/* v30.18: sin fallback nativo (bloqueado en PWA); __confirm vive en el root */}
+    if(window.__confirm){window.__confirm(t("¿Remover este jugador? Si ya había pagado, se procesará un refund."),async()=>{
       try{
         const{data,error}=await sb.rpc("remove_booking_participant",{p_participant_id:pid});
         if(error)throw error;
@@ -2376,13 +2378,21 @@ function ParticipantsSection({booking,isOwner,onChanged}){
   const totalLbl=ps==="paid"?t("Cobrado"):ps==="refunded"?t("Reembolsado"):ps==="no_show_fee"?"No-Show":t("Pendiente");
   return<div style={{background:C.cd,borderRadius:14,padding:14,border:"1px solid "+C.bd,marginBottom:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-      <h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Jugadores y modalidad")} <span style={{color:C.tm,fontWeight:500}}>({parts.filter(x=>x.status==="accepted"||x.status==="accepted_pending_payment"||x.is_creator_proportional).length}/{booking.party_size})</span></h4>
+      <h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Jugadores y modalidad")} <span style={{color:C.tm,fontWeight:500}}>({parts.length===0?1:parts.filter(x=>x.status==="accepted"||x.status==="accepted_pending_payment"||x.is_creator_proportional).length}/{booking.party_size})</span></h4>
     </div>
     {(payChip||socChip)&&<div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:12}}>
       {payChip&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:payChip.c+"18",border:"1px solid "+payChip.c+"35",fontSize:11,fontWeight:700,color:payChip.c}}>{payChip.l}</span>}
       {socChip&&<span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:10,background:socChip.c+"30",border:"1px solid "+socChip.c+"50",fontSize:11,fontWeight:700,color:socChip.c===C.pri?C.txt:socChip.c}}>{socChip.l}</span>}
     </div>}
-    {ld?<Skeleton w="100%" h={40}/>:parts.length===0?<p style={{fontSize:12,color:C.tm,margin:0}}>{(()=>{const teeDT=new Date((booking.booking_date||"")+"T"+((booking.booking_time||"12:00").slice(0,5)));return teeDT.getTime()<=Date.now()?t("Sin participantes."):t("Sin participantes todavía. Invita a jugar.")})()}</p>:parts.map(pp=>{
+    {ld?<Skeleton w="100%" h={40}/>:parts.length===0?(booking.payment_mode!=="split"&&booking.payment_mode!=="compartir"
+      ?<div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0"}}>
+        <div style={{width:32,height:32,borderRadius:16,background:C.pri,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("user",16,"#fff")}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:C.txt,fontSize:13,fontWeight:600}}>{isOwner?(_meP?.full_name||t("Tú")):(booking.guest_name||t("Anfitrión"))}</div>
+          <span style={{display:"inline-block",marginTop:2,padding:"1px 7px",borderRadius:8,background:C.grn+"20",color:C.grn,fontSize:10,fontWeight:700}}>{t("Anfitrión")}</span>
+        </div>
+      </div>
+      :<p style={{fontSize:12,color:C.tm,margin:0}}>{(()=>{const teeDT=new Date((booking.booking_date||"")+"T"+((booking.booking_time||"12:00").slice(0,5)));return teeDT.getTime()<=Date.now()?t("Sin participantes."):t("Sin participantes todavía. Invita a jugar.")})()}</p>):parts.map(pp=>{
       const bd=statusBadge(pp);
       return<div key={pp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.bd+"40"}}>
         <div style={{width:32,height:32,borderRadius:16,background:C.pri,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("user",14,C.tm)}}/>
@@ -2468,7 +2478,7 @@ function ParticipantsSection({booking,isOwner,onChanged}){
           }
         };
         const confirmMsg="¿Cerrar lista ahora?\n\n"+pendings.length+" jugador(es) pendiente(s) serán removidos. Si hicieron pago con split, se reembolsará automáticamente.";
-        if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go();
+        if(window.__confirm)window.__confirm(confirmMsg,go);else go();
       };
       
       return<div style={{background:tone+"12",border:"1px solid "+tone+"40",borderRadius:10,padding:12,marginTop:10}}>
@@ -2674,7 +2684,7 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
         onResponded?.();onClose?.();
       }catch(e){setError(e.message);setProcessing(false);}
     };
-    if(window.__confirm)window.__confirm(t("¿Rechazar esta invitación?"),go);else if(window.confirm(t("¿Rechazar esta invitación?")))go();
+    if(window.__confirm)window.__confirm(t("¿Rechazar esta invitación?"),go);else go();
   };
   const bkCard=<div style={{background:C.bg,borderRadius:12,padding:14,marginBottom:14,border:"1px solid "+C.bd}}>
     <div style={{fontSize:15,fontWeight:800,color:C.txt,marginBottom:6}}>{bk.course_name||"Campo"}</div>
@@ -4187,7 +4197,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
     };
     if(autoOpenInvite){go();return}
     const msg=t("¿Aumentar a ")+newSize+t(" jugador(es)?\n\nSe reserva 1 cupo adicional al campo. Si el pago excede lo ya pagado, se te cobrará la diferencia.");
-    if(window.__confirm)window.__confirm(msg,go);else if(confirm(msg))go();
+    if(window.__confirm)window.__confirm(msg,go);else go();
   };
   // v19.30: convertPartida también extraída a nivel componente (para Opción C colapsable)
   // v20.30 Fase A: dispatch ahora apunta a "matches" (Partidas), antes "torneos" colisionaba con tab real Torneos
@@ -4375,7 +4385,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
               const confirmMsg=isFree
                 ?t("¿Cancelar esta reserva? No hay cargos.")
                 :t("¿Cancelar esta reserva?")+"\n"+t("Reembolso completo: $")+fm(actualPaid)+" MXN.";
-              if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go()}} style={{padding:"10px 14px",background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>
+              if(window.__confirm)window.__confirm(confirmMsg,go);else go()}} style={{padding:"10px 14px",background:C.acc+"20",border:"none",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cancelar")}</button>
           </div>}
           {/* v19.41: CTA para invitees — Salir de la reserva. Llama a RPC leave_booking que dispara
               el trigger v19.37 (libera slot + marca refund_pending si pagó). El cron v19.40 procesa
@@ -4429,7 +4439,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
                 return;
               }
               const confirmMsg="¿Salir de esta reserva?\n\nSe liberará tu lugar. Si ya pagaste, el reembolso se procesará automáticamente.";
-              if(window.__confirm)window.__confirm(confirmMsg,go);else if(confirm(confirmMsg))go();
+              if(window.__confirm)window.__confirm(confirmMsg,go);else go();
             }} style={{width:"100%",padding:11,background:C.acc+"15",border:"1px solid "+C.acc+"30",borderRadius:10,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
               <span dangerouslySetInnerHTML={{__html:ic("logout",14,C.acc)}}/>
               {t("Salir de la reserva")}
@@ -6198,7 +6208,7 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
     </GlassCard>
     {[{k:"info",icon:ic("user",18,C.grn),label:t("Info Personal"),color:C.grn,content:<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><button onClick={()=>ed?save():setEd(true)} style={{background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",color:"#fff",fontSize:11,fontWeight:700,padding:"7px 16px",borderRadius:10,cursor:"pointer",boxShadow:C.shAcc||"none"}}>{sv?"...":ed?t("Guardar"):t("Editar")}</button></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{l:t("Nombre"),v:nm,set:setNm,p:t("Nombre")},{l:t("Apodo"),v:nick,set:setNick,p:t("Apodo")},{l:t("Ciudad"),v:city,set:setCity,p:t("Ciudad")},{l:t("Estado"),v:pst,set:setPst,p:t("Estado")},{l:t("Teléfono"),v:ph,set:setPh,p:t("Tel")},{l:"Handicap",v:hc,set:setHc,p:"HCP"}].map((f,i)=><div key={i}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{f.l}</label><input {...inp(f.v,f.set,f.p)}/></div>)}<div><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("FECHA NAC.")}</label><input type={ed?"date":"text"} value={bd} onChange={e=>setBd(e.target.value)} disabled={!ed} max={new Date().toISOString().slice(0,10)} min={new Date(Date.now()-120*365*24*60*60*1000).toISOString().slice(0,10)} style={{width:"100%",background:ed?C.bg:C.cd,border:"1px solid "+(ed?C.bd:"transparent"),borderRadius:10,padding:"10px 14px",fontSize:13,color:ed?C.txt:C.ts,outline:"none",boxSizing:"border-box",marginTop:4}}/>{age!=null&&<div style={{fontSize:11,color:C.gld,marginTop:4}}>{age} {t("años")}</div>}</div></div><div style={{marginTop:8}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>{t("MANO")}</label><div style={{display:"flex",gap:8}}>{[{k:"diestro",l:t("Diestro")},{k:"zurdo",l:t("Zurdo")}].map(h=><button key={h.k} onClick={()=>{if(ed)setHand(h.k)}} style={{flex:1,padding:10,borderRadius:12,border:"2px solid "+(hand===h.k?C.acc:C.bd),background:hand===h.k?C.acc+"12":C.bg,cursor:ed?"pointer":"default",fontSize:12,fontWeight:700,color:hand===h.k?C.acc:C.ts}}>{h.l}</button>)}</div></div><div style={{marginTop:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>{t("MARCA")}</label><div className="brand-scroll">{BRANDS.map(b=><div key={b.id} className={"brand-card"+(brand===b.id?" active":"")} onClick={()=>{if(ed)setBrand(brand===b.id?"":b.id)}} style={{opacity:ed?1:.7,cursor:ed?"pointer":"default"}}><img src={b.logo} alt={b.id} onError={e=>{e.target.style.display="none"}}/><div style={{fontSize:11,fontWeight:700,color:brand===b.id?C.acc:C.ts}}>{b.id}</div></div>)}</div></div></div>},{k:"prefs",icon:ic("settings",18,C.ts),label:t("Preferencias"),color:C.ts,content:<div><ThemeToggle/><LangToggle/><ChangePassword/><div style={{marginTop:4}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>{t("ZONA HORARIA")}</label><select value={userTz} onChange={e=>{setUserTz(e.target.value);if(ed){}else{sb.from("user_profiles").update({timezone:e.target.value}).eq("id",s.user.id).then(()=>ref())}}} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.txt,outline:"none",boxSizing:"border-box",appearance:"auto"}}><option value="">{t("Detectar automático")} ({detectTz().split("/").pop()})</option>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select></div><div style={{marginTop:8}}><MyGPSSection/></div></div>},{k:"payments",icon:ic("credit",18,C.gld),label:t("Método de pago y movimientos"),color:C.gld,content:<PaymentAndMovementsSection/>},{k:"notifs",icon:ic("bell",18,C.secBlu||"#5b86e5"),label:t("Notificaciones"),color:C.secBlu||"#5b86e5",content:<NotificationPrefs/>},{k:"referral",icon:ic("handshake",18,C.gld),label:t("Invita y gana"),color:C.gld,content:<ReferralSection/>}].map(sec=><div key={sec.k}><div onClick={()=>setOpenSec(openSec===sec.k?null:sec.k)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:openSec===sec.k?"14px 14px 0 0":14,cursor:"pointer",boxShadow:C.shCard||"none"}}><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:32,height:32,borderRadius:10,background:sec.color+"10",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sec.icon}}/><span style={{fontSize:14,fontWeight:700,color:C.txt}}>{sec.label}</span></div><div style={{transform:openSec===sec.k?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/></div>{openSec===sec.k&&<div style={{padding:16,background:C.el||C.cd,border:"1px solid "+(C.elBd||C.bd),borderTop:"none",borderRadius:"0 0 14px 14px"}}>{sec.content}</div>}</div>)}
     <div style={{padding:"20px 16px",borderRadius:16,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd)}}>
-      <button onClick={()=>{if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>out());else if(confirm(t("Cerrar sesión?")))out()}} style={{width:"100%",padding:13,background:C.acc+"0a",border:"1px solid "+C.acc+"30",borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:14}}>{t("Cerrar Sesión")}</button>
+      <button onClick={()=>{if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>out());else out()}} style={{width:"100%",padding:13,background:C.acc+"0a",border:"1px solid "+C.acc+"30",borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:14}}>{t("Cerrar Sesión")}</button>
       <div style={{display:"flex",justifyContent:"center",gap:16,marginBottom:14}}><span onClick={()=>setTermsView("terms")} style={{fontSize:11,color:C.ts,cursor:"pointer"}}>Términos</span><span style={{color:C.bd}}>|</span><span onClick={()=>setTermsView("privacy")} style={{fontSize:11,color:C.ts,cursor:"pointer"}}>{t("Privacidad")}</span></div>{termsView&&<TermsModal type={termsView} onClose={()=>setTermsView(null)}/>}
       <button onClick={async()=>{
         // v18.2.0 — Sprint 3 Fase 2: account deletion completo con edge function
@@ -6399,7 +6409,7 @@ function PushToggle(){const[enabled,setEnabled]=useState(false);const[loading,se
   return<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><div style={{fontSize:13,fontWeight:600,color:C.txt}}>{t("Notificaciones Push")}</div><div style={{fontSize:11,color:C.tm}}>{t("Reservas, amigos y partidas")}</div></div><button onClick={toggle} disabled={loading} style={{width:50,height:28,minHeight:0,padding:0,borderRadius:14,border:"none",background:enabled?C.grn:C.bd,cursor:"pointer",position:"relative",transition:"background .2s"}}><div style={{width:22,height:22,borderRadius:10,background:"#fff",position:"absolute",top:3,left:enabled?25:3,transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/></button></div>}
 
 function PaymentCard({userId,email,cardLast4:initLast4,cardBrand:initBrand}){const[last4,setLast4]=useState(initLast4||"");const[brand,setBrand]=useState(initBrand||"");const hasCard=last4&&last4.length>=2;
-  const removeCard=()=>{const go=async()=>{await sb.from("user_profiles").update({card_last4:null,card_brand:null,stripe_customer_id:null}).eq("id",userId);setLast4("");setBrand("")};if(window.__confirm)window.__confirm("¿Eliminar método de pago?",go);else if(confirm("¿Eliminar método de pago?"))go()};
+  const removeCard=()=>{const go=async()=>{await sb.from("user_profiles").update({card_last4:null,card_brand:null,stripe_customer_id:null}).eq("id",userId);setLast4("");setBrand("")};if(window.__confirm)window.__confirm("¿Eliminar método de pago?",go);else go()};
   return<div>{hasCard?<div style={{display:"flex",alignItems:"center",gap:12,padding:14,background:C.bg,borderRadius:14,border:"1px solid "+C.bd}}><div style={{width:44,height:28,borderRadius:6,background:`linear-gradient(135deg,${C.grn},#00cec9)`,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:9,fontWeight:800}}>{(brand||"CARD").toUpperCase()}</span></div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.txt,..._s.mono}}>{"•••• •••• •••• "+last4}</div><div style={{fontSize:11,color:C.grn,marginTop:2}}>{t("Predeterminada")}</div></div><button onClick={removeCard} style={{background:"none",border:"none",color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t("Eliminar")}</button></div>
     :<div style={{display:"flex",alignItems:"center",gap:12,padding:14,background:C.bg,borderRadius:14,border:"1px solid "+C.bd}}><div style={{width:44,height:28,borderRadius:6,background:C.bd,display:"flex",alignItems:"center",justifyContent:"center"}}><span dangerouslySetInnerHTML={{__html:ic("creditcard",13,C.txt)}}/></div><div style={{flex:1}}><div style={{fontSize:13,color:C.ts}}>{t("Sin método de pago")}</div><div style={{fontSize:11,color:C.tm,marginTop:2}}>{t("Se guardará al reservar")}</div></div></div>}</div>}
 
@@ -9119,7 +9129,7 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     }
     // v19.71: layouts ya NO se guardan aquí — se manejan con su propio modal/save (saveLayout). El editor multi-layout vive aparte.
     setSv(false);setEd(false);if(onRefresh)onRefresh()};
-  const removePhoto=(idx)=>{const go=async()=>{const np=photos.filter((_,i)=>i!==idx);setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);if(onRefresh)onRefresh()};if(window.__confirm)window.__confirm("¿Eliminar esta foto?",go);else if(confirm("¿Eliminar esta foto?"))go()};
+  const removePhoto=(idx)=>{const go=async()=>{const np=photos.filter((_,i)=>i!==idx);setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);if(onRefresh)onRefresh()};if(window.__confirm)window.__confirm("¿Eliminar esta foto?",go);else go()};
   const replacePhoto=async(e,idx)=>{const file=e.target.files?.[0];if(!file||!file.type.startsWith("image/")||file.size>5*1024*1024)return;setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const _fz=await resizeImg(file,1600);const{error:ue}=await sb.storage.from("venue-photos").upload(path,_fz,{contentType:_fz.type||"image/jpeg"});if(ue){setUpPh(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos];np[idx]=publicUrl;setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);setUpPh(false);if(onRefresh)onRefresh()};
   const uploadPhoto=async(e)=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith("image/")){window.__toast?.(t("Solo imágenes"),"error");return}if(file.size>5*1024*1024){window.__toast?.(t("Máximo 5MB"),"error");return}setUpPh(true);const ext=file.name.split(".").pop();const path=`${course.id}/${Date.now()}.${ext}`;const _fz=await resizeImg(file,1600);const{error:ue}=await sb.storage.from("venue-photos").upload(path,_fz,{contentType:_fz.type||"image/jpeg"});if(ue){window.__toast?.(ue.message,"error");setUpPh(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);const np=[...photos,publicUrl];setPhotos(np);await sb.from("golf_courses").update({photo_urls:np}).eq("id",course.id);setUpPh(false);if(onRefresh)onRefresh()};
   const saveHole=async()=>{
@@ -9144,7 +9154,7 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
 
   // v19.71: logo upload/remove. Bucket venue-photos compartido con fotos pero path con prefijo logo-{ts}.
   const uploadLogo=async(e)=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith("image/")){window.__toast?.(t("Solo imágenes"),"error");return}if(file.size>2*1024*1024){window.__toast?.(t("Logo máximo 2MB"),"error");return}setUpLogo(true);const ext=file.name.split(".").pop();const path=`${course.id}/logo-${Date.now()}.${ext}`;const{error:ue}=await sb.storage.from("venue-photos").upload(path,file,{contentType:file.type});if(ue){window.__toast?.(ue.message,"error");setUpLogo(false);return}const{data:{publicUrl}}=sb.storage.from("venue-photos").getPublicUrl(path);setLogoUrl(publicUrl);await sb.from("golf_courses").update({logo_url:publicUrl}).eq("id",course.id);setUpLogo(false);if(onRefresh)onRefresh();window.__toast?.(t("Logo actualizado"),"success")};
-  const removeLogo=()=>{const go=async()=>{setLogoUrl("");await sb.from("golf_courses").update({logo_url:null}).eq("id",course.id);if(onRefresh)onRefresh();window.__toast?.(t("Logo eliminado"),"success")};if(window.__confirm)window.__confirm(t("¿Eliminar el logo?"),go);else if(confirm(t("¿Eliminar el logo?")))go()};
+  const removeLogo=()=>{const go=async()=>{setLogoUrl("");await sb.from("golf_courses").update({logo_url:null}).eq("id",course.id);if(onRefresh)onRefresh();window.__toast?.(t("Logo eliminado"),"success")};if(window.__confirm)window.__confirm(t("¿Eliminar el logo?"),go);else go()};
 
   // v19.71: editor multi-layout — open/close/save/delete/setDefault.
   const openLayoutEditor=(ly)=>{if(ly){setEditLayout(ly);setLyName(ly.name||"");setLyHC(ly.holes_count!=null?ly.holes_count.toString():"");setLyParEdit(ly.par!=null?ly.par.toString():"");setLyRating(ly.rating!=null?ly.rating.toString():"");setLySlope(ly.slope!=null?ly.slope.toString():"");setLyIsDefault(!!ly.is_default)}else{setEditLayout({});setLyName("");setLyHC(course.holes_per_round?course.holes_per_round.toString():"18");setLyParEdit(course.total_par?course.total_par.toString():"72");setLyRating("");setLySlope("");setLyIsDefault(layouts.length===0)}};
@@ -9183,7 +9193,7 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     await sb.from("course_holes").delete().eq("layout_id",ly.id);
     await sb.from("course_layouts").delete().eq("id",ly.id);
     await reloadLayouts();window.__toast?.(t("Layout eliminado"),"success")};
-    if(window.__confirm)window.__confirm(`${t("¿Eliminar layout")} "${ly.name}"? ${t("Sus hoyos también se eliminarán.")}`,go);else if(confirm(`${t("¿Eliminar layout")} "${ly.name}"?`))go()};
+    if(window.__confirm)window.__confirm(`${t("¿Eliminar layout")} "${ly.name}"? ${t("Sus hoyos también se eliminarán.")}`,go);else go()};
   const setAsDefault=async(ly)=>{if(ly.is_default)return;const cur=layouts.find(l=>l.is_default);if(cur)await sb.from("course_layouts").update({is_default:false}).eq("id",cur.id);await sb.from("course_layouts").update({is_default:true}).eq("id",ly.id);await reloadLayouts();window.__toast?.(t("Layout default actualizado"),"success")};
 
   // v19.71: amenities — toggle on/off mientras ed=true. Se persiste con saveCourse (ya incluido en upd).
@@ -10517,7 +10527,7 @@ const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);
     {/* v19.39: lista combinada — match_members + booking_participants invited/accepted no-en-mm. Badges: amarillo "Pendiente" para invited, verde "Aceptado" para accepted. Etiqueta "Creador" para detail.creator_id. */}
     <div style={{marginBottom:14}}><div style={{..._s.section,color:C.txt,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>{t("Miembros")} ({totalConfirmedPlayers}/{detail.max_players}{hasPendingInvitees?" · "+pendingInvitees.length+" pendiente"+(pendingInvitees.length===1?"":"s"):""})</span>{isCreator&&!gClosed&&!detail.tournament_id&&<button onClick={openEdit} style={{background:"transparent",border:"1px solid "+C.grn+"40",borderRadius:8,color:C.grn,fontSize:10,fontWeight:700,padding:"4px 10px",cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("edit",10,C.grn)+" "+t("Editar")}}/>}</div>{combinedList.map(m=>{const isPending=m._badge==="pending";const isCreatorRow=m.user_id===detail.creator_id;const accentColor=isPending?C.gld:C.grn;return<div key={m.rowKey} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.bd,opacity:isPending?0.85:1}}><div style={{width:32,height:32,borderRadius:"50%",background:accentColor+"10",border:"1px solid "+accentColor+"20",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("user",14,accentColor)}}/><div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.txt}}>{m.user?.nickname||m.user?.full_name||m.player_name}</div><div style={{fontSize:10,color:C.ts}}>{m.user?.city||""}{m.user?.handicap?" · HCP "+m.user.handicap:""}</div></div>{isCreatorRow?<span style={{fontSize:9,fontWeight:700,color:C.gld,background:C.gld+"15",padding:"2px 8px",borderRadius:6}}>{t("Creador")}</span>:isPending?<span style={{fontSize:9,fontWeight:700,color:C.gld,background:C.gld+"15",padding:"2px 8px",borderRadius:6}}>Pendiente</span>:isCreator&&!gClosed&&!detail.tournament_id&&m._mm?<button onClick={()=>kickMember(m._mm)} title={t("Remover del grupo")} style={{background:"transparent",border:"1px solid "+C.acc+"30",borderRadius:6,color:C.acc,fontSize:9,fontWeight:600,padding:"3px 8px",cursor:"pointer"}}>{t("Remover")}</button>:<span style={{fontSize:9,fontWeight:700,color:C.grn,background:C.grn+"15",padding:"2px 8px",borderRadius:6}}>{t("Aceptado")}</span>}</div>})}</div>
     {isCreator&&pending.length>0&&<div style={{marginBottom:14}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><span style={{fontSize:13,fontWeight:800,color:C.acc}}>Solicitudes</span><span style={{fontSize:10,color:"#fff",background:C.acc,borderRadius:10,padding:"2px 7px",fontWeight:700}}>{pending.length}</span></div>{pending.map(m=><div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:10,marginBottom:6,background:C.acc+"08",border:"1px solid "+C.acc+"20",borderRadius:12}}><div style={{width:32,height:32,borderRadius:"50%",background:C.acc+"10",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("user",14,C.acc)}}/><div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.txt}}>{m.user?.nickname||m.user?.full_name||m.player_name}</div><div style={{fontSize:10,color:C.ts}}>{m.user?.city||""}{m.user?.handicap?" · HCP "+m.user.handicap:""}</div></div><div style={{display:"flex",gap:6}}><button onClick={()=>handleRequest(m.id,"accept")} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>Aceptar</button><button onClick={()=>handleRequest(m.id,"reject")} style={{padding:"6px 12px",background:"transparent",border:"1px solid "+C.acc+"40",borderRadius:8,color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t("Rechazar")}</button></div></div>)}</div>}
-    {isCreator&&<button onClick={()=>{if(window.__confirm)window.__confirm("¿Eliminar este grupo?",()=>deleteGroup(detail.id));else if(confirm("¿Eliminar?"))deleteGroup(detail.id)}} style={{width:"100%",padding:10,background:"transparent",border:"1px solid "+C.acc+"30",borderRadius:12,color:C.acc,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("Eliminar grupo")}</button>}
+    {isCreator&&<button onClick={()=>{if(window.__confirm)window.__confirm("¿Eliminar este grupo?",()=>deleteGroup(detail.id));else deleteGroup(detail.id)}} style={{width:"100%",padding:10,background:"transparent",border:"1px solid "+C.acc+"30",borderRadius:12,color:C.acc,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("Eliminar grupo")}</button>}
     {!isCreator&&myMemberships[detail.id]==="accepted"&&!gClosed&&!detail.tournament_id&&<button onClick={()=>leaveGroup(detail)} style={{width:"100%",padding:10,background:"transparent",border:"1px solid "+C.acc+"30",borderRadius:12,color:C.acc,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("Salir del grupo")}</button>}
     <button onClick={()=>setDetail(null)} style={{width:"100%",padding:12,marginTop:8,background:"transparent",border:"1px solid "+C.bd,borderRadius:12,color:C.ts,fontSize:13,cursor:"pointer"}}>Volver</button>
     {editMode&&<div onClick={e=>{if(e.target===e.currentTarget)setEditMode(false)}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}}><div style={{background:C.bg,borderRadius:"18px 18px 0 0",padding:20,width:"100%",maxWidth:C.appMax||520,maxHeight:"85vh",overflowY:"auto",border:"1px solid "+C.bd}}>
@@ -11266,7 +11276,7 @@ function SlotDetailDrawer({slotId,course,onClose,onChange,onRefresh}){
           const byBay={};bays.bk.forEach(b=>{if(b.assigned_bay)byBay[b.assigned_bay]=b});
           const blk={};bays.bl.forEach(b=>{blk[b.bay_number]=b});
           if(maxB<1)return null;
-          const askConfirm=(msg,fn)=>{if(window.__confirm)window.__confirm(msg,fn,()=>{});else if(confirm(msg))fn()};
+          const askConfirm=(msg,fn)=>{if(window.__confirm)window.__confirm(msg,fn,()=>{});else fn()};
           const clickBay=(n)=>{
             const oc=byBay[n];const bl=blk[n];
             if(oc){window.__toast?.(unitB+" #"+n+": "+(oc.user_profiles?.full_name||t("Reservada"))+" · "+(oc.party_size||1)+" pax. "+t("Para cambiarla usa Reservas."),"info");return}
@@ -12279,7 +12289,7 @@ function AdminInventory({course}){const[impOpen,setImpOpen]=useState(false);cons
     const msg=isBundle?"¿Eliminar este paquete? Si ya tuvo ventas, se oculta en vez de borrarse."
       :isCustom?"¿Eliminar este item propio? Si ya tuvo ventas, se oculta en vez de borrarse."
       :"¿Quitar este item del inventario?";
-    if(window.__confirm)window.__confirm(msg,doDel);else if(confirm(msg))doDel();
+    if(window.__confirm)window.__confirm(msg,doDel);else doDel();
   }
   async function openBundleEdit(item){
     const{data}=await sb.from("extras_bundle_items").select("component_extra_id,quantity").eq("bundle_extra_id",item.extra_id);
@@ -15465,7 +15475,7 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
   async function toggleActive(t){await sb.from("course_membership_tiers").update({is_active:!t.is_active}).eq("id",t.id);loadAll()}
   async function delTier(t){
     const doDel=async()=>{const{error}=await sb.from("course_membership_tiers").delete().eq("id",t.id);if(error){window.__toast?.(t("No se puede eliminar (¿tiene miembros?): ")+error.message,"warn");return}window.__toast?.(t("Eliminado"),"success");loadAll()};
-    if(window.__confirm)window.__confirm("¿Eliminar tier? No podrás eliminarlo si tiene miembros activos.",doDel);else if(confirm("¿Eliminar tier?"))doDel();
+    if(window.__confirm)window.__confirm("¿Eliminar tier? No podrás eliminarlo si tiene miembros activos.",doDel);else doDel();
   }
 
   if(edit){
@@ -15678,7 +15688,7 @@ function AdminMembers({course,extTiers}){
   function remove(m){
     const doIt=async()=>{const{data,error}=await sb.rpc("admin_remove_member",{p_membership_id:m.id});if(error){window.__toast?.(t("Error: ")+error.message,"warn");return}window.__toast?.(data?.mode==="cancelled"?"Membresía cancelada":"Socio eliminado","success");load()};
     const msg=m.link_status==="linked"?"Este socio está ligado a un usuario. Se cancelará su membresía. ¿Continuar?":"¿Quitar a este socio del roster?";
-    if(window.__confirm)window.__confirm(msg,doIt);else if(confirm(msg))doIt();
+    if(window.__confirm)window.__confirm(msg,doIt);else doIt();
   }
   const MOT={falta_numero:"Falta número de socio",falta_nombre:"Falta nombre",falta_tier:"Falta la membresía (columna tier)",tier_invalido:"Membresía no reconocida",falta_factor:"Falta el 2º factor (apellido/fecha)",estado_invalido:"Estado no válido",fecha_invalida:"Vencimiento inválido (usa AAAA-MM-DD)",duplicate_member_number:"Número de socio duplicado",error_fila:"Error en la fila"};
   const HMAP={numero_socio:"member_number",numero:"member_number",num_socio:"member_number",no_socio:"member_number",id_socio:"member_number",nombre:"member_name",nombre_socio:"member_name",nombre_completo:"member_name",socio:"member_name",correo:"member_email",email:"member_email",e_mail:"member_email",mail:"member_email",tier:"tier_name",membresia:"tier_name",categoria:"tier_name",plan:"tier_name",nivel:"tier_name",factor:"verify_value",segundo_factor:"verify_value",apellido:"verify_value",fecha:"verify_value",fecha_nacimiento:"verify_value",nacimiento:"verify_value",estado:"status",status:"status",vencimiento:"expires_at",vence:"expires_at",expira:"expires_at",expiracion:"expires_at",vigencia:"expires_at"};
