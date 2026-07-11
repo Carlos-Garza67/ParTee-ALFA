@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v30.26 (Auditoria UX copy aplicada: P1 cero errores tecnicos al usuario — 90 sitios via friendlyErr/errReason con detalle a consola, toasts de enviar/actualizar con guia; P2 acentos normalizados (bahia->con acento, revision, ATENCION, Aun) con enums protegidos y dict EN consistente; P3 confirmaciones con objeto y consecuencia; P4 rondas gratis en tiers. Baseline de statements 269->271 por los 2 helpers)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v30.27 (Limpieza de deuda menor del code-review: 25 lecturas .single() migradas a .maybeSingle() para no lanzar excepcion ante 0 filas — los 6 .insert().select().single() se conservan por garantia de 1 fila; fecha del review prompt parseada en hora local en vez de UTC para no adelantarse ~6h en MX)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -1223,7 +1223,7 @@ function Login({onHome}){const[e,setE]=useState("");const[pw,setPw]=useState("")
     // y fallaba por RLS porque no habia sesion (auth.uid() = NULL).
     const{error:eSU}=await signUp(e,pw,nm,"course_admin",null);
     if(eSU){setMsg(eSU.message);setBusy(false);return}
-    const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:e,course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().single();
+    const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:e,course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().maybeSingle();
     if(ne){setMsg(ne.message);setBusy(false);return}
     await sb.from("user_profiles").update({managed_course_id:nc.id,admin_facility_type:facType}).eq("email",e);
     setMsg("OK:"+t("Confirma tu email"));
@@ -1733,7 +1733,7 @@ async function sendBookingEmails(bk,course,playerEmail,playerName,partySize,tota
   // 1. Email al jugador
   fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"booking_confirmation",to:playerEmail,data:emailData})}).catch(()=>{});
   // 2. Email al admin del campo
-  try{const{data:admin}=await sb.from("user_profiles").select("email,full_name").eq("managed_course_id",course.id).eq("user_role","course_admin").limit(1).single();
+  try{const{data:admin}=await sb.from("user_profiles").select("email,full_name").eq("managed_course_id",course.id).eq("user_role","course_admin").limit(1).maybeSingle();
     if(admin?.email){fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"booking_admin_notification",to:admin.email,data:emailData})}).catch(()=>{})}
   }catch(e){}
 }
@@ -1783,7 +1783,7 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
     if(busyRef.current)return;
     busyRef.current=true;
     const{data:conflictCheck}=await sb.rpc("check_booking_conflict",{p_user_id:s.user.id,p_booking_date:sl.slot_date,p_booking_time:sl.slot_time});if(conflictCheck?.conflict){window.__toast?.(t("Ya tienes una reservación en ")+conflictCheck.existing_course+" a las "+conflictCheck.existing_time?.slice(0,5)+" ese día","error");busyRef.current=false;return}
-    const{data:capCheck}=await sb.from("time_slots").select("booked_count,booking_count,status").eq("course_name",c.course_name).eq("slot_date",sl.slot_date).eq("slot_time",sl.slot_time).single();if(capCheck){const spotsLeft=8-(capCheck.booked_count||0);const bksLeft=2-(capCheck.booking_count||0);if(capCheck.status==="booked"||bksLeft<=0||spotsLeft<n){window.__toast?.(t("Slot no disponible")+(spotsLeft<n?" ("+spotsLeft+" "+t("lugares restantes")+")" :""),"error");busyRef.current=false;return}}
+    const{data:capCheck}=await sb.from("time_slots").select("booked_count,booking_count,status").eq("course_name",c.course_name).eq("slot_date",sl.slot_date).eq("slot_time",sl.slot_time).maybeSingle();if(capCheck){const spotsLeft=8-(capCheck.booked_count||0);const bksLeft=2-(capCheck.booking_count||0);if(capCheck.status==="booked"||bksLeft<=0||spotsLeft<n){window.__toast?.(t("Slot no disponible")+(spotsLeft<n?" ("+spotsLeft+" "+t("lugares restantes")+")" :""),"error");busyRef.current=false;return}}
     // ==== Path 2 (n>1): usa StripePayment modal + RPC atomico en onSuccess ====
     if(n>1){
       if(appliedPromo){window.__toast?.(t("Los códigos promocionales aún no aplican a reservas con varios jugadores"),"warn");busyRef.current=false;return}
@@ -2079,7 +2079,7 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
                 setPayData(null);return;
               }
               // Post-processing: fetch booking row + extras + notifs
-              const{data:bkRow}=await sb.from("bookings").select("*").eq("id",rpcResult.booking_id).single();
+              const{data:bkRow}=await sb.from("bookings").select("*").eq("id",rpcResult.booking_id).maybeSingle();
               if(payData.extras?.length>0){const{data:exRes}=await sb.rpc("add_extras_to_booking",{p_booking_id:rpcResult.booking_id,p_items:payData.extras});if(exRes&&exRes.skipped>0)console.warn("[extras] omitidos",exRes.skipped,exRes.skipped_reasons)}
               await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
               if(selectedFriends.length>0){
@@ -2569,7 +2569,7 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
     if(!inv.booking_id)return;
     let dead=false;
     (async()=>{
-      const{data}=await sb.from("bookings").select("id,course_name,booking_date,booking_time,user_id,total_cost,party_size,course_id,status").eq("id",inv.booking_id).single();
+      const{data}=await sb.from("bookings").select("id,course_name,booking_date,booking_time,user_id,total_cost,party_size,course_id,status").eq("id",inv.booking_id).maybeSingle();
       if(!dead&&data)setBooking(data);
     })();
     return()=>{dead=true};
@@ -2848,7 +2848,7 @@ function PaymentModeChooserSheet({booking,onClose,onChosen}){
       if(error)throw error;
       if(data?.success===false){window.__toast?.(data.error||t("No se pudo cambiar el modo"),"error");setBusy(false);return}
       // Re-fetch del booking actualizado
-      const{data:fresh}=await sb.from("bookings").select("*,golf_courses(facility_type,session_minutes)").eq("id",booking.id).single();
+      const{data:fresh}=await sb.from("bookings").select("*,golf_courses(facility_type,session_minutes)").eq("id",booking.id).maybeSingle();
       window.__toast?.(t("Modo cambiado a")+" "+(mode==="compartir"?t("Compartir"):t("Split")),"success");
       onChosen?.(fresh||{...booking,payment_mode:mode});
       onClose?.();
@@ -4217,7 +4217,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
   useRealtime(s?.user?.id?"booking_participants":null,s?.user?.id?("user_id=eq."+s.user.id):null,()=>loadInvitations(),[s?.user?.id]);
   const openDetail=async(b)=>{setDetail(b);setDetailScore(null);setDraftScore(null);setDetailCardOpen(false);
     try{const raw=localStorage.getItem("pt_live_card_"+b.id);if(raw){const pd=JSON.parse(raw);const ks=pd&&pd.scores?Object.keys(pd.scores).filter(k=>pd.scores[k]!=null&&pd.scores[k]!==""):[];if(ks.length>0)setDraftScore({holes:ks.length,total:ks.reduce((sm,k)=>sm+(Number(pd.scores[k])||0),0)})}}catch(e){}
-    sb.from("scorecards").select("id,total_strokes,total_par,vs_par,holes_played,round_date").eq("booking_id",b.id).order("created_at",{ascending:false}).limit(1).maybeSingle().then(({data:scR})=>{if(!scR)return;sb.from("scorecard_holes").select("hole_number,par,strokes").eq("scorecard_id",scR.id).order("hole_number").then(({data:hs})=>{setDetailScore({...scR,holes:hs||[]})})});if(b.course_id){const{data:c}=await sb.from("golf_courses").select("*").eq("id",b.course_id).single();setCourse(c)}else{setCourse({course_name:b.course_name,city:"",state:"",photo_urls:[]})}const{data:ex}=await sb.from("booking_extras").select("*,extras_catalog(name,icon,price)").eq("booking_id",b.id);setBkExtras(ex||[])};
+    sb.from("scorecards").select("id,total_strokes,total_par,vs_par,holes_played,round_date").eq("booking_id",b.id).order("created_at",{ascending:false}).limit(1).maybeSingle().then(({data:scR})=>{if(!scR)return;sb.from("scorecard_holes").select("hole_number,par,strokes").eq("scorecard_id",scR.id).order("hole_number").then(({data:hs})=>{setDetailScore({...scR,holes:hs||[]})})});if(b.course_id){const{data:c}=await sb.from("golf_courses").select("*").eq("id",b.course_id).maybeSingle();setCourse(c)}else{setCourse({course_name:b.course_name,city:"",state:"",photo_urls:[]})}const{data:ex}=await sb.from("booking_extras").select("*,extras_catalog(name,icon,price)").eq("booking_id",b.id);setBkExtras(ex||[])};
   const stc={confirmed:{l:t("Confirmada"),c:C.grn},cancelled:{l:t("Cancelada"),c:C.acc},pending:{l:t("Pendiente"),c:C.gld}};
   // v19.29: increaseBooking extraído al scope del componente para unificar con "Invitar a jugar".
   // Param autoOpenInvite=true salta el confirm y abre el modal de invitar al terminar.
@@ -4232,7 +4232,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         const d=await r.json();
         if(!r.ok||d?.success===false){window.__toast?.(d?.error||"No se pudo aumentar","error");return}
         window.__toast?.(t("Reserva aumentada a")+" "+newSize+" "+(newSize===1?t("jugador"):t("jugadores")),"success");
-        const{data:fresh}=await sb.from("bookings").select("*").eq("id",detail.id).single();
+        const{data:fresh}=await sb.from("bookings").select("*").eq("id",detail.id).maybeSingle();
         if(fresh){setDetail(fresh);if(autoOpenInvite)setInvModal(fresh);}
         load();
       }catch(e){window.__toast?.(friendlyErr(e),"error")}
@@ -4326,7 +4326,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
           </div>
         </div>;
       })()}
-      <ParticipantsSection booking={detail} isOwner={detail.user_id===s?.user?.id} onChanged={async()=>{load();loadInvitations();const{data:fresh}=await sb.from("bookings").select("*,golf_courses(facility_type,session_minutes)").eq("id",detail.id).single();if(fresh)setDetail(fresh);}}/>
+      <ParticipantsSection booking={detail} isOwner={detail.user_id===s?.user?.id} onChanged={async()=>{load();loadInvitations();const{data:fresh}=await sb.from("bookings").select("*,golf_courses(facility_type,session_minutes)").eq("id",detail.id).maybeSingle();if(fresh)setDetail(fresh);}}/>
       {/* v19.46 (Opción A): CTAs primero, luego tres colapsables: Detalles / Política de cancelación / Layout del campo */}
       {(()=>{
         const courseTz=course?.timezone||"America/Mexico_City";
@@ -4554,7 +4554,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
           </Collapsible>}
 
           {/* Review prompt sigue al final si aplica */}
-          {detail.status==="confirmed"&&new Date(detail.booking_date)<new Date()&&<ReviewPrompt bookingId={detail.id} courseId={detail.course_id} courseName={detail.course_name}/>}
+          {detail.status==="confirmed"&&new Date(detail.booking_date+"T"+((detail.booking_time||"12:00").slice(0,5)))<new Date()&&<ReviewPrompt bookingId={detail.id} courseId={detail.course_id} courseName={detail.course_name}/>}
         </>;
       })()}
     </div>}
@@ -4562,12 +4562,12 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
       // v19.34: re-fetch del booking abierto para refrescar `detail` (party_size, total_cost) tras
       // expand-and-invite. Antes solo se llamaba load()+loadInvitations() pero ninguno tocaba `detail`,
       // dejando la UI stale (Jugadores 1/2 cuando ya era 1/3). Mismo patrón que usa increaseBooking.
-      const{data:fresh}=await sb.from("bookings").select("*,golf_courses(facility_type,session_minutes)").eq("id",invModal.id).single();
+      const{data:fresh}=await sb.from("bookings").select("*,golf_courses(facility_type,session_minutes)").eq("id",invModal.id).maybeSingle();
       if(fresh)setDetail(fresh);
       load();
       loadInvitations();
     }}/>}
-    {convertModal&&<ConvertToGroupModal booking={convertModal} onClose={()=>setConvertModal(null)} onConverted={async()=>{const{data:fresh}=await sb.from("bookings").select("*").eq("id",convertModal.id).single();if(fresh)setDetail(fresh);load();}}/>}
+    {convertModal&&<ConvertToGroupModal booking={convertModal} onClose={()=>setConvertModal(null)} onConverted={async()=>{const{data:fresh}=await sb.from("bookings").select("*").eq("id",convertModal.id).maybeSingle();if(fresh)setDetail(fresh);load();}}/>}
     {/* v19.48: PaymentModeChooserSheet aparece cuando el user clickea "Invitar" estando en payment_mode='solo'.
         Al elegir compartir/split, llama RPC convert_solo_to_payment_mode y luego abre InvitePlayersSheet con el booking actualizado.
         v19.50: setTimeout(...,50) para evitar race condition entre el unmount del chooser y el mount del invite sheet.
@@ -4988,7 +4988,7 @@ function TourneoTab(props){
         return window.__toast?.(msg,"error");
       }
       // La RPC solo devuelve el id; traemos el registro completo para openDetail
-      const{data:tf}=await sb.from("tournaments").select("*").eq("id",tid).single();
+      const{data:tf}=await sb.from("tournaments").select("*").eq("id",tid).maybeSingle();
       if(!tf)return window.__toast?.(t("No se pudo cargar la partida creada"),"error");
       t=tf;
     }else{
@@ -5041,7 +5041,7 @@ function TourneoTab(props){
   async function openDetail(tn){
     setAt(tn);setView("detail");setPlayers([]);setHoles([]);setScores({});setReactions([]);setBadges([]);setCurHole(1);
     if(navigator.onLine&&_offlineQ.count()>0){syncOfflineScores().then(()=>setOfflinePending(_offlineQ.count())).catch(()=>{})}
-    const{data:t}=await sb.from("tournaments").select("*").eq("id",tn.id).single();
+    const{data:t}=await sb.from("tournaments").select("*").eq("id",tn.id).maybeSingle();
     if(!t){setView("list");setAt(null);return}setAt(t);const tid=t.id;
     const[plR,hR,scR,rxR,bgR]=await Promise.all([sb.from("tournament_players").select("*").eq("tournament_id",tid).order("is_creator",{ascending:false}),sb.from("course_holes").select("*").eq("course_id",t.course_id).is("layout_id",null).order("hole_number"),sb.from("tournament_scores").select("*").eq("tournament_id",tid),sb.from("match_reactions").select("*,user:user_id(full_name,nickname)").eq("tournament_id",tid).order("created_at",{ascending:false}),sb.from("player_badges").select("*").eq("tournament_id",tid)]);
     setPlayers(plR.data||[]);setHoles(hR.data||[]);const sm={};(scR.data||[]).forEach(s=>{if(!sm[s.player_id])sm[s.player_id]={};sm[s.player_id][s.hole_number]=s.strokes});setScores(sm);setReactions(rxR.data||[]);setBadges(bgR.data||[])}
@@ -5088,7 +5088,7 @@ function TourneoTab(props){
     const xpMap=[100,70,50,30];for(let i=0;i<sorted.length;i++){const uid=sorted[i].user_id;const xpGain=xpMap[i]||20;await sb.rpc("increment_xp",{p_user_id:uid,p_xp:xpGain}).catch(()=>{});if(uid!==s.user.id)createNotif(uid,"match_update","Partida finalizada",at.name+" ha terminado. Quedaste #"+(i+1),{match_id:at.id,action_route:"tab:2",action_label:"Ver resultados"})}await evaluateBadges(sorted);
     // Send match summary email to all players
     const{data:badgeList}=await sb.from("player_badges").select("*").eq("tournament_id",at.id);
-    for(const pl of sorted){const{data:profile}=await sb.from("user_profiles").select("email,full_name").eq("id",pl.user_id).single();if(profile?.email){const plBadges=(badgeList||[]).filter(b=>b.user_id===pl.user_id).map(b=>b.badge_icon+" "+b.badge_name);fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"match_summary",to:profile.email,data:{match_name:at.name,course_name:at.course_name,mode:MODES[at.game_mode]?.l||at.game_mode,format:fmtLabel(at.game_format),players:sorted.map((p,i)=>({name:p.player_name,score:fmt==="stableford"?p.stabPts+" pts":p.total,position:i+1,badges:(badgeList||[]).filter(b=>b.user_id===p.user_id).map(b=>b.badge_icon+" "+b.badge_name)}))}})}).catch(()=>{})}}
+    for(const pl of sorted){const{data:profile}=await sb.from("user_profiles").select("email,full_name").eq("id",pl.user_id).maybeSingle();if(profile?.email){const plBadges=(badgeList||[]).filter(b=>b.user_id===pl.user_id).map(b=>b.badge_icon+" "+b.badge_name);fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"match_summary",to:profile.email,data:{match_name:at.name,course_name:at.course_name,mode:MODES[at.game_mode]?.l||at.game_mode,format:fmtLabel(at.game_format),players:sorted.map((p,i)=>({name:p.player_name,score:fmt==="stableford"?p.stabPts+" pts":p.total,position:i+1,badges:(badgeList||[]).filter(b=>b.user_id===p.user_id).map(b=>b.badge_icon+" "+b.badge_name)}))}})}).catch(()=>{})}}
     openDetail(at);window.__toast?.(t("Partida finalizada"),"success")}
   // v18.4.3: usa RPC delete_tournament. La RPC valida permisos (creator booking + participants),
   // bloquea status completed/archived (preserva integridad de handicap WHS), reabre el match_request
@@ -5125,7 +5125,7 @@ function TourneoTab(props){
     window.__toast?.(reopened?t("Partida eliminada — el grupo se reabrió"):t("Partida eliminada"),"success");
   }
   async function deleteTorneo(){if(!at)return;await _deleteT(at,players);setAt(null);setView("list");loadTorneos()}
-  async function evaluateBadges(sorted){const BDEFS=[{key:"birdie_hunter",name:"Birdie Hunter",icon:"🦅",check:sc=>{let c=0;holes.forEach(h=>{if(sc[h.hole_number]&&sc[h.hole_number]<h.par)c++});return c>=3}},{key:"par_machine",name:"Par Machine",icon:"⚙️",check:sc=>{let pars=0,played=0;holes.forEach(h=>{if(sc[h.hole_number]){played++;if(sc[h.hole_number]===h.par)pars++}});return played>=9&&pars/played>=0.8}},{key:"eagle_eye",name:"Eagle Eye",icon:"🎯",check:sc=>holes.some(h=>sc[h.hole_number]&&sc[h.hole_number]<=h.par-2)},{key:"century_club",name:"Sub 100",icon:"💯",check:sc=>{const t=Object.values(sc).reduce((s,v)=>s+v,0);return t>0&&t<100&&Object.keys(sc).length>=18}},{key:"streak_pars",name:"Racha de Pars",icon:"⚡",check:sc=>{let streak=0,max=0;holes.forEach(h=>{if(sc[h.hole_number]===h.par){streak++;max=Math.max(max,streak)}else streak=0});return max>=3}},{key:"comeback_king",name:"Comeback King",icon:"👑",check:sc=>{const mid=Math.floor(holes.length/2);let front=0,back=0;holes.forEach((h,i)=>{if(sc[h.hole_number]){if(i<mid)front+=sc[h.hole_number]-h.par;else back+=sc[h.hole_number]-h.par}});return Object.keys(sc).length>=holes.length&&back<front&&front>0}},{key:"clutch_player",name:"Clutch Player",icon:"🔥",check:sc=>{const last3=holes.slice(-3);return last3.every(h=>sc[h.hole_number]&&sc[h.hole_number]<=h.par)}},{key:"iron_man",name:"Iron Man",icon:"💪",check:(sc,pl)=>pl.user_id&&true},{key:"underdog",name:"Underdog",icon:"🏆",check:(sc,pl)=>pl._isUnderdog||false},{key:"social_butterfly",name:"Social Butterfly",icon:"🦋",check:(sc,pl)=>pl._isSocial||false}];const winner=sorted[0];for(const pl of sorted){const sc=scores[pl.id]||{};const{data:mc}=await sb.from("user_profiles").select("matches_completed").eq("id",pl.user_id).single().catch(()=>({data:null}));const isIronMan=(mc?.matches_completed||0)>=5;const{data:hcData}=await sb.from("user_profiles").select("handicap").eq("id",pl.user_id).single().catch(()=>({data:null}));const isUnderdog=pl.id===winner?.id&&sorted.length>=2&&(hcData?.handicap||0)>Math.max(...sorted.filter(x=>x.id!==pl.id).map(x=>0));pl._isUnderdog=isUnderdog;const{data:socialData}=await sb.from("tournament_players").select("tournament_id,tournaments!inner(id)").eq("user_id",pl.user_id).then(({data})=>{if(!data)return{data:0};const tids=data.map(x=>x.tournament_id);return sb.from("tournament_players").select("user_id").in("tournament_id",tids).neq("user_id",pl.user_id).then(({data:d2})=>({data:new Set((d2||[]).map(x=>x.user_id)).size}))}).catch(()=>({data:0}));pl._isSocial=(socialData||0)>=10;for(const bd of BDEFS){const pass=bd.key==="iron_man"?isIronMan:bd.check(sc,pl);if(pass){await sb.from("player_badges").upsert({user_id:pl.user_id,badge_key:bd.key+"_"+at.id,badge_name:bd.name,badge_icon:bd.icon,tournament_id:at.id},{onConflict:"user_id,badge_key,tournament_id"}).catch(()=>{})}}}}
+  async function evaluateBadges(sorted){const BDEFS=[{key:"birdie_hunter",name:"Birdie Hunter",icon:"🦅",check:sc=>{let c=0;holes.forEach(h=>{if(sc[h.hole_number]&&sc[h.hole_number]<h.par)c++});return c>=3}},{key:"par_machine",name:"Par Machine",icon:"⚙️",check:sc=>{let pars=0,played=0;holes.forEach(h=>{if(sc[h.hole_number]){played++;if(sc[h.hole_number]===h.par)pars++}});return played>=9&&pars/played>=0.8}},{key:"eagle_eye",name:"Eagle Eye",icon:"🎯",check:sc=>holes.some(h=>sc[h.hole_number]&&sc[h.hole_number]<=h.par-2)},{key:"century_club",name:"Sub 100",icon:"💯",check:sc=>{const t=Object.values(sc).reduce((s,v)=>s+v,0);return t>0&&t<100&&Object.keys(sc).length>=18}},{key:"streak_pars",name:"Racha de Pars",icon:"⚡",check:sc=>{let streak=0,max=0;holes.forEach(h=>{if(sc[h.hole_number]===h.par){streak++;max=Math.max(max,streak)}else streak=0});return max>=3}},{key:"comeback_king",name:"Comeback King",icon:"👑",check:sc=>{const mid=Math.floor(holes.length/2);let front=0,back=0;holes.forEach((h,i)=>{if(sc[h.hole_number]){if(i<mid)front+=sc[h.hole_number]-h.par;else back+=sc[h.hole_number]-h.par}});return Object.keys(sc).length>=holes.length&&back<front&&front>0}},{key:"clutch_player",name:"Clutch Player",icon:"🔥",check:sc=>{const last3=holes.slice(-3);return last3.every(h=>sc[h.hole_number]&&sc[h.hole_number]<=h.par)}},{key:"iron_man",name:"Iron Man",icon:"💪",check:(sc,pl)=>pl.user_id&&true},{key:"underdog",name:"Underdog",icon:"🏆",check:(sc,pl)=>pl._isUnderdog||false},{key:"social_butterfly",name:"Social Butterfly",icon:"🦋",check:(sc,pl)=>pl._isSocial||false}];const winner=sorted[0];for(const pl of sorted){const sc=scores[pl.id]||{};const{data:mc}=await sb.from("user_profiles").select("matches_completed").eq("id",pl.user_id).maybeSingle().catch(()=>({data:null}));const isIronMan=(mc?.matches_completed||0)>=5;const{data:hcData}=await sb.from("user_profiles").select("handicap").eq("id",pl.user_id).maybeSingle().catch(()=>({data:null}));const isUnderdog=pl.id===winner?.id&&sorted.length>=2&&(hcData?.handicap||0)>Math.max(...sorted.filter(x=>x.id!==pl.id).map(x=>0));pl._isUnderdog=isUnderdog;const{data:socialData}=await sb.from("tournament_players").select("tournament_id,tournaments!inner(id)").eq("user_id",pl.user_id).then(({data})=>{if(!data)return{data:0};const tids=data.map(x=>x.tournament_id);return sb.from("tournament_players").select("user_id").in("tournament_id",tids).neq("user_id",pl.user_id).then(({data:d2})=>({data:new Set((d2||[]).map(x=>x.user_id)).size}))}).catch(()=>({data:0}));pl._isSocial=(socialData||0)>=10;for(const bd of BDEFS){const pass=bd.key==="iron_man"?isIronMan:bd.check(sc,pl);if(pass){await sb.from("player_badges").upsert({user_id:pl.user_id,badge_key:bd.key+"_"+at.id,badge_name:bd.name,badge_icon:bd.icon,tournament_id:at.id},{onConflict:"user_id,badge_key,tournament_id"}).catch(()=>{})}}}}
   async function addReaction(emoji){const newR={tournament_id:at.id,user_id:s.user.id,reaction:emoji,created_at:new Date().toISOString(),user:{full_name:p?.full_name,nickname:p?.nickname}};setReactions(prev=>[newR,...prev]);sb.from("match_reactions").insert({tournament_id:at.id,user_id:s.user.id,reaction:emoji}).catch(()=>{})}
   const myPid=players.find(x=>x.user_id===s?.user?.id)?.id;
   const isCreator=at?.created_by===s?.user?.id;
@@ -6374,7 +6374,7 @@ function NotificationPrefs(){const{s}=useA();const[ld,setLd]=useState(true);cons
   useEffect(()=>{if(!("Notification" in window)){setBrowserPerm("unsupported");return}setBrowserPerm(Notification.permission)},[]);
   const requestBrowserPerm=async()=>{if(reqLoading)return;setReqLoading(true);try{const perm=await Notification.requestPermission();setBrowserPerm(perm);if(perm==="granted"){const sess=await sb.auth.getSession();if(sess.data.session)await initPush(sess.data.session.user.id);window.__toast?.(t("Notificaciones activadas"),"success")}else if(perm==="denied"){window.__toast?.(t("Permiso denegado en el navegador"),"warn")}}catch(e){console.error("[NotifPrefs]",e);window.__toast?.(t("No se pudieron activar"),"error")}finally{setReqLoading(false)}};
   useEffect(()=>{if(!s){setLd(false);return}(async()=>{const{data}=await sb.from("notification_preferences").select("alert_type_id,is_enabled,push_enabled,email_enabled,in_app_enabled,alert_types!inner(category)").eq("user_id",s.user.id);const grouped={};(data||[]).forEach(np=>{const cat=np.alert_types?.category;if(!cat)return;if(!grouped[cat])grouped[cat]={is_enabled:np.is_enabled,push_enabled:np.push_enabled,email_enabled:np.email_enabled,in_app_enabled:np.in_app_enabled,alert_type_ids:[]};grouped[cat].alert_type_ids.push(np.alert_type_id)});setPrefs(grouped);setLd(false)})()},[]);
-  useEffect(()=>{if(!s)return;(async()=>{const{data}=await sb.from("user_profiles").select("whatsapp_opt_in,phone").eq("id",s.user.id).single();if(data){setWaOptIn(!!data.whatsapp_opt_in);setWaPhone(data.phone||"")}setWaReady(true)})()},[]);
+  useEffect(()=>{if(!s)return;(async()=>{const{data}=await sb.from("user_profiles").select("whatsapp_opt_in,phone").eq("id",s.user.id).maybeSingle();if(data){setWaOptIn(!!data.whatsapp_opt_in);setWaPhone(data.phone||"")}setWaReady(true)})()},[]);
   const toggleWa=async()=>{if(waSaving)return;const ph10=(waPhone||"").replace(/[^0-9]/g,"").slice(-10);if(ph10.length!==10){window.__toast?.(t("Agrega tu teléfono en Info Personal para activar WhatsApp"),"warn");return}const nv=!waOptIn;setWaSaving(true);setWaOptIn(nv);const{error}=await sb.from("user_profiles").update({whatsapp_opt_in:nv}).eq("id",s.user.id);if(error){setWaOptIn(!nv);window.__toast?.(t("Error al guardar preferencia"),"error")}else{window.__toast?.(nv?t("Avisos por WhatsApp activados"):t("Avisos por WhatsApp desactivados"),"success")}setWaSaving(false)};
   const toggle=async(category,field)=>{const cur=prefs[category];if(!cur||!s||saving)return;const newVal=!cur[field];setSaving(category+":"+field);setPrefs(p=>({...p,[category]:{...p[category],[field]:newVal}}));const{error}=await sb.from("notification_preferences").update({[field]:newVal,updated_at:new Date().toISOString()}).eq("user_id",s.user.id).in("alert_type_id",cur.alert_type_ids);if(error){setPrefs(p=>({...p,[category]:{...p[category],[field]:!newVal}}));window.__toast?.(t("Error al guardar preferencia"),"error")}setSaving(null)};
   const CATS=[
@@ -6461,7 +6461,7 @@ function PaymentCard({userId,email,cardLast4:initLast4,cardBrand:initBrand}){con
     :<div style={{display:"flex",alignItems:"center",gap:12,padding:14,background:C.bg,borderRadius:14,border:"1px solid "+C.bd}}><div style={{width:44,height:28,borderRadius:6,background:C.bd,display:"flex",alignItems:"center",justifyContent:"center"}}><span dangerouslySetInnerHTML={{__html:ic("creditcard",13,C.txt)}}/></div><div style={{flex:1}}><div style={{fontSize:13,color:C.ts}}>{t("Sin método de pago")}</div><div style={{fontSize:11,color:C.tm,marginTop:2}}>{t("Se guardará al reservar")}</div></div></div>}</div>}
 
 function ReviewPrompt({bookingId,courseId,courseName}){const{s}=useA();const[done,setDone]=useState(false);const[open,setOpen]=useState(false);const[rt,setRt]=useState(0);const[cm,setCm]=useState("");const[busy,setBusy]=useState(false);const[existing,setExisting]=useState(null);
-  useEffect(()=>{if(!s||!bookingId)return;sb.from("reviews").select("*").eq("booking_id",bookingId).eq("user_id",s.user.id).single().then(({data})=>{if(data){setExisting(data);setDone(true)}})},[bookingId]);
+  useEffect(()=>{if(!s||!bookingId)return;sb.from("reviews").select("*").eq("booking_id",bookingId).eq("user_id",s.user.id).maybeSingle().then(({data})=>{if(data){setExisting(data);setDone(true)}})},[bookingId]);
   const submit=async()=>{if(!rt)return;setBusy(true);await sb.from("reviews").upsert({user_id:s.user.id,course_id:courseId,booking_id:bookingId,rating:rt,comment:cm||null},{onConflict:"booking_id"});setDone(true);setBusy(false);setOpen(false)};
   if(done)return<div style={{background:C.grn+"15",borderRadius:14,padding:14,marginBottom:14,border:"1px solid "+C.grn+"30"}}><div style={{display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("check",15,C.grn)}}/><span style={{fontSize:13,fontWeight:700,color:C.grn}}>{t("Reseña enviada")}</span><Stars r={existing?.rating||rt} s={12}/></div>{(existing?.comment||cm)&&<p style={{fontSize:12,color:C.ts,marginTop:6}}>{existing?.comment||cm}</p>}</div>;
   if(!open)return<button onClick={()=>setOpen(true)} style={{width:"100%",padding:14,marginBottom:14,background:`linear-gradient(135deg,${C.gld},#d97706)`,border:"none",borderRadius:14,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}} dangerouslySetInnerHTML={{__html:ic("star",14,"#fff")+" Califica tu experiencia"}}/>;
@@ -6964,7 +6964,7 @@ function PlayerConciergeChat({onClose}){
   const scrollRef=useRef(null);
   const[escOpen,setEscOpen]=useState(false);const[escMsg,setEscMsg]=useState("");const[escWa,setEscWa]=useState(false);const[escSending,setEscSending]=useState(false);const[escDone,setEscDone]=useState(false);const[escBooking,setEscBooking]=useState(null);const[escPhone,setEscPhone]=useState("");
   const userTurns=messages.filter(m=>m.role==="user").length;
-  useEffect(()=>{if(!s)return;const today=new Date().toLocaleDateString("en-CA");(async()=>{try{const{data:bk}=await sb.from("bookings").select("id,course_id,course_name,booking_date,booking_time").eq("user_id",s.user.id).in("status",["pending","confirmed"]).gte("booking_date",today).order("booking_date").order("booking_time").limit(1);if(bk&&bk[0])setEscBooking(bk[0]);const{data:pr}=await sb.from("user_profiles").select("phone").eq("id",s.user.id).single();if(pr)setEscPhone(pr.phone||"")}catch(e){}})()},[]);
+  useEffect(()=>{if(!s)return;const today=new Date().toLocaleDateString("en-CA");(async()=>{try{const{data:bk}=await sb.from("bookings").select("id,course_id,course_name,booking_date,booking_time").eq("user_id",s.user.id).in("status",["pending","confirmed"]).gte("booking_date",today).order("booking_date").order("booking_time").limit(1);if(bk&&bk[0])setEscBooking(bk[0]);const{data:pr}=await sb.from("user_profiles").select("phone").eq("id",s.user.id).maybeSingle();if(pr)setEscPhone(pr.phone||"")}catch(e){}})()},[]);
 
   useEffect(()=>{
     if(navigator.geolocation){
@@ -10293,7 +10293,7 @@ const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);
   useRealtime(detail?.id?"match_requests":null,detail?.id?("id=eq."+detail.id):null,async(payload)=>{
     if(!detail)return;
     if(payload.eventType==="DELETE"){setDetail(null);load();return}
-    const{data}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("id",detail.id).single();
+    const{data}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("id",detail.id).maybeSingle();
     if(data)setDetail(data);
   },[detail?.id]);
   // Realtime — badges Partida/Grupo de "Desde tus reservas" (live). Mismo patrón que TourneoTab:
@@ -10455,7 +10455,7 @@ const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);
       window.__toast?.(t("Rechazado"),"info")
     }
     // Refresh detail + lista global (#17)
-    const{data:freshDetail}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("id",detail.id).single();
+    const{data:freshDetail}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("id",detail.id).maybeSingle();
     if(freshDetail)setDetail(freshDetail);
     openDetail(freshDetail||detail);
     load()
@@ -10538,7 +10538,7 @@ const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);
     window.__toast?.(t("Grupo actualizado"),"success");
     setEditMode(false);
     // Refetch detail + lista
-    const{data:fresh}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("id",detail.id).single();
+    const{data:fresh}=await sb.from("match_requests").select("*,creator:creator_id(full_name,nickname,player_id,city,handicap)").eq("id",detail.id).maybeSingle();
     if(fresh)setDetail(fresh);
     load();
   }
@@ -10634,7 +10634,7 @@ const[gName,setGName]=useState("");const[myBookings,setMyBookings]=useState([]);
   </div>}
 
 const PLANS={free:{name:"Básico",price:0},monthly:{name:"Premium",price:100},annual:{name:"Premium Anual",price:1000}};
-function usePremium(){const{s}=useA();const[sub,setSub]=useState(null);const[ld,setLd]=useState(true);useEffect(()=>{if(!s)return;sb.from("admin_subscriptions").select("*").eq("user_id",s.user.id).single().then(({data})=>{setSub(data);setLd(false)}).catch(()=>setLd(false))},[s]);const isPremium=sub&&(sub.plan==="monthly"||sub.plan==="annual")&&sub.status==="active"&&(!sub.expires_at||new Date(sub.expires_at)>new Date());return{sub,isPremium,ld}}
+function usePremium(){const{s}=useA();const[sub,setSub]=useState(null);const[ld,setLd]=useState(true);useEffect(()=>{if(!s)return;sb.from("admin_subscriptions").select("*").eq("user_id",s.user.id).maybeSingle().then(({data})=>{setSub(data);setLd(false)}).catch(()=>setLd(false))},[s]);const isPremium=sub&&(sub.plan==="monthly"||sub.plan==="annual")&&sub.status==="active"&&(!sub.expires_at||new Date(sub.expires_at)>new Date());return{sub,isPremium,ld}}
 function PremiumBadge({plan}){if(!plan||plan==="free")return null;return<span style={{fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:6,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",marginLeft:6}}>PRO</span>}
 function LockedOverlay({title,desc,onUpgrade}){return<div style={{position:"relative",borderRadius:14,overflow:"hidden",marginBottom:16}}><div style={{filter:"blur(4px)",opacity:.3,pointerEvents:"none",padding:16,background:C.cd,borderRadius:14,border:"1px solid "+C.bd}}><div style={{height:20,background:C.tm+"30",borderRadius:6,marginBottom:8,width:"70%"}}/><div style={{height:14,background:C.tm+"20",borderRadius:6,width:"60%"}}/></div><div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.5)",borderRadius:14}}><div dangerouslySetInnerHTML={{__html:ic("lock",28,C.gld)}}/><div style={{fontSize:15,fontWeight:800,color:C.txt,marginBottom:4}}>{title}</div><div style={{fontSize:11,color:C.txt,textAlign:"center",padding:"0 20px",marginBottom:12}}>{desc}</div><button onClick={onUpgrade} style={{padding:"10px 24px",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("gem",13,"#fff")+" Premium"}}></button></div></div>}
 
@@ -13723,7 +13723,7 @@ function LiveMap({course}){
 }
 
 function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[concierge,setConcierge]=useState(false);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);const isTeam=p?.user_role==="course_team";const[teamPerms,setTeamPerms]=useState(null);const[adminSupportOpen,setAdminSupportOpen]=useState(false);const[wx,setWx]=useState(null);
-  const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).single().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
+  const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).maybeSingle().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
   useEffect(()=>{loadC()},[p]);
   useEffect(()=>{const la=course?.latitude,lo=course?.longitude;if(la==null||lo==null||(course?.facility_type==="simulador")){setWx(null);return}let stop=false;fetch("https://api.open-meteo.com/v1/forecast?latitude="+la+"&longitude="+lo+"&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m&forecast_days=2&timezone=auto",{cache:"no-store"}).then(r=>r.json()).then(j=>{if(!stop&&j)setWx(j)}).catch(()=>{});return()=>{stop=true}},[course?.latitude,course?.longitude]);
    useEffect(()=>{window.__openAdminSupport=()=>setAdminSupportOpen(true);window.__navigate=(target)=>{const parts=String(target||"").split(":");if(parts[0]==="support")setAdminSupportOpen(true);else if(parts[0]==="tab"){const _ti=parseInt(parts[1]);if(!isNaN(_ti))navTo(_ti,parts[2]?{sub:parts[2]}:{})}};return()=>{delete window.__openAdminSupport;delete window.__navigate}},[]);
@@ -16980,7 +16980,7 @@ function GoogleRoleSelector(){const{s,p,setP,ref,out}=useA();const[step,setStep]
     if(step==="pickFacType"){if(!facType)return setMsg(t("Selecciona tipo"));setStep("locOnboarding");setMsg("");return}
     if(step==="locOnboarding"){if(!locName)return setMsg(t("Nombre obligatorio"));if(!locAddress)return setMsg(t("Dirección obligatoria"));if(!locCity)return setMsg(t("Ciudad obligatoria"));if(!locState)return setMsg("Estado obligatorio");if(!contactName)return setMsg(t("Nombre obligatorio"));
       setBusy(true);setMsg("");
-      const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:s.user.email||"",course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().single();
+      const{data:nc,error:ne}=await sb.from("golf_courses").insert({course_name:locName,business_name:bizName||null,full_address:locAddress,city:locCity,state:locState,address:locAddress,operating_days:locDays||null,operating_hours:locHours||null,contact_name:contactName,contact_role:contactRole||null,phone_number:"",email:s.user.email||"",course_type:"public",hole_count:facType==="campo"?18:0,total_par:facType==="campo"?72:0,green_fee_min:0,green_fee_max:0,status:"active",listing_status:"draft",facility_type:facType}).select().maybeSingle();
       if(ne){setMsg(ne.message);setBusy(false);return}
       await sb.from("user_profiles").update({user_role:"course_admin",managed_course_id:nc.id,admin_facility_type:facType}).eq("id",s.user.id);
       fetch(SB_FN_URL+"/send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"course_welcome",to:s.user.email,data:{name:s.user.user_metadata?.full_name||contactName,course_name:locName,facility_type:facType,city:locCity,state:locState}})}).catch(()=>{});
