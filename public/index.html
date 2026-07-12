@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v30.34 (Overview de plataforma 2.0 — patron Whop/Lemon Squeezy/Stripe: hero de GMV 30d con sparkline SVG y delta vs periodo anterior, fee plataforma; KPIs Reservas/Jugadores nuevos/Ticket promedio con % de cambio; cola REQUIERE TU ACCION (campos por revisar, fiscales por verificar, aclaraciones abiertas, campos por liquidar con monto) navegable. RPC get_platform_overview_v2. El overview viejo (contadores por estado + Top 5) se conserva debajo)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v30.35 (FIX critico v30.34: el comentario inline // del estado ov2 comento el resto de su linea, incluido const[courses,setCourses] — la app crasheaba con courses-is-not-defined. Regla: NUNCA usar comentarios de linea // en lineas con multiples declaraciones. Overview 2.0 intacto: hero GMV con sparkline y delta, KPIs con cambio %, cola REQUIERE TU ACCION)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -16899,7 +16899,7 @@ function PlatformSettlements(){
   </div>;
 }
 
-function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);const[ld,setLd]=useState(true);const[stats,setStats]=useState(null);const[ov2,setOv2]=useState(null); // v30.34: overview dashboard (GMV trend + deltas + cola de accion)const[courses,setCourses]=useState([]);const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");const[sel,setSel]=useState(null);
+function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);const[ld,setLd]=useState(true);const[stats,setStats]=useState(null);const[ov2,setOv2]=useState(null);const[courses,setCourses]=useState([]);const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");const[sel,setSel]=useState(null);
   const loadAll=async()=>{setLd(true);const today=new Date().toISOString().slice(0,10);const d30=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
     const[{data:cs},{data:bks},{data:us},{data:sl}]=await Promise.all([
       sb.from("golf_courses").select("*").order("created_at",{ascending:false}),
