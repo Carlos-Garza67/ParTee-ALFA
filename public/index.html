@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.46 (Auth: lockup de marca reemplazado por el oficial del splash — componente ParteeLogo (imagotipo + wordmark integrados en un SVG, h=46, colores del tema) + tagline FIND CONNECT PLAY con letterspacing .18em, centrados arriba del titulo. Aplica a login, registro y reset. Resto del layout v32.45 (patron Nord recurrente) intacto. Base: v32.45)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.47 (Auth: ritmo vertical — elementos se veian apretados. Lockup con margin 10/26 (antes 2/18), subtitulo a 9px del titulo, y el header completo a 28px de los campos (antes 18). Sin cambios funcionales. Base: v32.46)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -1374,15 +1374,15 @@ function Login({onHome}){/* v32.45 Nord (Mobbin): cuenta recordada en localStora
   </div>;
   return<div className="auth-wrap"><div className="fi auth-card" style={{maxWidth:420}}>
     {/* 19a-19f (v32.22): onboarding premium — header por modo, social 2col, campos card, casillas legales, radio cards coral */}
-    {(mode==="login"||mode==="register"||mode==="reset")&&<div style={{marginBottom:18}}>
+    {(mode==="login"||mode==="register"||mode==="reset")&&<div style={{marginBottom:28}}>
       <button onClick={()=>{setMsg("");if(mode==="login"){if(onHome)onHome()}else setMode("login")}} aria-label="Volver" style={{width:36,height:36,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:4}} dangerouslySetInnerHTML={{__html:ic("left",16,C.ts)}}/>
       {/* v32.46: lockup oficial del splash — ParteeLogo integrado + tagline FIND CONNECT PLAY */}
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",margin:"2px 0 18px"}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",margin:"10px 0 26px"}}>
         <ParteeLogo h={46} mc={C.acc} tc={C.txt}/>
         <p style={{fontSize:11,color:C.ts,letterSpacing:".18em",fontWeight:500,margin:"11px 0 0"}}>FIND · CONNECT · PLAY</p>
       </div>
       <h2 style={{fontSize:24,fontWeight:800,color:C.txt,letterSpacing:"-0.02em",margin:0,lineHeight:1.15,textAlign:"center"}}>{mode==="register"?"Crea tu cuenta":mode==="reset"?"Recupera tu acceso":knownE?"Hola de nuevo":t("Inicia sesión")}</h2>
-      <p style={{fontSize:13,color:C.tm,margin:"6px 0 0",textAlign:"center"}}>{mode==="register"?<>{"¿Ya tienes una? "}<span onClick={()=>{setMode("login");setMsg("")}} style={{color:C.acc,fontWeight:700,cursor:"pointer"}}>Inicia sesión</span></>:mode==="login"?<>{"¿No tienes cuenta? "}<span onClick={()=>{setMode("register");setMsg("")}} style={{color:C.acc,fontWeight:700,cursor:"pointer"}}>Crea una</span></>:"Te enviamos un enlace de recuperación por correo."}</p>
+      <p style={{fontSize:13,color:C.tm,margin:"9px 0 0",textAlign:"center"}}>{mode==="register"?<>{"¿Ya tienes una? "}<span onClick={()=>{setMode("login");setMsg("")}} style={{color:C.acc,fontWeight:700,cursor:"pointer"}}>Inicia sesión</span></>:mode==="login"?<>{"¿No tienes cuenta? "}<span onClick={()=>{setMode("register");setMsg("")}} style={{color:C.acc,fontWeight:700,cursor:"pointer"}}>Crea una</span></>:"Te enviamos un enlace de recuperación por correo."}</p>
     </div>}
     {stepNum>0&&<><div style={{display:"flex",gap:6,marginBottom:18}}>{[1,2,3].map(sN=><div key={sN} style={{flex:1,height:4,borderRadius:99,background:sN<=stepNum?C.acc:"rgba(255,255,255,.12)",transition:"background .3s"}}/>)}</div>
       <h2 style={{fontSize:24,fontWeight:800,color:C.txt,letterSpacing:"-0.02em",margin:0,lineHeight:1.15}}>{mode==="role"?t("¿Cómo usarás Partee?"):mode==="pickFacType"?"¿Qué tipo de locación administras?":t("Datos de tu locación")}</h2>
