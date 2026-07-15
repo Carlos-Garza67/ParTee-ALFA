@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.47 (Auth: ritmo vertical — elementos se veian apretados. Lockup con margin 10/26 (antes 2/18), subtitulo a 9px del titulo, y el header completo a 28px de los campos (antes 18). Sin cambios funcionales. Base: v32.46)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.48 (Para ti rediseno B1 (Mobbin: Revolut Hub aplanado al lenguaje de la casa, refs Spotify benefit tiles / Xbox Game Pass evaluadas): Membresias y Clases pasan de celda-lista a card promo — card cd con hairline blanco 6pct radius 18, icono en tile 42, titulo+sub con mas aire, y CTA de verbo con flecha en el color de cada una (Explorar planes / Buscar instructores) separado por divisor. Iconos mejorados: crown para upsell de membresias (gem si activa), target para clases (antes banderin custom). Chevron lateral eliminado. Base: v32.47)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -5373,25 +5373,36 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
     {tab==="up"&&<React.Fragment>
     {/* 8a "Para ti": filas planas sobre C.cd (sin gradientes ni bordes oro) */}
     <div style={{fontSize:16,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",padding:"6px 0 10px"}}>Para ti</div>
-    <div onClick={()=>{hap();setShowMemberships(true)}} style={{display:"flex",alignItems:"center",gap:12,background:C.cd,borderRadius:14,padding:"12px 14px",marginBottom:10,cursor:"pointer"}}>
-      <div style={{width:44,height:44,borderRadius:12,flexShrink:0,background:"rgba(245,198,79,.12)",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic(hasActiveMembership?"gem":"star",19,C.gld)}}/>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:15,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{hasActiveMembership?"Mis membresías":"Membresías Partee"}</span>
-          {hasActiveMembership&&<span style={{fontSize:9,fontWeight:800,color:C.grn,letterSpacing:.4,flexShrink:0}}>ACTIVA</span>}
+    {/* v32.48 B1 (Mobbin Revolut aplanado a la casa): cards promo con CTA de verbo — icono en tile, divisor hairline, link de accion en color */}
+    <div onClick={()=>{hap();setShowMemberships(true)}} style={{background:C.cd,border:"1px solid rgba(255,255,255,.06)",borderRadius:18,padding:16,marginBottom:10,cursor:"pointer"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{width:42,height:42,borderRadius:12,flexShrink:0,background:"rgba(245,198,79,.12)",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic(hasActiveMembership?"gem":"crown",20,C.gld)}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:15,fontWeight:700,color:C.txt,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{hasActiveMembership?"Mis membresías":"Membresías Partee"}</span>
+            {hasActiveMembership&&<span style={{fontSize:9,fontWeight:800,color:C.grn,letterSpacing:.4,flexShrink:0}}>ACTIVA</span>}
+          </div>
+          <div style={{fontSize:12.5,color:C.ts,marginTop:3,lineHeight:1.4}}>{hasActiveMembership?"Ver beneficios y vencimientos":"Ahorra en cada ronda · beneficios exclusivos"}</div>
         </div>
-        <div style={{fontSize:12,color:C.ts,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{hasActiveMembership?"Ver beneficios y vencimientos":"Ahorra en cada ronda · beneficios exclusivos"}</div>
       </div>
-      <span style={{flexShrink:0,display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/>
+      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:13,paddingTop:12,borderTop:"1px solid rgba(255,255,255,.05)"}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.gld}}>{hasActiveMembership?"Ver mis beneficios":"Explorar planes"}</span>
+        <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("right",13,C.gld)}}/>
+      </div>
     </div>
     <MyStandbysCard/>
-    <div onClick={()=>{hap();setShowLessons(true)}} style={{display:"flex",alignItems:"center",gap:12,background:C.cd,borderRadius:14,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
-      <div style={{width:44,height:44,borderRadius:12,flexShrink:0,background:C.accSoft||"rgba(255,84,112,.1)",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="${C.accTx2||C.acc}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="21" x2="7" y2="3"/><path d="M7 4h8.5a1 1 0 0 1 .8 1.6L14 8.5l2.3 2.9a1 1 0 0 1-.8 1.6H7"/></svg>`}}/>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:15,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t("Clases con un instructor")}</div>
-        <div style={{fontSize:12,color:C.ts,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t("Encuentra tu pro y agenda una clase")}</div>
+    <div onClick={()=>{hap();setShowLessons(true)}} style={{background:C.cd,border:"1px solid rgba(255,255,255,.06)",borderRadius:18,padding:16,marginBottom:14,cursor:"pointer"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{width:42,height:42,borderRadius:12,flexShrink:0,background:C.accSoft||"rgba(255,84,112,.1)",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("target",20,C.accTx2||C.acc)}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.txt,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t("Clases con un instructor")}</div>
+          <div style={{fontSize:12.5,color:C.ts,marginTop:3,lineHeight:1.4}}>{t("Encuentra tu pro y agenda una clase")}</div>
+        </div>
       </div>
-      <span style={{flexShrink:0,display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/>
+      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:13,paddingTop:12,borderTop:"1px solid rgba(255,255,255,.05)"}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.accTx2||C.acc}}>Buscar instructores</span>
+        <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("right",13,C.accTx2||C.acc)}}/>
+      </div>
     </div>
     {showLessons&&<div style={{position:"fixed",inset:0,maxWidth:"var(--app-max)",margin:"0 auto",boxShadow:"0 0 80px rgba(0,0,0,.5)",zIndex:2600,background:C.bg,display:"flex",flexDirection:"column"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px"}}>
