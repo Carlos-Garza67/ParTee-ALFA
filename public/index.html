@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.41 (FIX facelift: botones del hero del Detalle (volver, compartir, favorito) congelados — el zIndex 1 de la foto contain de v32.40 la elevaba sobre los botones sin z-index e interceptaba los taps. Se elimina el zIndex: las dos capas son absolute y el orden del DOM ya pinta el frente sobre el blur; los botones, hermanos posteriores en el DOM, vuelven a quedar encima y clickeables. Base: v32.40)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.43 (FIX facelift: el punto rojo de una notificacion no desaparecia al tocarla — el onClick solo navegaba sin marcarla leida (decision 15a de marcado solo manual). Nueva markOne: al tocar cualquier notificacion se marca leida con update optimista local, decremento del badge y persistencia en DB; si tiene ruta ademas navega. Marcar leidas del header se conserva para limpiar el resto. Base: v32.42)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -882,6 +882,8 @@ function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[sho
   // 15a: marcar leidas es accion manual — las no leidas conservan su dot coral hasta que el usuario lo pida
   async function markAllRead(){hap();setNotifs(p=>p.map(n=>({...n,is_read:true})));setCount(0);await sb.from("notifications").update({is_read:true}).eq("user_id",s.user.id).eq("is_read",false)}
   async function deleteOne(id){setNotifs(p=>p.filter(n=>n.id!==id));await sb.from("notifications").delete().eq("id",id)}
+  // v32.43: tocar una notificacion la consume — dot coral desaparece al click; "Marcar leidas" sigue para el resto
+  async function markOne(n){if(n.is_read)return;setNotifs(p=>p.map(x=>x.id===n.id?{...x,is_read:true}:x));setCount(c=>Math.max(0,c-1));await sb.from("notifications").update({is_read:true}).eq("id",n.id)}
   async function clearAll(){setNotifs([]);setShow(false);await sb.from("notifications").delete().eq("user_id",s.user.id)}
   const ago=(d)=>{const ms=Date.now()-new Date(d).getTime();const m=Math.floor(ms/60000);if(m<1)return"ahora";if(m<60)return m+"m";const h=Math.floor(m/60);if(h<24)return h+"h";return Math.floor(h/24)+"d"};
   const ico={booking:ic("calendar",16,C.grn),payment:ic("creditcard",16,C.txt),alert:ic("bell",16,C.acc),friend_request:ic("users",16,C.grn),share_request:ic("handshake",16,C.gld),match_update:ic("swords",16,C.acc),booking_reminder:ic("clock",16,C.gld),round_reminder:ic("pin",16,C.grn),support_reply:ic("mail",16,C.grn)};
@@ -924,7 +926,7 @@ function NotifBell(){const{s}=useA();const[count,setCount]=useState(0);const[sho
             {g9.items.map(n=>{const route=n.action_route||routeMap[n.type]||null;const hasAction=!!route;
               const tl=TILE[n.type]||{i:"bell",c:C.ts2||"#C7CBD4",bg:C.w07};
               const hh=new Date(n.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit",hour12:false});
-              return<div key={n.id} onClick={()=>{if(hasAction){setShow(false);window.__navigate?.(route)}}} style={{display:"flex",gap:11,padding:"9px 0",alignItems:"center",cursor:hasAction?"pointer":"default",opacity:n.is_read?.75:1}}>
+              return<div key={n.id} onClick={()=>{markOne(n);if(hasAction){setShow(false);window.__navigate?.(route)}}} style={{display:"flex",gap:11,padding:"9px 0",alignItems:"center",cursor:hasAction?"pointer":"default",opacity:n.is_read?.75:1}}>
               <div style={{width:40,height:40,borderRadius:11,background:tl.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(tl.i,17,tl.c)}}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13.5,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tNotif(n.title)}</div>
@@ -7691,7 +7693,7 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
     {termsView&&<TermsModal type={termsView} onClose={()=>setTermsView(null)}/>}
     <div style={{textAlign:"center",fontSize:10.5,color:C.mut||"#5B6270",marginTop:10,letterSpacing:".05em",..._s.mono}}>PARTEE v32{pr?.player_id?" · "+pr.player_id:""}</div>
     {/* 13a · Sheet de seccion de Cuenta */}
-    {cfgSheet&&ReactDOM.createPortal(<div className="fi" style={{position:"fixed",top:0,bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:"var(--app-max)",background:C.bg,zIndex:9500,display:"flex",flexDirection:"column",boxShadow:"0 0 40px rgba(0,0,0,.5)"}}>
+    {cfgSheet&&ReactDOM.createPortal(<div className="fi" style={{position:"fixed",top:0,bottom:0,left:0,right:0,margin:"0 auto",width:"100%",maxWidth:"var(--app-max)",background:C.bg,zIndex:9500,display:"flex",flexDirection:"column",boxShadow:"0 0 40px rgba(0,0,0,.5)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 20px 10px",flexShrink:0}}>
         <button onClick={()=>setCfgSheet(null)} aria-label="Volver" style={{width:36,height:36,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${C.txt}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg>`}}/>
         <span style={{fontSize:19,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>{({info:t("Info personal"),prefs:t("Preferencias"),payments:t("Método de pago y movimientos"),notifs:t("Notificaciones"),referral:t("Invita y gana")})[cfgSheet]}</span>
