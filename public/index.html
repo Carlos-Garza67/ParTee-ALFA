@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.35 (MODO CLARO: auditoria de Claude Design aplicada — C1 token mut agregado a DARK/LIGHT (30 textos apagados); C2 .cta-outline texto tematizado; A1 19 divisores border rgba-blanco → C.bd linea por linea; A2 hairlines (helper hair + ranking + preferencias) → C.bd; A3 track OFF del toggle → C.w15; A4 radio picker → C.w20 y celdas score → C.bd; M1 WhiteSection/.ax-section theme-condicional (oscuro intacto, claro elevated card via elCard/elCardBd + vars --el-card en applyCSS); M2 meta theme-color sincronizado al tema; M3 badge tipo blanco sobre coral. Neutro en oscuro por diseno. Base: v32.34)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.41 (FIX facelift: botones del hero del Detalle (volver, compartir, favorito) congelados — el zIndex 1 de la foto contain de v32.40 la elevaba sobre los botones sin z-index e interceptaba los taps. Se elimina el zIndex: las dos capas son absolute y el orden del DOM ya pinta el frente sobre el blur; los botones, hermanos posteriores en el DOM, vuelven a quedar encima y clickeables. Base: v32.40)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -159,7 +159,7 @@ window.__al=function(){};
 .admin-hdr-actions{display:none}
 .acct-2col{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
 .acct-col{display:flex;flex-direction:column;gap:12px}.pl{-webkit-animation:pl 1.4s infinite;animation:pl 1.4s infinite}button:active{-webkit-transform:scale(.97);transform:scale(.97)}
-.crs{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:14px;padding:0 20px 12px;-ms-overflow-style:none;scrollbar-width:none}.crs>*{scroll-snap-align:start;flex-shrink:0}
+.crs{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scroll-padding-left:20px;-webkit-overflow-scrolling:touch;gap:14px;padding:0 20px 12px;-ms-overflow-style:none;scrollbar-width:none}.crs>*{scroll-snap-align:start;flex-shrink:0}@media(min-width:768px){.crs>*{width:calc(50% - 6px)!important}}
 .scroll-fade{position:relative}.scroll-fade::after{content:"";position:absolute;top:0;right:0;bottom:0;width:40px;background:linear-gradient(to right,transparent,var(--app-bg,#0A0B10));pointer-events:none;pointer-events:none;z-index:1;border-radius:0 14px 14px 0}
 .ic{position:relative;overflow:hidden;-webkit-transform:translateZ(0);transform:translateZ(0)}.ic img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;opacity:0;-webkit-transition:opacity .5s;transition:opacity .5s;-webkit-transform:translateZ(0);transform:translateZ(0)}.ic img.icbg{object-fit:cover;filter:blur(18px) brightness(.75);transform:scale(1.15) translateZ(0)}.ic img.icfg{object-fit:contain;z-index:1}.ic img.a{opacity:1}
 .badge-off{position:absolute;top:12px;right:12px;background:linear-gradient(135deg,#e94560,#ff6b6b);color:#fff;font-size:12px;font-weight:800;padding:4px 10px;border-radius:8px;z-index:2}
@@ -1605,6 +1605,12 @@ function Home({onPick}){const{s,p}=useA();const[cs,setCs]=useState([]);const[ld,
       <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:C.txt}}>{t("Cerca de mí")}</div><div style={{fontSize:12,color:C.ts,marginTop:1}}>Activa tu ubicación para ver campos cercanos</div></div>
       <span style={{fontSize:13,fontWeight:800,color:C.acc,flexShrink:0}}>{geoLd?"...":"Activar"}</span>
     </div>}
+    {/* v32.36: geo activa — tarjeta de estado con salida (antes no habia forma de ver todos ni desactivar) */}
+    {!searching&&geoOn&&<div onClick={()=>{hap();setGeoOn(false);setNearbyList([]);try{localStorage.setItem("partee_geo_enabled","0")}catch{}}} style={{margin:"8px 20px 0",display:"flex",alignItems:"center",gap:12,background:C.cd,borderRadius:14,padding:"10px 12px",cursor:"pointer"}}>
+      <div style={{width:40,height:40,borderRadius:99,background:"rgba(30,232,165,.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("pin",17,C.grn)}}/>
+      <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:C.txt}}>{t("Cerca de mí")} <span style={{color:C.grn}}>·</span> <span style={{fontSize:12.5,fontWeight:700,color:C.grn}}>activo</span></div><div style={{fontSize:12,color:C.ts,marginTop:1}}>{geoLd?t("Cargando..."):("Mostrando "+near.length+(near.length===1?" venue cercano":" venues cercanos")+" · el resto está oculto")}</div></div>
+      <span style={{fontSize:13,fontWeight:800,color:C.acc,flexShrink:0}}>{t("Ver todos")}</span>
+    </div>}
     {/* resultados de busqueda */}
     {searching&&(()=>{
       const sRes=cs.filter(c=>mQ(c)).map(enrichC);
@@ -1741,7 +1747,7 @@ function Detail({c,onBack,onBook}){const{s,p}=useA();const[slots,setSlots]=useSt
   return<div className="fi scr-enter" style={{paddingBottom:130}}>
     {/* HERO 240 full-bleed con contador */}
     <div style={{position:"relative",height:240,background:C.cd}}>
-      {imgs.length>0?<div ref={heroRef} onScroll={onHeroScroll} style={{display:"flex",height:"100%",overflowX:"auto",scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>{imgs.map((src,i)=><img key={i} src={src} alt="" loading={i===0?"eager":"lazy"} style={{width:"100%",height:"100%",objectFit:"cover",flexShrink:0,scrollSnapAlign:"start"}}/>)}</div>
+      {imgs.length>0?<div ref={heroRef} onScroll={onHeroScroll} style={{display:"flex",height:"100%",overflowX:"auto",scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>{imgs.map((src,i)=><div key={i} style={{position:"relative",width:"100%",height:"100%",flexShrink:0,scrollSnapAlign:"start",overflow:"hidden"}}><img src={src} alt="" aria-hidden="true" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",filter:"blur(18px) brightness(.6)",transform:"scale(1.15)"}}/><img src={src} alt="" loading={i===0?"eager":"lazy"} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain"}}/></div>)}</div>
         :<div style={{position:"absolute",inset:0,background:C.w06,display:"flex",alignItems:"center",justifyContent:"center",fontSize:48,fontWeight:800,color:C.ts}}>{(c.course_name||"?")[0]}</div>}
       <button onClick={onBack} aria-label="Volver" style={{position:"absolute",top:16,left:16,width:36,height:36,borderRadius:99,background:"rgba(10,11,16,.5)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg>`}}/>
       <div style={{position:"absolute",top:16,right:16,display:"flex",gap:8}}>
