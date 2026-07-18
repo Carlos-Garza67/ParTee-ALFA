@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.58 (Extras del detalle, segunda pasada: fuera contenedores — Agregar queda como texto verde pelon con plus fino (patron Marcar leidas) y la X como aspa pelona en C.tm sin circulo (patron del clear de busqueda). Las acciones inline de la casa no llevan caja. Base: v32.57)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.59 (Tarjeta en vivo: SOS y GPS pierden la pill con borde — quedan como acciones de texto pelon con icono (patron Marcar leidas): SOS coral 800, GPS toggle que enciende verde / apaga gris C.tm. Mismo tratamiento que Agregar y la X de extras. Base: v32.58)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -4371,7 +4371,7 @@ function LiveScorecard({booking,onClose}){
         <div style={{fontSize:11,color:C.tm,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{booking.course_name||""}</div>
       </div>
       <SosButton booking={booking} compact/>
-      <button onClick={()=>setAutoFollow(a=>!a)} title={t("Auto-seguir GPS")} style={{display:"flex",alignItems:"center",gap:5,padding:"6px 10px",borderRadius:20,border:"1px solid "+(autoFollow?C.grn:C.bd),background:autoFollow?C.grn+"15":"transparent",color:autoFollow?C.grn:C.tm,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+      <button onClick={()=>setAutoFollow(a=>!a)} title={t("Auto-seguir GPS")} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 2px",border:"none",background:"none",color:autoFollow?C.grn:C.tm,fontSize:11.5,fontWeight:700,cursor:"pointer",letterSpacing:.3}}>
         <span dangerouslySetInnerHTML={{__html:ic("pin",13,autoFollow?C.grn:C.tm)}}/>{t("GPS")}
       </button>
     </div>
@@ -4567,7 +4567,7 @@ function SosButton({booking,compact}){
     setStage("idle");
   }
   const trigger=compact
-    ? <button onClick={arm} aria-label="SOS" title={t("Emergencia")} style={{display:"inline-flex",alignItems:"center",gap:5,padding:"6px 11px",borderRadius:20,border:"1px solid "+C.acc+"66",background:C.acc+"14",color:C.acc,fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:.3,flexShrink:0}}>
+    ? <button onClick={arm} aria-label="SOS" title={t("Emergencia")} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"6px 2px",border:"none",background:"none",color:C.acc,fontSize:11.5,fontWeight:800,cursor:"pointer",letterSpacing:.3,flexShrink:0}}>
         <span dangerouslySetInnerHTML={{__html:ic("alert",13,C.acc)}}/>SOS</button>
     : <button onClick={arm} style={{width:"100%",padding:11,background:"transparent",border:"1px solid "+C.acc+"55",borderRadius:12,color:C.acc,fontSize:13,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
         <span dangerouslySetInnerHTML={{__html:ic("alert",15,C.acc)}}/><span>{t("Emergencia")} · SOS</span></button>;
