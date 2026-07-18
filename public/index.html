@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.50 (Registro: consents compactos — CB19 padding 13a9 y margen 10a5, el hueco entre Terminos y Aviso queda a la mitad (aplica tambien al re-consent y cerrar sesiones que usan el mismo componente). Nueva fila Apariencia bajo el aviso (Mobbin: Bluesky color mode, Perplexity appearance): segmentado Oscuro/Claro con luna/sol que setea pt_theme via ThemeCtx — lo elegido al registrarse queda como default del usuario y hace live-preview inmediato de toda la pantalla; se cambia despues en Perfil como siempre. Base: v32.49)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.53 (Auth: boton volver a posicion absoluta (top 14 left 16) — deja de empujar el contenido y el lockup Partee sube ~40px pegandose al borde superior con margen 4; el segmentado Oscuro/Claro gana aire simetrico 16px contra el Aviso de privacidad y contra Crear cuenta. Base: v32.52)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -260,7 +260,7 @@ window.__al=function(){};
   .modal-box{max-width:560px !important;border-radius:24px !important;margin-bottom:20px;max-height:calc(100vh - 80px) !important}
   .modal-bg{align-items:center !important;padding-top:0 !important}
   .bsheet{max-width:600px !important;left:50% !important;transform:translateX(-50%);right:auto !important;border-radius:24px 24px 0 0}
-  .auth-card{padding:40px 36px;background:var(--card-bg,rgba(18,18,31,.6));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:24px;border:1px solid rgba(255,255,255,.08);box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .auth-card{padding:20px 36px 36px;background:var(--card-bg,rgba(18,18,31,.6));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:24px;border:1px solid rgba(255,255,255,.08);box-shadow:0 20px 60px rgba(0,0,0,.4)}
   /* Admin gets more width on tablet */
   .admin-container{max-width:768px;box-shadow:0 0 60px rgba(0,0,0,.3)}
   .admin-bnav{max-width:768px !important}
@@ -1376,9 +1376,9 @@ function Login({onHome}){/* v32.45 Nord (Mobbin): cuenta recordada en localStora
   return<div className="auth-wrap"><div className="fi auth-card" style={{maxWidth:420}}>
     {/* 19a-19f (v32.22): onboarding premium — header por modo, social 2col, campos card, casillas legales, radio cards coral */}
     {(mode==="login"||mode==="register"||mode==="reset")&&<div style={{marginBottom:28}}>
-      <button onClick={()=>{setMsg("");if(mode==="login"){if(onHome)onHome()}else setMode("login")}} aria-label="Volver" style={{width:36,height:36,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:4}} dangerouslySetInnerHTML={{__html:ic("left",16,C.ts)}}/>
+      <button onClick={()=>{setMsg("");if(mode==="login"){if(onHome)onHome()}else setMode("login")}} aria-label="Volver" style={{position:"absolute",top:14,left:16,zIndex:2,width:36,height:36,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",16,C.ts)}}/>
       {/* v32.46: lockup oficial del splash — ParteeLogo integrado + tagline FIND CONNECT PLAY */}
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",margin:"10px 0 26px"}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",margin:"4px 0 26px"}}>
         <ParteeLogo h={46} mc={C.acc} tc={C.txt}/>
         <p style={{fontSize:11,color:C.ts,letterSpacing:".18em",fontWeight:500,margin:"11px 0 0"}}>FIND · CONNECT · PLAY</p>
       </div>
@@ -1410,11 +1410,10 @@ function Login({onHome}){/* v32.45 Nord (Mobbin): cuenta recordada en localStora
       <CB19 on={okTerms} tap={()=>setOkTerms(!okTerms)}>Acepto los <span onClick={ev=>{ev.stopPropagation();setTermsType("terms")}} style={{color:C.acc,fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>Términos y condiciones</span></CB19>
       <CB19 on={okPriv} tap={()=>setOkPriv(!okPriv)}>Acepto el <span onClick={ev=>{ev.stopPropagation();setTermsType("privacy")}} style={{color:C.acc,fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>Aviso de privacidad</span></CB19>
       {/* v32.50 Mobbin (Bluesky color mode): apariencia elegida al registrarse = default del usuario (pt_theme); se cambia luego en Perfil */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.cd,borderRadius:14,padding:"9px 14px",marginBottom:5}}>
-        <span style={{fontSize:13,color:C.ts}}>Apariencia</span>
+      <div style={{display:"flex",justifyContent:"center",margin:"16px 0 16px"}}>
         <div style={{display:"flex",background:C.w06,borderRadius:9,padding:2}}>
-          <button type="button" onClick={()=>{if(theme!=="dark")toggle()}} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 11px",borderRadius:7,border:"none",background:theme==="dark"?C.acc:"transparent",color:theme==="dark"?"#fff":C.ts,fontSize:11.5,fontWeight:theme==="dark"?700:600,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'}}/>Oscuro</button>
-          <button type="button" onClick={()=>{if(theme!=="light")toggle()}} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 11px",borderRadius:7,border:"none",background:theme==="light"?C.acc:"transparent",color:theme==="light"?"#fff":C.ts,fontSize:11.5,fontWeight:theme==="light"?700:600,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("sun",12,"currentColor")}}/>Claro</button>
+          <button type="button" onClick={()=>{if(theme!=="dark")toggle()}} style={{display:"flex",alignItems:"center",gap:4,padding:"4.5px 10px",borderRadius:7,border:"none",background:theme==="dark"?C.acc:"transparent",color:theme==="dark"?"#fff":C.ts,fontSize:10.5,fontWeight:theme==="dark"?700:600,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'}}/>Oscuro</button>
+          <button type="button" onClick={()=>{if(theme!=="light")toggle()}} style={{display:"flex",alignItems:"center",gap:4,padding:"4.5px 10px",borderRadius:7,border:"none",background:theme==="light"?C.acc:"transparent",color:theme==="light"?"#fff":C.ts,fontSize:10.5,fontWeight:theme==="light"?700:600,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("sun",11,"currentColor")}}/>Claro</button>
         </div>
       </div>
     </>}
