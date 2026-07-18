@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.63 (Pinny: header al lenguaje de la casa — Solicitudes, + Nuevo y la X pierden las pills w06 y quedan como acciones de texto pelon (Nuevo con icono plus, X como aspa ic 15 en C.ts), patron Marcar leidas. Fix del texto raro: el saludo tenia el escape u26f3 pegado en texto JSX donde se renderiza literal; ahora va como expresion JS y pinta la banderita de golf. Base: v32.62)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.64 (Auditoria de X: 36 botones de cerrar/quitar homologados al aspa pelona de la casa (sin cajas, bordes ni pills; C.ts para cerrar, C.tm para quitar; cursores busy conservados). Excepciones deliberadas: X sobre fotos conservan scrim para contraste (galeria, thumbs), badge flotante coral, chips de filtro con x integrada, y el par aceptar/rechazar de solicitudes que se mantiene simetrico. Base: v32.63)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -2656,7 +2656,7 @@ function Ok({d,onHome,onBookings}){
   const secBtn16={padding:"12px 0",background:C.w06,border:"none",borderRadius:14,color:C.ts2||"#C7CBD4",fontSize:12.5,fontWeight:700,cursor:"pointer",textAlign:"center",textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center",gap:6};
   return<div className="fi" style={{minHeight:"100vh",background:C.bg,position:"relative",overflow:"hidden",padding:"0 20px 32px",boxSizing:"border-box"}}>
     {cf16.map((f,i)=><div key={i} className="cf16" style={{left:f.l+"%",width:f.w,height:f.w+2,background:f.c,borderRadius:f.rd,animationDelay:f.dl+"s"}}/>)}
-    <div style={{display:"flex",justifyContent:"flex-end",paddingTop:14}}><button onClick={()=>{hap();goBk16()}} aria-label={t("Cerrar")} style={{width:36,height:36,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",16,C.ts2||"#C7CBD4")}}/></div>
+    <div style={{display:"flex",justifyContent:"flex-end",paddingTop:14}}><button onClick={()=>{hap();goBk16()}} aria-label={t("Cerrar")} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:"6px 4px"}} dangerouslySetInnerHTML={{__html:ic("x",16,C.ts2||"#C7CBD4")}}/></div>
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",marginTop:18}}>
       <div style={{width:76,height:76,borderRadius:99,border:"2px solid "+C.grn,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={C.grn} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
       <div style={{fontSize:23,fontWeight:800,color:C.txt,letterSpacing:"-.02em"}}>{t("¡Reserva confirmada!")}</div>
@@ -3000,7 +3000,7 @@ function ParticipantsSection({booking,isOwner,onChanged}){
           </div>
         </div>
         {isOwner&&!pp.is_creator_proportional&&(pp.status==="invited"||pp.status==="accepted_pending_payment")&&hoursLeft>24&&(
-          <button onClick={()=>removeParticipant(pp.id)} style={{width:26,height:26,borderRadius:13,background:C.acc+"15",border:"none",color:C.acc,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
+          <button onClick={()=>removeParticipant(pp.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:4}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
         )}
       </div>;
     })}
@@ -4492,7 +4492,7 @@ function FnbOrderSheet({booking,onClose}){
           <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>{t("Pedir al hoyo")}</h3>
           <div style={{fontSize:11,color:C.tm,marginTop:2}}>{t("Te lo llevamos a donde vayas en el campo")}</div>
         </div>
-        <button onClick={()=>!saving&&onClose&&onClose()} style={{width:32,height:32,borderRadius:10,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        <button onClick={()=>!saving&&onClose&&onClose()} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"4px 18px 8px"}}>
         {ld?<div style={{padding:"30px 0"}}><Skeleton w="100%" h={60} mb={8}/><Skeleton w="100%" h={60}/></div>:
@@ -5327,7 +5327,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
             <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>Agregar extras</h3>
             <div style={{fontSize:11,color:C.tm,marginTop:2}}>Para {detail?.course_name} · {detail?.party_size||1} {(detail?.party_size||1)===1?"jugador":"jugadores"}</div>
           </div>
-          <button onClick={()=>!savingExtras&&setExtrasSheet(false)} style={{width:32,height:32,borderRadius:10,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          <button onClick={()=>!savingExtras&&setExtrasSheet(false)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
         </div>
         {/* Catalog */}
         <div style={{flex:1,overflowY:"auto",padding:"4px 18px 8px"}}>
@@ -5512,7 +5512,7 @@ function FriendsTab(){const{s,p}=useA();const[friends,setFriends]=useState([]);c
           <div style={{fontSize:12,color:C.tm,marginTop:1,..._s.mono}}>{r.user?.player_id}{r.user?.handicap!=null?" · HCP "+Number(r.user.handicap).toFixed(1):""}</div>
         </div>
         <button onClick={()=>acceptFade(r.id,r.user_id)} style={{background:C.acc,border:"none",borderRadius:10,padding:"9px 15px",fontSize:12.5,fontWeight:800,color:"#fff",cursor:"pointer",flexShrink:0}}>{t("Aceptar")}</button>
-        <button onClick={()=>{hap();rejectF(r.id,r.user_id)}} aria-label={t("Descartar")} style={{width:34,height:34,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",13,C.ts)}}/>
+        <button onClick={()=>{hap();rejectF(r.id,r.user_id)}} aria-label={t("Descartar")} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:"6px 4px",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",13,C.ts)}}/>
       </div>)}
     </div>}
     </div><div style={{padding:"0 20px 120px",flex:1}}>
@@ -5582,7 +5582,7 @@ function FriendsTab(){const{s,p}=useA();const[friends,setFriends]=useState([]);c
     return<div className="modal-bg" onClick={close9}><div className="modal-box" onClick={e=>{e.stopPropagation();if(vpMenu)setVpMenu(false)}} style={{maxHeight:"calc(100vh - 40px)",overflowY:"auto",background:C.bg,border:"none",borderRadius:20,padding:"14px 18px 18px"}}>
       {/* 15d header: nombre + menu ⋯ */}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,position:"relative"}}>
-        <button onClick={close9} aria-label="Cerrar" style={{width:32,height:32,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",13,C.txt)}}/>
+        <button onClick={close9} aria-label="Cerrar" style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:"6px 4px",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",13,C.txt)}}/>
         <span style={{flex:1,fontSize:16,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName(vp)}</span>
         <button onClick={e=>{e.stopPropagation();setVpMenu(v=>!v)}} aria-label="Opciones" style={{width:32,height:32,borderRadius:99,background:vpMenu?C.w07:"transparent",border:"none",cursor:"pointer",color:C.ts2||C.ts,fontSize:18,fontWeight:800,lineHeight:1,letterSpacing:1}}>{"\u22ef"}</button>
         {vpMenu&&<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:38,right:0,background:C.cd,borderRadius:12,overflow:"hidden",zIndex:5,minWidth:180,boxShadow:"0 8px 28px rgba(0,0,0,.5)"}}>
@@ -6622,7 +6622,7 @@ function TourneoTab(props){
         const share16=async()=>{hap();const msg="\ud83c\udfc6 "+rv.verdict.txt+" en "+(at.course_name||"Partee")+(rv.myScore?" \u00b7 "+rv.myScore+" golpes":"")+" \u00b7 Partee https://www.partee.com.mx";try{if(navigator.share){await navigator.share({text:msg})}else{await navigator.clipboard.writeText(msg);window.__toast?.(t("Copiado al portapapeles"),"success")}}catch(e){}};
         const rematch16=()=>{hap();if(!rv.rival)return;window.__createMatchFromGroup={id:null,course_id:at.course_id,course_name:at.course_name,group_name:null,date:null,time:null,game_mode:at.game_mode||"individual",game_format:at.game_format||null,max_players:2,members:[{id:s.user.id,name:p?.nickname||p?.full_name||"",player_pid:p?.player_id||null},{id:rv.rival.user_id,name:rv.rival.player_name||rivAv16?.nickname||"",player_pid:rv.rival.player_pid||null}]};setResult16(null);setAt(null);setView("list");window.dispatchEvent(new CustomEvent("partee:vtab",{detail:{tab:"matches"}}))};
         return<div className="fi" style={{position:"fixed",inset:0,zIndex:400,background:C.bg,overflowY:"auto",padding:"0 20px 32px",boxSizing:"border-box"}}>
-        <div style={{display:"flex",justifyContent:"flex-end",paddingTop:14}}><button onClick={()=>{setResult16(null);setAt(null);setView("list")}} aria-label={t("Cerrar")} style={{width:36,height:36,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",16,C.ts2||"#C7CBD4")}}/></div>
+        <div style={{display:"flex",justifyContent:"flex-end",paddingTop:14}}><button onClick={()=>{setResult16(null);setAt(null);setView("list")}} aria-label={t("Cerrar")} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:"6px 4px"}} dangerouslySetInnerHTML={{__html:ic("x",16,C.ts2||"#C7CBD4")}}/></div>
         <div style={{textAlign:"center",marginTop:8}}>
           <div style={{fontSize:11,fontWeight:800,color:C.ts,letterSpacing:"2px",textTransform:"uppercase"}}>{(fmtLabel(at.game_format)||at.game_format||"Partida")+" · "+(at.course_name||"")}</div>
           <div style={{fontSize:34,fontWeight:800,color:rv.verdict.col,letterSpacing:"-.04em",marginTop:12,lineHeight:1.05,..._s.mono}}>{rv.verdict.txt}</div>
@@ -7369,7 +7369,7 @@ function ProSection({mode}){
          <div style={{marginBottom:6}}>{mySlots.map(sl=>{const ss=sl.status==="booked"?{l:"Reservado",c:C.grn}:sl.status==="pending"?{l:"Pendiente",c:C.gld}:sl.status==="cancelled"?{l:"Cancelado",c:C.tm}:{l:"Abierto",c:C.ts};
           return<div key={sl.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"11px 13px",background:C.cd,borderRadius:13,marginBottom:8}}>
           <div style={{minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{slDate(sl.slot_date)} · <span style={_s.mono}>{hhmm(sl.start_time)}–{hhmm(sl.end_time)}</span></div>{(sl.price!=null||sl.notes)&&<div style={{fontSize:11,color:C.tm,marginTop:1}}>{[sl.price!=null?"$"+fm(sl.price):null,sl.notes].filter(Boolean).join(" · ")}</div>}</div>
-          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:".4px",color:ss.c,background:ss.c==="#5B6270"?C.w06:ss.c+"18",padding:"3px 9px",borderRadius:99}}>{ss.l.toUpperCase()}</span>{sl.status!=="booked"&&<button onClick={()=>deleteSlot(sl.id)} aria-label="Eliminar horario" style={{width:28,height:28,borderRadius:99,border:"none",background:C.w06,color:C.ts,cursor:"pointer",fontSize:12,lineHeight:1}}>✕</button>}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}><span style={{fontSize:9.5,fontWeight:800,letterSpacing:".4px",color:ss.c,background:ss.c==="#5B6270"?C.w06:ss.c+"18",padding:"3px 9px",borderRadius:99}}>{ss.l.toUpperCase()}</span>{sl.status!=="booked"&&<button onClick={()=>deleteSlot(sl.id)} aria-label="Eliminar horario" style={{background:"none",border:"none",color:C.ts,cursor:"pointer",fontSize:14,lineHeight:1,padding:"4px 6px"}}>✕</button>}</div>
         </div>})}</div>}
         {/* 20a: solicitudes */}
         <div style={{display:"flex",alignItems:"center",gap:8,margin:"14px 0 8px"}}>
@@ -9081,7 +9081,7 @@ function AdminWalkInsCard({course}){
                 <span style={{fontWeight:600,color:pm.c,display:"inline-flex",alignItems:"center",gap:4}} dangerouslySetInnerHTML={{__html:pm.l}}/>
                 <span>{isToday?"Hoy":w.walk_in_date} {w.walk_in_time?.slice(0,5)}</span>
               </div>
-              {!cancelled&&<button onClick={()=>cancel(w.id)} disabled={busyId===w.id} title="Cancelar" style={{padding:"2px 7px",background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:5,color:C.acc,fontSize:9,cursor:busyId===w.id?"default":"pointer"}}>×</button>}
+              {!cancelled&&<button onClick={()=>cancel(w.id)} disabled={busyId===w.id} title="Cancelar" style={{background:"none",border:"none",color:C.tm,fontSize:12,cursor:busyId===w.id?"default":"pointer",padding:"2px 4px",lineHeight:1}}>×</button>}
             </div>
             {w.notes&&<div style={{fontSize:9,color:C.tm,marginTop:3,fontStyle:"italic"}}>{w.notes}</div>}
           </div>})}
@@ -10080,7 +10080,7 @@ function AdminBookings({course}){
             ?<span onClick={e=>e.stopPropagation()} style={{display:"inline-flex",alignItems:"center",gap:4}}>
               <input autoFocus type="number" min={1} max={(course.facility_type==="simulador"?course.cabins_count:course.stations_count)||72} value={bayVal} onChange={e=>setBayVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();const mx=(course.facility_type==="simulador"?course.cabins_count:course.stations_count)||72;const n=parseInt(bayVal);if(!n||n<1||n>mx){window.__toast?.(t("Numero invalido"),"warn");return}sb.rpc("assign_bay",{p_booking_id:b.id,p_bay:n}).then(({data:r,error})=>{if(error||!r?.ok){window.__toast?.(t("No se pudo asignar")+(r?.reason?" ("+r.reason+")":""),"warn")}else{window.__toast?.((course.facility_type==="simulador"?t("Cabina"):t("Bahía"))+" #"+n+" "+t("asignada"),"success");load&&load()}});setBayFor(null)}}} placeholder={"1-"+((course.facility_type==="simulador"?course.cabins_count:course.stations_count)||72)} style={{width:52,height:28,padding:"0 6px",background:C.bg,border:"1px solid "+C.gld+"66",borderRadius:8,color:C.txt,fontSize:11,outline:"none"}}/>
               <button onClick={e=>{e.stopPropagation();const mx=(course.facility_type==="simulador"?course.cabins_count:course.stations_count)||72;const n=parseInt(bayVal);if(!n||n<1||n>mx){window.__toast?.(t("Numero invalido"),"warn");return}sb.rpc("assign_bay",{p_booking_id:b.id,p_bay:n}).then(({data:r,error})=>{if(error||!r?.ok){window.__toast?.(t("No se pudo asignar")+(r?.reason?" ("+r.reason+")":""),"warn")}else{window.__toast?.((course.facility_type==="simulador"?t("Cabina"):t("Bahía"))+" #"+n+" "+t("asignada"),"success");load&&load()}});setBayFor(null)}} style={{height:28,padding:"0 10px",borderRadius:14,border:"none",background:C.gld,color:"#1a1a2e",fontSize:10,fontWeight:800,cursor:"pointer"}}>OK</button>
-              <button onClick={e=>{e.stopPropagation();setBayFor(null)}} style={{height:28,width:28,borderRadius:14,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:11,cursor:"pointer"}}>×</button>
+              <button onClick={e=>{e.stopPropagation();setBayFor(null)}} style={{background:"none",border:"none",color:C.ts,fontSize:14,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
             </span>
             :<button onClick={e=>{e.stopPropagation();setBayFor(b.id);setBayVal(b.assigned_bay?String(b.assigned_bay):"")}} title={t("Asignar bahía")} style={{height:28,padding:"0 10px",borderRadius:14,background:b.assigned_bay?C.grn+"15":"#6c5ce712",border:"1px solid "+(b.assigned_bay?C.grn+"30":"#6c5ce730"),display:"flex",alignItems:"center",gap:5,cursor:"pointer",color:b.assigned_bay?C.grn:"#6c5ce7",fontSize:11,fontWeight:700}}><span dangerouslySetInnerHTML={{__html:ic("pin",12,b.assigned_bay?C.grn:"#6c5ce7")}}/>{b.assigned_bay?"#"+b.assigned_bay:(course.facility_type==="simulador"?t("Cabina"):t("Bahía"))}</button>)}
           </div>
@@ -11098,7 +11098,7 @@ function AdminPricingRules({course,embedded}){
             <div style={{display:"flex",gap:4,flexShrink:0}}>
               <button onClick={()=>toggle(r)} disabled={busyId===r.id} title={isActive?"Pausar":"Activar"} style={{padding:"4px 8px",background:isActive?C.gld+"15":C.grn+"15",border:"1px solid "+(isActive?C.gld+"40":C.grn+"40"),borderRadius:6,color:isActive?C.gld:C.grn,fontSize:10,fontWeight:700,cursor:busyId===r.id?"default":"pointer"}}>{isActive?"⏸":"▶"}</button>
               <button onClick={()=>{setEditRule(r);setShowModal(true)}} title="Editar" style={{padding:"4px 8px",background:C.cd,border:"1px solid "+C.bd,borderRadius:6,color:C.ts,fontSize:10,cursor:"pointer"}}>✎</button>
-              <button onClick={()=>del(r)} disabled={busyId===r.id} title="Borrar" style={{padding:"4px 8px",background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:6,color:C.acc,fontSize:10,cursor:busyId===r.id?"default":"pointer"}}>×</button>
+              <button onClick={()=>del(r)} disabled={busyId===r.id} title="Borrar" style={{background:"none",border:"none",color:C.tm,fontSize:13,cursor:busyId===r.id?"default":"pointer",padding:"2px 4px",lineHeight:1}}>×</button>
             </div>
           </div>
         </div>})}
@@ -11393,7 +11393,7 @@ function AdminPromos({course}){const[promos,setPromos]=useState([]);const[ld,set
   const _pOrder={running:0,scheduled:1,paused:2,expired:3};
   const sortedPromos=[...promos].sort((a,b)=>(_pOrder[pStatus(a)]-_pOrder[pStatus(b)])||(b.valid_from||"").localeCompare(a.valid_from||""));
   const livePromos=sortedPromos.filter(p=>pStatus(p)!=="expired"),pastPromos=sortedPromos.filter(p=>pStatus(p)==="expired");
-  function renderPromo(p){const st=pStatus(p),sc=PROMO_ST[st];return<div key={p.id} style={{background:C.cd,border:"1.5px solid "+(st==="expired"?C.bd:sc.c+"55"),borderRadius:14,padding:12,marginBottom:8,opacity:st==="expired"?.62:1,display:"flex",flexDirection:"column",gap:8}}><div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",width:"100%",gap:8}}><div style={{display:"flex",gap:9,flex:1,minWidth:0}}><span style={{display:"inline-flex",marginTop:1,flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("tag",15,sc.c)}}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{PL[p.promo_type]}: {p.promo_type==="2x1"?"":p.promo_type==="fixed"?"$"+fm(p.discount_value):p.discount_value+"%"}</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>{p.valid_from} → {p.valid_until}{p.time_start?" · "+p.time_start+"-"+p.time_end:""}{dowText(p.target_days_of_week)?" · "+dowText(p.target_days_of_week):""}</div><span style={{display:"inline-block",marginTop:4,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:6,background:(p.promo_type==="2x1"?C.gld:C.grn)+"18",color:p.promo_type==="2x1"?C.gld:C.grn}}>{p.promo_type==="2x1"?"Se anuncia":"Aplica al precio"}</span>{p.description&&<div style={{fontSize:10,color:C.tm,marginTop:1}}>{p.description}</div>}</div></div><div style={{display:"flex",gap:4,flexShrink:0}}><button onClick={()=>{setPType(p.promo_type);setPVal(p.discount_value?.toString()||"");setPFrom(p.valid_from||"");setPUntil(p.valid_until||"");setPTStart(p.time_start||"");setPTEnd(p.time_end||"");setPDesc(p.description||"");setPMin(p.min_players?.toString()||"1");setPMaxUses(p.max_usage_limit?.toString()||"");setPDays(p.target_days_of_week||[]);setEditId(p.id);setCreate(true)}} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",12,C.ts)}}/>{st!=="expired"&&<button onClick={()=>togglePromo(p.id,p.is_active)} style={{padding:"6px 10px",background:p.is_active?C.acc:C.grn,border:"none",borderRadius:10,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer"}}>{p.is_active?"Pausar":"Activar"}</button>}<button onClick={()=>{if(window.__confirm)window.__confirm("¿Eliminar promo?",()=>deletePromo(p.id))}} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.acc+"25",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/></div></div><div style={{..._s.flexB,width:"100%"}}><div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:10,color:C.ts}}>{p.usage_count||0} usos{p.max_usage_limit?" / "+p.max_usage_limit:""}</span>{st==="running"&&<span style={{fontSize:9,fontWeight:700,color:"#6c5ce7",background:"#6c5ce715",border:"1px solid #6c5ce730",padding:"1px 7px",borderRadius:5}}>{slotCounts[p.id]||0} horarios ahora</span>}</div><span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:9,fontWeight:800,color:sc.c,background:sc.c+"15",border:"1px solid "+sc.c+"3a",padding:"3px 9px",borderRadius:20}}>{st==="running"&&<span style={{width:6,height:6,borderRadius:"50%",background:sc.c,display:"inline-block",animation:"parteePulseGrn 2.5s infinite"}}/>}{sc.l}</span></div></div>}
+  function renderPromo(p){const st=pStatus(p),sc=PROMO_ST[st];return<div key={p.id} style={{background:C.cd,border:"1.5px solid "+(st==="expired"?C.bd:sc.c+"55"),borderRadius:14,padding:12,marginBottom:8,opacity:st==="expired"?.62:1,display:"flex",flexDirection:"column",gap:8}}><div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",width:"100%",gap:8}}><div style={{display:"flex",gap:9,flex:1,minWidth:0}}><span style={{display:"inline-flex",marginTop:1,flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("tag",15,sc.c)}}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{PL[p.promo_type]}: {p.promo_type==="2x1"?"":p.promo_type==="fixed"?"$"+fm(p.discount_value):p.discount_value+"%"}</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>{p.valid_from} → {p.valid_until}{p.time_start?" · "+p.time_start+"-"+p.time_end:""}{dowText(p.target_days_of_week)?" · "+dowText(p.target_days_of_week):""}</div><span style={{display:"inline-block",marginTop:4,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:6,background:(p.promo_type==="2x1"?C.gld:C.grn)+"18",color:p.promo_type==="2x1"?C.gld:C.grn}}>{p.promo_type==="2x1"?"Se anuncia":"Aplica al precio"}</span>{p.description&&<div style={{fontSize:10,color:C.tm,marginTop:1}}>{p.description}</div>}</div></div><div style={{display:"flex",gap:4,flexShrink:0}}><button onClick={()=>{setPType(p.promo_type);setPVal(p.discount_value?.toString()||"");setPFrom(p.valid_from||"");setPUntil(p.valid_until||"");setPTStart(p.time_start||"");setPTEnd(p.time_end||"");setPDesc(p.description||"");setPMin(p.min_players?.toString()||"1");setPMaxUses(p.max_usage_limit?.toString()||"");setPDays(p.target_days_of_week||[]);setEditId(p.id);setCreate(true)}} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",12,C.ts)}}/>{st!=="expired"&&<button onClick={()=>togglePromo(p.id,p.is_active)} style={{padding:"6px 10px",background:p.is_active?C.acc:C.grn,border:"none",borderRadius:10,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer"}}>{p.is_active?"Pausar":"Activar"}</button>}<button onClick={()=>{if(window.__confirm)window.__confirm("¿Eliminar promo?",()=>deletePromo(p.id))}} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:4}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/></div></div><div style={{..._s.flexB,width:"100%"}}><div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:10,color:C.ts}}>{p.usage_count||0} usos{p.max_usage_limit?" / "+p.max_usage_limit:""}</span>{st==="running"&&<span style={{fontSize:9,fontWeight:700,color:"#6c5ce7",background:"#6c5ce715",border:"1px solid #6c5ce730",padding:"1px 7px",borderRadius:5}}>{slotCounts[p.id]||0} horarios ahora</span>}</div><span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:9,fontWeight:800,color:sc.c,background:sc.c+"15",border:"1px solid "+sc.c+"3a",padding:"3px 9px",borderRadius:20}}>{st==="running"&&<span style={{width:6,height:6,borderRadius:"50%",background:sc.c,display:"inline-block",animation:"parteePulseGrn 2.5s infinite"}}/>}{sc.l}</span></div></div>}
   return<div className="fi"><div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}>Precios</h3></div>
 
     {/* v25.2: gancho cuantificado arriba del grid (solo campos free con inventario vacio); abre el paywall al tocarlo */}
@@ -13246,7 +13246,7 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
       <div style={{display:"flex",gap:4}}>
         <button onClick={()=>toggleOffer(sl)} title="Hot Deal" style={{width:28,height:28,borderRadius:8,border:"1px solid "+(sl.is_offer?C.gld:C.bd),background:sl.is_offer?C.gld+"15":"transparent",color:sl.is_offer?C.gld:C.tm,fontSize:12,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("flame",12,C.gld)}}/>
         {sl.status!=="booked"&&<button onClick={()=>toggleSlot(sl)} title={sl.status==="available"?"Bloquear":"Desbloquear"} style={{width:28,height:28,borderRadius:8,border:"1px solid "+(sl.status==="blocked"?C.grn:C.acc)+30,background:sl.status==="blocked"?C.grn+"15":C.acc+"15",color:sl.status==="blocked"?C.grn:C.acc,fontSize:12,cursor:"pointer"}}>{sl.status==="blocked"?"✓":"✕"}</button>}
-        <button onClick={()=>deleteSlot(sl.id)} title="Eliminar" style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.acc+"25",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
+        <button onClick={()=>deleteSlot(sl.id)} title="Eliminar" style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:4}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
         {sl.status==="booked"&&<span style={{fontSize:10,color:C.acc,fontWeight:600,padding:"4px 8px"}}>Reservado</span>}
       </div>
     </div>)}</div>})}
@@ -13453,7 +13453,7 @@ function ProUpgradeModal({course,currentPlan,isPro,onClose,source}){
             }</div>
             <div style={{fontSize:20,fontWeight:800,color:C.txt,marginTop:4}}>{isPro?"Tu plan "+(currentPlan==="pro"?"Partee Pro":currentPlan==="pro_plus"?"Partee Pro+":"Enterprise"):"Partee Pro"}</div>
           </div>
-          <button onClick={onClose} style={{width:32,height:32,borderRadius:9,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
+          <button onClick={onClose} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1,flexShrink:0}}>×</button>
         </div>
 
         {/* Chip de plan seleccionado, visible en todos los steps post-plans */}
@@ -14193,7 +14193,7 @@ function AdminInventory({course}){const[impOpen,setImpOpen]=useState(false);cons
             <div style={{display:"flex",gap:4,flexShrink:0}}>
               <button onClick={()=>toggleAvail(item)} style={{padding:"6px 10px",background:item.is_available?C.grn+"20":C.bd,border:"none",borderRadius:8,color:item.is_available?C.grn:C.tm,fontSize:10,fontWeight:700,cursor:"pointer"}}>{item.is_available?"On":"Off"}</button>
               <button onClick={()=>openEdit(item)} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",12,C.ts)}}/>
-              <button onClick={()=>removeItem(item)} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.acc+"25",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
+              <button onClick={()=>removeItem(item)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:4}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
             </div>
           </div>
         </div>})}
@@ -14246,7 +14246,7 @@ function AdminInventory({course}){const[impOpen,setImpOpen]=useState(false);cons
         <div style={{padding:"10px 0 0",display:"flex",justifyContent:"center"}}><div style={{width:40,height:4,background:C.tm,borderRadius:2,opacity:.4}}/></div>
         <div style={{padding:"12px 18px 8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>Agregar al inventario</h3>
-          <button onClick={()=>setAddModal(false)} style={{width:32,height:32,borderRadius:10,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:18,cursor:"pointer"}}>×</button>
+          <button onClick={()=>setAddModal(false)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
         </div>
         <div style={{flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:"4px 18px 18px"}}>
           {availableToAdd.length===0?<div style={{textAlign:"center",padding:40,color:C.tm}}>{t("Ya tienes todo el catálogo")}</div>:
@@ -14268,7 +14268,7 @@ function AdminInventory({course}){const[impOpen,setImpOpen]=useState(false);cons
       <div onClick={e=>e.stopPropagation()} style={{background:C.bgPanel||C.cd,borderRadius:18,width:"100%",maxWidth:420,padding:18}}>
         <div style={{..._s.flexB,marginBottom:12}}>
           <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>{edit.extras_catalog?.icon} Editar item</h3>
-          <button onClick={()=>!savingEdit&&setEdit(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+          <button onClick={()=>!savingEdit&&setEdit(null)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
         </div>
         <div style={{marginBottom:10}}>
           <label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>NOMBRE PERSONALIZADO (opcional)</label>
@@ -14308,7 +14308,7 @@ function AdminInventory({course}){const[impOpen,setImpOpen]=useState(false);cons
             <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>{nw._editId?"Editar item propio":"Crear item propio"}</h3>
             <div style={{fontSize:11,color:C.tm,marginTop:2}}>Un accesorio o servicio exclusivo de tu campo</div>
           </div>
-          <button onClick={()=>!savingNew&&setNw(null)} style={{width:32,height:32,borderRadius:10,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
+          <button onClick={()=>!savingNew&&setNw(null)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1,flexShrink:0}}>×</button>
         </div>
         <div style={{flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:"14px 18px"}}>
           <div style={{display:"flex",gap:8,marginBottom:12}}>
@@ -14360,7 +14360,7 @@ function AdminInventory({course}){const[impOpen,setImpOpen]=useState(false);cons
             <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt}}>{bnd._editId?"Editar paquete":"Crear paquete"}</h3>
             <div style={{fontSize:11,color:C.tm,marginTop:2}}>Agrupa varios items en un combo con precio especial</div>
           </div>
-          <button onClick={()=>!savingBnd&&setBnd(null)} style={{width:32,height:32,borderRadius:10,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
+          <button onClick={()=>!savingBnd&&setBnd(null)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1,flexShrink:0}}>×</button>
         </div>
         <div style={{flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:"14px 18px"}}>
           <div style={{display:"flex",gap:8,marginBottom:12}}>
@@ -14871,7 +14871,7 @@ function HoleGeoEditor({course, onClose}){
         <div style={{fontSize:15,fontWeight:800,color:C.txt}}>{t("Posiciones GPS de hoyos")}</div>
         <div style={{fontSize:11,marginTop:2}}><span style={{color:C.grn,fontWeight:700}}>{savedN} {t("guardados")}</span>{pendN>0?<span style={{color:C.gld,fontWeight:700}}> · {pendN} {t("sin guardar")}</span>:null}<span style={{color:C.ts}}> · {holes.length} {t("hoyos")}</span></div>
       </div>
-      <button onClick={tryClose} style={{width:34,height:34,borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer",flexShrink:0}}>×</button>
+      <button onClick={tryClose} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1,flexShrink:0}}>×</button>
     </div>
     <div ref={mapRef} style={{flex:1,minHeight:0,width:"100%",background:C.cd}}/>
     <div style={{padding:"10px 16px 16px",borderTop:"1px solid "+C.bd,background:C.cd,flexShrink:0,maxHeight:"46vh",overflowY:"auto"}}>
@@ -14943,7 +14943,7 @@ function DispatchModal({course,onClose}){
     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:500,background:C.bg,borderRadius:"18px 18px 0 0",padding:18,maxHeight:"88vh",overflowY:"auto"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic("mail",18,C.grn)}}/><div style={{fontSize:16,fontWeight:800,color:C.txt}}>Mensaje al equipo</div></div>
-        <button onClick={onClose} style={{width:34,height:34,borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.tm,fontSize:18,cursor:"pointer"}}>×</button>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
       <div style={{fontSize:12,color:C.tm,marginBottom:12}}>{t("Manda un mensaje por WhatsApp al equipo según su rol (solo disponibles).")}</div>
       <div style={{fontSize:11,fontWeight:700,color:C.ts,marginBottom:6}}>ROL</div>
@@ -15412,7 +15412,7 @@ function LiveMap({course}){
               {assigned&&tk.assignee_phone&&<button onClick={()=>waStaff(tk.assignee_phone,taskWaMsg(tk))} title={t("Avisar por WhatsApp")} style={{padding:"6px 9px",borderRadius:8,border:"1px solid "+C.grn+"40",background:C.cd,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("phone",12,C.grn)}}/>{t("Avisar")}</button>}
               {assigned&&<button onClick={()=>setAssignFor({mode:"task",id:tk.id})} title={t("Reasignar")} style={{padding:"6px 9px",borderRadius:8,border:"1px solid "+C.bd,background:C.cd,color:C.ts,cursor:"pointer",display:"flex"}} dangerouslySetInnerHTML={{__html:ic("refresh",12,C.ts)}}/>}
               <button onClick={()=>doComplete(tk.id)} style={{padding:"6px 11px",borderRadius:8,border:"none",background:C.grn,color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("check",12,"#fff")}}/>{t("Hecha")}</button>
-              <button onClick={()=>doCancelTask(tk.id)} title={t("Cancelar")} style={{padding:"6px 9px",borderRadius:8,border:"1px solid "+C.acc+"30",background:C.cd,color:C.acc,fontSize:13,fontWeight:800,cursor:"pointer",lineHeight:1}}>×</button>
+              <button onClick={()=>doCancelTask(tk.id)} title={t("Cancelar")} style={{background:"none",border:"none",color:C.tm,fontSize:16,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
             </div>
           </div>;
         })}
@@ -16191,7 +16191,7 @@ function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="cou
             <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{drill.label}</div>
             <div style={{fontSize:10,color:C.tm,marginTop:1}}>{mode==="historical"?"Últimas 4 semanas":"Próximas 4 semanas"} · {drill.summary?.slot_count||0} slot(s)</div>
           </div>
-          <button onClick={()=>setDrill(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+          <button onClick={()=>setDrill(null)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
         </div>
 
         {drill.can_hot_deal&&drill.summary?.hot_deal_eligible_count>0&&!isTeam&&<button onClick={applyHotDealToCell} disabled={hotDealBusy} style={{width:"100%",padding:11,marginBottom:12,background:hotDealBusy?C.bd:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:10,color:hotDealBusy?C.tm:"#fff",fontSize:12,fontWeight:800,cursor:hotDealBusy?"default":"pointer",letterSpacing:.3,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{hotDealBusy?"Aplicando…":<>Aplicar Hot Deal -20% a {drill.summary.hot_deal_eligible_count} slot(s)</>}</button>}
@@ -16385,7 +16385,7 @@ function CampaignCreateModal({course,onClose,onCreated,prefill}){
     <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:20,padding:18,maxWidth:560,width:"100%",maxHeight:"85vh",overflowY:"auto",border:"1px solid "+C.bd}}>
       <div style={{..._s.flexB,marginBottom:14,paddingBottom:10,borderBottom:"1px solid "+C.bd}}>
         <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{t("Nueva campaña")}</div>
-        <button onClick={()=>{if(!busy&&!result)onClose()}} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        <button onClick={()=>{if(!busy&&!result)onClose()}} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
 
       {result?<div style={{textAlign:"center",padding:"20px 0"}}>
@@ -16441,7 +16441,7 @@ function CampaignCreateModal({course,onClose,onCreated,prefill}){
           <div style={{fontSize:11,color:C.ts,whiteSpace:"pre-wrap",lineHeight:1.5}}>{body.replaceAll("{nombre}",previewName)||<em style={{color:C.tm}}>(empty)</em>}</div>
         </div>
 
-        {tplAsk&&<div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}><input autoFocus value={tplName} onChange={e=>setTplName(e.target.value)} placeholder={t("Nombre de la plantilla")} style={{flex:1,padding:"10px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.bg,color:C.txt,fontSize:12.5}}/><button onClick={()=>{setTplAsk(false);setTplName("")}} style={{padding:"9px 11px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.tm,fontSize:11,cursor:"pointer"}}>✕</button></div>}
+        {tplAsk&&<div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}><input autoFocus value={tplName} onChange={e=>setTplName(e.target.value)} placeholder={t("Nombre de la plantilla")} style={{flex:1,padding:"10px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.bg,color:C.txt,fontSize:12.5}}/><button onClick={()=>{setTplAsk(false);setTplName("")}} style={{background:"none",border:"none",color:C.tm,fontSize:14,cursor:"pointer",padding:"6px 4px",lineHeight:1}}>✕</button></div>}
         <div style={{display:"flex",gap:6}}>
           <button onClick={onClose} disabled={busy} style={{flex:1,padding:11,background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.tm,fontSize:12,fontWeight:700,cursor:busy?"default":"pointer"}}>Cancelar</button>
           {/* v20.19: guardar como plantilla (no bloquea el flow de crear) */}
@@ -16510,7 +16510,7 @@ function CampaignDetailModal({campaignId,onClose,onSent}){
             </div>
             <div style={{fontSize:10,color:C.tm}}>{SEGMENT_OPTIONS.find(s=>s.v===data.campaign.target_segment)?.lbl||data.campaign.target_segment}</div>
           </div>
-          <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+          <button onClick={onClose} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
         </div>
 
         {/* Stats — v20.13 expanded: 5 cols with Clicks + rates inline */}
@@ -16660,7 +16660,7 @@ function CampaignTemplatesModal({course,onClose,onUse}){
           <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{t("Plantillas de campaña")}</div>
           <div style={{fontSize:10,color:C.tm,marginTop:2}}>Reusa subject + body para ahorrarte rescribir cada vez</div>
         </div>
-        <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
 
       {/* Filter tabs */}
@@ -16897,7 +16897,7 @@ function ChurnRiskPanel({course}){const{p}=useA();const isTeam=p?.user_role==="c
             </div>
             <div style={{fontSize:10,color:C.tm,marginTop:1}}>Score {selected.risk_score} · {selected.days_since_last}d sin venir · LTV ${fm(selected.revenue_12mo)}</div>
           </div>
-          <button onClick={()=>{if(!busy){setSelected(null);setWinback(null)}}} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+          <button onClick={()=>{if(!busy){setSelected(null);setWinback(null)}}} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
         </div>
 
         {/* Recommended action */}
@@ -17355,7 +17355,7 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
     return<div style={{padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginTop:10}}>
       <div style={{..._s.flexB,marginBottom:12}}>
         <h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{edit.id?"Editar membresía":"Nueva membresía"}</h4>
-        <button onClick={()=>!saving&&setEdit(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        <button onClick={()=>!saving&&setEdit(null)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
       <div style={{marginBottom:10}}>
         <label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>MODO</label>
@@ -17495,7 +17495,7 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
             <div style={{display:"flex",gap:4,flexShrink:0}}>
               <button onClick={()=>toggleActive(t)} style={{padding:"6px 8px",background:t.is_active?C.grn+"20":C.bd,border:"none",borderRadius:6,color:t.is_active?C.grn:C.tm,fontSize:10,fontWeight:700,cursor:"pointer"}}>{t.is_active?"On":"Off"}</button>
               <button onClick={()=>openEdit(t)} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.bd,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",11,C.ts)}}/>
-              <button onClick={()=>delTier(t)} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.acc+"25",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",11,C.acc)}}/>
+              <button onClick={()=>delTier(t)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:4}} dangerouslySetInnerHTML={{__html:ic("x",11,C.acc)}}/>
             </div>
           </div>
         </div>})}
@@ -17579,7 +17579,7 @@ function AdminMembers({course,extTiers}){
     return<div style={{padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginTop:10}}>
       <div style={{..._s.flexB,marginBottom:12}}>
         <h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{form.id?"Editar socio":"Cargar socio"}</h4>
-        <button onClick={()=>!saving&&setForm(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        <button onClick={()=>!saving&&setForm(null)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
       <div style={{marginBottom:8}}><label style={L}>{t("MEMBRESÍA")}</label><select value={form.tier_id} onChange={e=>setForm({...form,tier_id:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}>{extTiers.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
@@ -17602,7 +17602,7 @@ function AdminMembers({course,extTiers}){
     return<div style={{padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginTop:10}}>
       <div style={{..._s.flexB,marginBottom:12}}>
         <h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>Cargar socios por CSV</h4>
-        <button onClick={closeAll} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        <button onClick={closeAll} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
       {bulkRes?
         <div>
@@ -17675,7 +17675,7 @@ function AdminMembers({course,extTiers}){
            </div>
            <div style={{display:"flex",gap:4,flexShrink:0}}>
              <button onClick={()=>openEdit(m)} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.bd,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("edit",11,C.ts)}}/>
-             <button onClick={()=>remove(m)} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.acc+"25",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("x",11,C.acc)}}/>
+             <button onClick={()=>remove(m)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:4}} dangerouslySetInnerHTML={{__html:ic("x",11,C.acc)}}/>
            </div>
          </div>
        </div>})}
@@ -17863,7 +17863,7 @@ function ScoreCaptureModal({tournamentId,holesCount,coursePar,priorScore,priorHo
           <div style={{fontSize:14,fontWeight:800,color:C.txt}}>Capturar mi score</div>
           <div style={{fontSize:10,color:C.tm,marginTop:1}}>Par del campo: {coursePar} · {holesCount} hoyos</div>
         </div>
-        <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
 
       <div style={{marginBottom:14}}>
@@ -17947,7 +17947,7 @@ function HoleScoreCaptureModal({tournamentId,holesCount,coursePar,team,gameMode,
           <div style={{fontSize:14,fontWeight:800,color:C.txt}}>Mi score por hoyo{isFour&&team?" · Equipo "+team:""}</div>
           <div style={{fontSize:10,color:C.tm,marginTop:1}}>{isFour?"Four-Ball · cuenta la mejor bola por hoyo del equipo":isStab?"Stableford · puntos netos por hoyo (handicap WHS)":isMatch?"Match Play · captura tus golpes por hoyo":"Captura tus golpes por hoyo"}</div>
         </div>
-        <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
       {ld?<Skeleton w="100%" h={220}/>:<>
         <div style={{display:"flex",gap:8,marginBottom:12}}>
@@ -18495,7 +18495,7 @@ function AdminTournaments({course}){const{p}=useA();const isTeam=p?.user_role===
     return<div className="tform" style={{padding:14,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,marginTop:10}}>
       <div style={{..._s.flexB,marginBottom:12}}>
         <h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>Nuevo torneo</h4>
-        <button onClick={()=>!saving&&setEdit(null)} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.tm,fontSize:16,cursor:"pointer"}}>×</button>
+        <button onClick={()=>!saving&&setEdit(null)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
       <div style={{marginBottom:8}}><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>NOMBRE*</label><input value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})} placeholder="Open Cabo Mayo 2026" style={{...inpT,marginTop:4}}/></div>
       <div style={{marginBottom:8}}><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>{t("DESCRIPCIÓN")}</label><textarea value={edit.description} onChange={e=>setEdit({...edit,description:e.target.value})} placeholder="Stroke play 18 hoyos. Premios al podio." style={{...inpT,marginTop:4,minHeight:60,fontFamily:"inherit"}}/></div>
