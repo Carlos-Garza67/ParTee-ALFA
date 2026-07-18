@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.57 (Detalle de reserva, seccion Extras: el boton + Agregar (outline verde con borde) pasa a chip de la casa — pill radius 99, tinte verde al 12pct sin borde, icono plus del set ic(); la X de remover (cuadrito con borde coral) pasa a circulo neutro w06 con aspa fina, mismo patron que eliminar horario y rechazar. Base: v32.56)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.58 (Extras del detalle, segunda pasada: fuera contenedores — Agregar queda como texto verde pelon con plus fino (patron Marcar leidas) y la X como aspa pelona en C.tm sin circulo (patron del clear de busqueda). Las acciones inline de la casa no llevan caja. Base: v32.57)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -5052,14 +5052,14 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
             <div style={{marginBottom:14}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                 <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:1}}>{t("EXTRAS")}{bkExtras.length>0?` (${bkExtras.length})`:""}</div>
-                {(detail.golf_courses?.facility_type||"campo")==="campo"&&detail.status!=="cancelled"&&(()=>{const teeDT=new Date((detail.booking_date||"")+"T"+((detail.booking_time||"12:00").slice(0,5)));return !detail.checked_in_at&&Date.now()<teeDT.getTime()&&detailScore==null})()&&<button onClick={openExtrasSheet} style={{display:"inline-flex",alignItems:"center",gap:5,padding:"5px 12px",background:"rgba(30,232,165,.12)",border:"none",borderRadius:99,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("plus",11,C.grn)}}/>{t("Agregar")}</button>}
+                {(detail.golf_courses?.facility_type||"campo")==="campo"&&detail.status!=="cancelled"&&(()=>{const teeDT=new Date((detail.booking_date||"")+"T"+((detail.booking_time||"12:00").slice(0,5)));return !detail.checked_in_at&&Date.now()<teeDT.getTime()&&detailScore==null})()&&<button onClick={openExtrasSheet} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 0",background:"none",border:"none",color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("plus",12,C.grn)}}/>{t("Agregar")}</button>}
               </div>
               {bkExtras.length===0?<div style={{fontSize:11,color:C.tm,fontStyle:"italic",padding:"6px 0"}}>{(detail.golf_courses?.facility_type||"campo")!=="campo"?t("Para pedir productos usa Pedir a mi bahía, arriba."):(detail.checked_in_at||Date.now()>=new Date((detail.booking_date||"")+"T"+((detail.booking_time||"12:00").slice(0,5))).getTime()?t("Para pedir durante tu ronda usa Pedir al carrito, arriba."):t("Sin extras agregados"))}</div>:<>
                 {bkExtras.map(ex=>{const isRemoving=removingExtra===ex.id;
                 return<div key={ex.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,padding:"6px 0",borderBottom:"1px solid "+C.bd+"50"}}>
                   <span style={{color:C.ts,flex:1,minWidth:0}}>{ex.extras_catalog?.icon} {ex.extras_catalog?.name}{ex.variant_choice?<span style={{color:C.tm,fontWeight:600}}> · {ex.variant_choice}</span>:null} <span style={{color:C.tm}}>x{ex.quantity}</span></span>
                   <span style={{color:C.txt,fontWeight:600,..._s.mono,marginRight:8}}>${fm(ex.total_price)}</span>
-                  {detail.status!=="cancelled"&&<button onClick={()=>removeExtra(ex.id)} disabled={isRemoving} aria-label="Quitar extra" style={{width:24,height:24,borderRadius:99,border:"none",background:C.w06,color:C.ts,fontSize:11,cursor:isRemoving?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1}}>{isRemoving?"…":"✕"}</button>}
+                  {detail.status!=="cancelled"&&<button onClick={()=>removeExtra(ex.id)} disabled={isRemoving} aria-label="Quitar extra" style={{background:"none",border:"none",color:C.tm,fontSize:12,cursor:isRemoving?"default":"pointer",padding:"4px 2px",flexShrink:0,lineHeight:1}}>{isRemoving?"…":"✕"}</button>}
                 </div>})}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,padding:"8px 0 0",marginTop:4,borderTop:"2px solid "+C.bd}}>
                   <span style={{color:C.tm,fontSize:10,fontWeight:700,letterSpacing:.5}}>SUBTOTAL EXTRAS</span>
