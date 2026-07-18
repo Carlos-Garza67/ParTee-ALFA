@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.62 (Torneos jugador: segunda instancia del CTA Publicalo en Partee eliminada — vivia inline en el empty state (Sin torneos abiertos), aparte del cierre ya removido en v32.61. Queda solo el EmptyState limpio. Base: v32.61)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.63 (Pinny: header al lenguaje de la casa — Solicitudes, + Nuevo y la X pierden las pills w06 y quedan como acciones de texto pelon (Nuevo con icono plus, X como aspa ic 15 en C.ts), patron Marcar leidas. Fix del texto raro: el saludo tenia el escape u26f3 pegado en texto JSX donde se renderiza literal; ahora va como expresion JS y pinta la banderita de golf. Base: v32.62)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -8499,15 +8499,15 @@ function PlayerConciergeChat({onClose}){
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>{onClose&&onClose();setTimeout(()=>window.__openSupport?.(),60)}} title="Mis solicitudes a Partee" style={{padding:"7px 11px",background:C.w06,border:"none",borderRadius:99,color:C.ts2||C.ts,fontSize:11.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{t("Solicitudes")}</button>
-          {messages.length>0&&<button onClick={newChat} title="Nuevo chat" style={{padding:"7px 11px",background:C.w06,border:"none",borderRadius:99,color:C.ts2||C.ts,fontSize:11.5,fontWeight:700,cursor:"pointer"}}>+ {t("Nuevo")}</button>}
-          <button onClick={onClose} aria-label="Cerrar" style={{width:32,height:32,borderRadius:99,background:C.w06,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",14,C.txt)}}/>
+          <button onClick={()=>{onClose&&onClose();setTimeout(()=>window.__openSupport?.(),60)}} title="Mis solicitudes a Partee" style={{padding:"6px 2px",background:"none",border:"none",color:C.ts2||C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{t("Solicitudes")}</button>
+          {messages.length>0&&<button onClick={newChat} title="Nuevo chat" style={{display:"inline-flex",alignItems:"center",gap:4,padding:"6px 2px",background:"none",border:"none",color:C.ts2||C.ts,fontSize:12,fontWeight:700,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("plus",11,"currentColor")}}/>{t("Nuevo")}</button>}
+          <button onClick={onClose} aria-label="Cerrar" style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:"6px 4px",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("x",15,C.ts)}}/>
         </div>
       </div>
       <div ref={scrollRef} style={{flex:1,overflowY:"auto",padding:"14px 16px"}}>
         {messages.length===0?<div>
           <div style={{padding:"13px 14px",background:C.cd,borderRadius:"16px 16px 16px 5px",marginBottom:14,maxWidth:"88%"}}>
-            <div style={{fontSize:13.5,color:"#E8E9EC",lineHeight:1.5}}>Hola, soy <strong style={{color:C.txt}}>Pinny</strong> \u26f3 Pregúntame sobre tus reservas, tu handicap, tus torneos o los campos cerca de ti.</div>
+            <div style={{fontSize:13.5,color:"#E8E9EC",lineHeight:1.5}}>Hola, soy <strong style={{color:C.txt}}>Pinny</strong> {"\u26f3"} Pregúntame sobre tus reservas, tu handicap, tus torneos o los campos cerca de ti.</div>
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
             {SUGGESTIONS.map((sg,i)=><button key={i} onClick={()=>send(sg)} disabled={sending} style={{padding:"8px 13px",background:"transparent",border:"1px solid rgba(69,245,237,.35)",borderRadius:99,color:"#45F5ED",fontSize:12,fontWeight:700,cursor:sending?"default":"pointer",lineHeight:1.3,textAlign:"left"}}>{sg}</button>)}
