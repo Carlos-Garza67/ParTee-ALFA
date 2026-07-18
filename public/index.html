@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.60 (Versus: el chip de temporada (Verano 26 · 75 dias) del header se reemplaza por NotifBell — consistente con Explorar, Reservas y demas secciones. La info de temporada sigue viva dentro de la liga/ranking. Base: v32.59)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.61 (Torneos jugador: eliminado el cierre con mailto Tu club organiza un torneo / Publicalo en Partee — los jugadores no publican torneos; el canal B2B no va en la vista del jugador. Base: v32.60)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -18348,11 +18348,6 @@ function TournamentsScreen({onBack}){const{s,p}=useA();const[heroPh,setHeroPh]=u
             <span style={{flexShrink:0,fontSize:10.5,fontWeight:700,color:tr.status==="in_progress"?C.grn:C.ts,background:tr.status==="in_progress"?"rgba(30,232,165,.1)":C.w07,padding:"4px 10px",borderRadius:99}}>{statusLabel(tr.status)}</span>
           </div>)}
         </div>}
-        {/* 4 · Cierre */}
-        <div style={{textAlign:"center",fontSize:12.5,color:C.tm,padding:"16px 10px 6px"}}>
-          {t("¿Tu club organiza un torneo?")}{" "}
-          <a href={"mailto:reservas@partee.com.mx?subject="+encodeURIComponent("Quiero publicar un torneo en Partee")} style={{color:C.ts2||"#C7CBD4",fontWeight:800,textDecoration:"none"}}>{t("Publícalo en Partee")}</a>
-        </div>
       </React.Fragment>})()}
   </div>
 }
