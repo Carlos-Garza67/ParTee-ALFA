@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.59 (Tarjeta en vivo: SOS y GPS pierden la pill con borde — quedan como acciones de texto pelon con icono (patron Marcar leidas): SOS coral 800, GPS toggle que enciende verde / apaga gris C.tm. Mismo tratamiento que Agregar y la X de extras. Base: v32.58)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.60 (Versus: el chip de temporada (Verano 26 · 75 dias) del header se reemplaza por NotifBell — consistente con Explorar, Reservas y demas secciones. La info de temporada sigue viva dentro de la liga/ranking. Base: v32.59)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -6748,7 +6748,7 @@ function VersusTab(){const[vTab,setVTab]=useState("matches");const[detailOpen,se
     {!detailOpen&&<React.Fragment>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 20px 0"}}>
         <span style={{fontSize:22,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>Versus</span>
-        {lg&&<span style={{fontSize:12,fontWeight:600,color:C.ts}}>{lg.season} · {lg.days_left} {t("días")}</span>}
+        <NotifBell/>
       </div>
       <div style={{display:"flex",margin:"12px 20px 0",background:C.w07,borderRadius:10,padding:2}}>
         {segs.map(sg=><button key={sg.k} onClick={()=>{hap();setVTab(sg.k)}} style={{flex:1,textAlign:"center",fontSize:13,fontWeight:vTab===sg.k?700:600,color:vTab===sg.k?"#fff":C.ts,background:vTab===sg.k?C.acc:"transparent",border:"none",borderRadius:8,padding:"7px 0",cursor:"pointer",boxShadow:vTab===sg.k?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{sg.l}</button>)}
