@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.55 (Campos de contrasena: el ojo pasa de la fila del input (quedaba pegado al borde inferior) a posicion absoluta centrada verticalmente en la card — right 10, top 50pct translateY(-50pct); las filas reservan paddingRight 26 para que el texto no pase debajo. Aplica a login, registro (ambos) y reset. Base: v32.54)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.56 (FIX cancelacion dentro de ventana: la politica decia contacta al campo y el confirm prometia reembolso completo mientras el RPC rechazaba. Ahora cancel_booking_by_creator (migracion cancel_inside_window_noshow_retention) permite cancelar dentro de la ventana con refund_pct=0 y flag noshow — nada se marca refund_pending, el pago queda retenido como No-Show Fee, extras anotados retained, audit con retained_amount; grants re-aplicados. Frontend: isIn24h usa cancellation_hours real del campo, politica dice cancelas sin reembolso, confirm muestra copy No-Show Fee con el monto, celda cambia a Cancelar (No-Show Fee), toast distingue sin reembolso. Base: v32.55)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -4945,7 +4945,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         const teeUTC=teeToUTC(detail.booking_date,detail.booking_time||"00:00:00",courseTz);
         const hoursUntil=(teeUTC.getTime()-Date.now())/3600000;
         const isPast=hoursUntil<=0;
-        const isIn24h=!isPast&&hoursUntil<24;
+        const isIn24h=!isPast&&hoursUntil<(Number(course?.cancellation_hours)||24); // v32.56: usa la politica real del campo
         const isOver24h=hoursUntil>24;
         const isSettled=detail.settlement_status==="settled";
         const isFree=!detail.total_cost||detail.total_cost<=0||!detail.stripe_payment_intent;
@@ -4975,7 +4975,7 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
         // canConvertPartida sigue solo en campo (las partidas requieren scorecards de 9/18 hoyos).
         const canConvertGroup=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasGroupMode&&!hasPartidaMode&&course?.facility_type!=="simulador";
         const canConvertPartida=isCreator&&isOver24h&&detail.status==="confirmed"&&!hasPartidaMode&&!hasGroupMode&&course?.facility_type==="campo";
-        const policyJSX=course?<div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>{t("La hora del tee time ya pasó. No es posible cancelar ni reembolsar.")}</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> {t("Estás dentro de la ventana de cancelación del campo.")}</p><p style={{margin:"0 0 4px",color:C.ts}}>No es posible cancelar desde la app. Para cancelar, contacta directamente a {course.course_name||"el campo"}.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de {course.cancellation_hours||24}h antes</strong> — cancelación con reembolso del {course.cancellation_refund_pct||100}%.</p>{detail.payment_mode==="split"?<p style={{margin:"0 0 4px",color:C.ts}}>Si tienes invitados que ya pagaron, la reserva se transfiere al primer jugador en aceptar y tú recibes refund de tu parte.</p>:null}<p style={{margin:"0 0 4px",color:C.ts}}>{t("Estando dentro de la ventana de cancelación, contacta directo al campo.")}</p><p style={{margin:0}}><strong style={{color:C.tm}}>{t("Después del tee time")}</strong> — no se puede cancelar ni reembolsar.</p></>}</div>:null;
+        const policyJSX=course?<div style={{fontSize:12,color:C.ts,lineHeight:1.6}}>{isSettled?<p style={{margin:0,color:C.tm}}>Reserva liquidada al campo. Contacta soporte.</p>:isPast?<p style={{margin:0,color:C.tm}}>{t("La hora del tee time ya pasó. No es posible cancelar ni reembolsar.")}</p>:isIn24h&&!isFree?<><p style={{margin:"0 0 6px",color:C.acc,fontWeight:600}}><span dangerouslySetInnerHTML={{__html:ic("alert",12,C.acc)}}/> {t("Estás dentro de la ventana de cancelación del campo.")}</p><p style={{margin:"0 0 4px",color:C.ts}}>Puedes cancelar, pero ya sin reembolso: el pago queda como cargo por no-show.</p></>:<><p style={{margin:"0 0 4px"}}><strong style={{color:C.grn}}>Más de {course.cancellation_hours||24}h antes</strong> — cancelación con reembolso del {course.cancellation_refund_pct||100}%.</p>{detail.payment_mode==="split"?<p style={{margin:"0 0 4px",color:C.ts}}>Si tienes invitados que ya pagaron, la reserva se transfiere al primer jugador en aceptar y tú recibes refund de tu parte.</p>:null}<p style={{margin:"0 0 4px",color:C.ts}}>Dentro de la ventana la cancelación ya no genera reembolso (cargo por no-show).</p><p style={{margin:0}}><strong style={{color:C.tm}}>{t("Después del tee time")}</strong> — no se puede cancelar ni reembolsar.</p></>}</div>:null;
         return<>
           {/* CTAs primarios */}
           {!isPast&&detail.status==="confirmed"&&<div style={{display:"flex",gap:8,marginBottom:14}}>
@@ -5156,8 +5156,10 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
                       window.__toast?.(t("Reserva transferida · Refund de $")+fm(refund)+" MXN se procesará en menos de 10 min","success");
                     }else{
                       // cancel_total
-                      const refundPct=data.refund_pct||100;
-                      const msg=refundPct>=100
+                      const refundPct=data.refund_pct??100;
+                      const msg=(data.noshow||refundPct===0)
+                        ?"Reserva cancelada · Sin reembolso (cargo por no-show)"
+                        :refundPct>=100
                         ?"Reserva cancelada · Reembolso completo $"+fm(actualPaid)+" MXN"
                         :"Reserva cancelada · Reembolso "+refundPct+"% · $"+fm(actualPaid*refundPct/100)+" MXN";
                       window.__toast?.(msg,"success");
@@ -5170,10 +5172,12 @@ function BkTab(){const{s,p}=useA();const[bs,setBs]=useState([]);const[tab,setTab
               };
               const confirmMsg=isFree
                 ?t("¿Cancelar esta reserva? No hay cargos.")
+                :isIn24h
+                ?t("¿Cancelar esta reserva?")+"\n"+t("No habrá reembolso. El pago de $")+fm(actualPaid)+t(" MXN queda como No-Show Fee.\nTu espacio se liberará.")
                 :t("¿Cancelar esta reserva?")+"\n"+t("Reembolso completo: $")+fm(actualPaid)+" MXN.";
               if(window.__confirm)window.__confirm(confirmMsg,go);else go()}} style={{display:"flex",alignItems:"center",gap:10,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"13px 14px",marginBottom:10,cursor:"pointer"}}>
             <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("x",15,C.accTx2||"#FF7A90")}}/>
-            <span style={{flex:1,fontSize:13,fontWeight:700,color:C.accTx2||"#FF7A90"}}>{t("Cancelar reserva")}</span>
+            <span style={{flex:1,fontSize:13,fontWeight:700,color:C.accTx2||"#FF7A90"}}>{isIn24h&&!isFree?t("Cancelar (No-Show Fee)"):t("Cancelar reserva")}</span>
             <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("right",12,C.tm)}}/>
           </div>}
           {/* Review prompt sigue al final si aplica */}
