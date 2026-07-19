@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.78 (Aviso recien publicado: las tres acciones (Comparte tu link / Completa tu perfil / Lanza tu primera promo) pasan de verde a violeta tenue C.secVio — se distinguen del verde omnipresente del admin en ambos temas. Base: v32.77)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.79 (Sidebar: la card de usuario ahora esta conectada — tocar avatar/nombre abre Configuracion (Mi campo/plataforma/simulador) cuando el rol tiene permiso, con cursor y tooltip; el icono de salida sigue siendo el logout, ahora con stopPropagation para no disparar la navegacion. Base: v32.78)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -15547,10 +15547,10 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
     </React.Fragment>
     })}
     <div className="side-only" style={{flex:1}}/>
-    <div className="side-only" style={{borderTop:"1px solid "+C.bd,padding:"12px 6px 0",alignItems:"center",gap:9}}>
+    <div className="side-only" onClick={allowedIdx.has(4)?()=>setTab(4):undefined} title={allowedIdx.has(4)?"Configuración":""} style={{borderTop:"1px solid "+C.bd,padding:"12px 6px 0",alignItems:"center",gap:9,cursor:allowedIdx.has(4)?"pointer":"default",borderRadius:12}}>
       <div style={{width:29,height:29,borderRadius:"50%",background:(C.secBlu||"#5b86e5")+"33",color:C.secBlu||"#9db6f2",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{(p?.full_name||"A").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase()}</div>
       <div style={{flex:1,minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p?.full_name||"Admin"}</div><div style={{fontSize:9.5,color:C.tm}}>{isTeam?"Equipo":"Administrador"}</div></div>
-      <button onClick={out} title="Cerrar sesión" aria-label="Cerrar sesión" style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("logout",14,C.tm)}}/>
+      <button onClick={ev=>{ev.stopPropagation();out()}} title="Cerrar sesión" aria-label="Cerrar sesión" style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("logout",14,C.tm)}}/>
     </div>
     </div>
     <button onClick={()=>{hap();setConcierge(true)}} aria-label="Abrir Pinny, tu caddie virtual" style={{position:"fixed",right:16,bottom:74,zIndex:90,width:54,height:54,borderRadius:27,border:"none",background:`linear-gradient(135deg,${C.grn},#00cec9)`,boxShadow:"0 6px 20px rgba(0,184,148,.45)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}><ParteeMark size={28} color="#fff"/>{isPro&&<span style={{position:"absolute",top:-5,right:-6,background:`linear-gradient(135deg,${C.gld},#e67e22)`,color:"#fff",fontSize:8,fontWeight:800,letterSpacing:".05em",padding:"2px 5px",borderRadius:8,border:"2px solid "+C.bg,boxShadow:"0 2px 6px rgba(0,0,0,.3)",lineHeight:1}}>PRO</span>}</button>
