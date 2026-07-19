@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.79 (Sidebar: la card de usuario ahora esta conectada — tocar avatar/nombre abre Configuracion (Mi campo/plataforma/simulador) cuando el rol tiene permiso, con cursor y tooltip; el icono de salida sigue siendo el logout, ahora con stopPropagation para no disparar la navegacion. Base: v32.78)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.81 (En Vivo: el boton Configurar hoyos baja del header a justo debajo del mapa, alineado a la derecha — junto al contexto que configura; el header queda solo con el refrescar. Base: v32.80)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -162,6 +162,8 @@ window.__al=function(){};
 .aviso-card>div:last-child{border-bottom:none}
 .wx-row{grid-template-columns:1fr}
 @media (min-width:1024px){.wx-row-2{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}}
+.live-2col{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
+@media (min-width:1024px){.live-2col{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}}
 .admin-hdr-actions{display:none}
 .acct-2col{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
 .acct-col{display:flex;flex-direction:column;gap:12px}.pl{-webkit-animation:pl 1.4s infinite;animation:pl 1.4s infinite}button:active{-webkit-transform:scale(.97);transform:scale(.97)}
@@ -15289,14 +15291,16 @@ function LiveMap({course}){
         <div style={{fontSize:11,color:C.ts,marginTop:2}}>{positions.length} {positions.length===1?t("jugador en el campo"):t("jugadores en el campo")}{lastUpdate?" · "+lastUpdate.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}):""}</div>
       </div>
       <div style={{display:"flex",gap:8,flexShrink:0}}>
-        <button onClick={()=>setGeoOpen(true)} style={{height:38,padding:"0 12px",borderRadius:12,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("target",15,C.grn)}}/>{t("Configurar hoyos")}</button>
-        <button onClick={refreshAll} aria-label="Refrescar" style={{width:38,height:38,borderRadius:12,border:"1px solid "+C.bd,background:C.cd,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><span dangerouslySetInnerHTML={{__html:ic("refresh",16,C.acc)}}/></button>
+        <button onClick={refreshAll} aria-label="Refrescar" style={{width:34,height:38,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><span dangerouslySetInnerHTML={{__html:ic("refresh",16,C.acc)}}/></button>
       </div>
     </div>
     <div style={{display:"flex",gap:6,marginBottom:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:4}}>
-      <button onClick={()=>setMapView("sat")} style={{flex:1,padding:"8px 10px",borderRadius:9,border:"none",background:mapView==="sat"?`linear-gradient(135deg,${C.grn},#00cec9)`:"transparent",color:mapView==="sat"?"#fff":C.ts,fontSize:12,fontWeight:800,cursor:"pointer"}}>Satelital</button>
-      <button onClick={()=>setMapView("schema")} style={{flex:1,padding:"8px 10px",borderRadius:9,border:"none",background:mapView==="schema"?`linear-gradient(135deg,${C.grn},#00cec9)`:"transparent",color:mapView==="schema"?"#fff":C.ts,fontSize:12,fontWeight:800,cursor:"pointer"}}>Esquema Partee</button>
+      <button onClick={()=>setMapView("sat")} style={{flex:1,padding:"7px 10px",borderRadius:9,border:"none",background:mapView==="sat"?"rgba(30,232,165,.14)":"transparent",color:mapView==="sat"?(C.grnTxt||C.grn):C.ts,fontSize:12,fontWeight:800,cursor:"pointer"}}>{t("Satelital")}</button>
+      <button onClick={()=>setMapView("schema")} style={{flex:1,padding:"7px 10px",borderRadius:9,border:"none",background:mapView==="schema"?"rgba(30,232,165,.14)":"transparent",color:mapView==="schema"?(C.grnTxt||C.grn):C.ts,fontSize:12,fontWeight:800,cursor:"pointer"}}>{t("Esquema Partee")}</button>
     </div>
+    {/* v32.80: consola En Vivo — mapa (izq) + rail de operacion (der) en desktop; apilado en movil */}
+    <div className="live-2col">
+    <div style={{minWidth:0}}>
     <div ref={mapRef} style={{width:"100%",height:"62vh",minHeight:380,borderRadius:16,overflow:"hidden",border:"1px solid "+C.bd,background:C.cd,isolation:"isolate",position:"relative",zIndex:0,display:mapView==="sat"?"block":"none"}}/>
     {loading&&<div style={{marginTop:10,fontSize:12,color:C.ts,textAlign:"center"}}>{t("Cargando mapa...")}</div>}
     {err&&!loading&&<div style={{marginTop:10,padding:"10px 12px",background:C.acc+"10",border:"1px solid "+C.acc+"30",borderRadius:12,fontSize:12,color:C.acc}}>{err}</div>}
@@ -15306,10 +15310,28 @@ function LiveMap({course}){
       <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:"50%",background:"#9aa3ad",border:"2px solid #fff"}}/>{t("última posición")}</span>
     </div>
     {mapView==="schema"&&<CourseHoleMap courseId={course.id} positions={positions}/>}
-    {/* Ritmo de juego: semáforo por grupo (on_pace/slow/critical/no_signal) + detenido */}
-    <div style={{marginTop:18}}>
+    <div style={{marginTop:8,display:"flex",justifyContent:"flex-end"}}>
+      <button onClick={()=>setGeoOpen(true)} style={{padding:"6px 2px",border:"none",background:"none",color:C.ts2||C.ts,fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span dangerouslySetInnerHTML={{__html:ic("target",15,C.grn)}}/>{t("Configurar hoyos")}</button>
+    </div>
+    </div>
+    <div style={{minWidth:0,display:"flex",flexDirection:"column",gap:14}}>
+    {sos.length>0&&<div style={{background:C.acc+"0d",border:"1px solid "+C.acc+"40",borderRadius:14,padding:"12px 14px"}}>
+      {sos.map((a,ix)=><div key={a.id} style={{paddingTop:ix>0?10:0,marginTop:ix>0?10:0,borderTop:ix>0?"1px solid "+C.acc+"22":"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span dangerouslySetInnerHTML={{__html:ic("alert",15,C.acc)}}/>
+          <span style={{fontSize:12,color:C.txt}}><span style={{fontWeight:800,color:C.accTx2||C.acc}}>{t("SOS activo")}</span>{a.hole_number?" · "+t("Hoyo ")+a.hole_number:""}</span>
+          {a.created_at&&<span style={{marginLeft:"auto",fontSize:10,color:C.tm,..._s.mono}}>{t("hace ")+Math.max(0,Math.round((Date.now()-new Date(a.created_at).getTime())/60000))+" min"}</span>}
+        </div>
+        <div style={{fontSize:11,color:C.ts2||C.ts,marginTop:4,paddingLeft:23}}>{(a.player_name||t("Jugador"))+(a.lat!=null?" · GPS "+Number(a.lat).toFixed(3)+", "+Number(a.lng).toFixed(3):"")}</div>
+        <div style={{display:"flex",gap:14,marginTop:7,paddingLeft:23}}>
+          <span onClick={()=>setSubTab("personal")} style={{fontSize:11,fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer"}}>{t("Ver en despacho")}</span>
+          <span onClick={()=>resolveSos(a.id)} style={{fontSize:11,fontWeight:700,color:C.ts2||C.ts,cursor:"pointer"}}>{t("Resolver")}</span>
+        </div>
+      </div>)}
+    </div>}
+    <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
-        <h3 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{t("Ritmo de juego")}</h3>
+        <h3 style={{margin:0,fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{t("Ritmo de juego")}</h3>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <button onClick={()=>setMarshalOpen(true)} style={{padding:"6px 11px",borderRadius:9,border:"1px solid "+C.gld+"45",background:C.cd,color:C.gld,fontSize:11,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("compass",13,C.gld)}}/>{t("Consola marshal")}</button>
           <span style={{fontSize:11,color:C.tm}}>{pace.length+" "+(pace.length===1?t("grupo activo"):t("grupos activos"))}</span>
@@ -15339,6 +15361,24 @@ function LiveMap({course}){
             </div>;
           })}
         </div>}
+    </div>
+    <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"13px 15px"}}>
+      <div style={{display:"flex",alignItems:"baseline",marginBottom:9}}>
+        <span style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{t("Personal en turno")}</span>
+        <span onClick={()=>setSubTab("mensajes")} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Mensaje al equipo")} →</span>
+      </div>
+      {(board.free_staff||[]).length===0
+        ?<div style={{fontSize:11,color:C.tm}}>{t("Sin personal disponible ahora")}</div>
+        :<div style={{display:"flex",flexDirection:"column",gap:2}}>
+          {(board.free_staff||[]).slice(0,4).map(s2=><div key={s2.id} style={{display:"flex",alignItems:"center",gap:9,padding:"4px 0",fontSize:12,color:C.txt}}>
+            <span style={{width:6,height:6,borderRadius:99,background:C.grn,flexShrink:0}}/>
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(RSTAFF_LBL[s2.role]||"Staff")+" · "+(s2.name||"")}</span>
+            <span style={{marginLeft:"auto",fontSize:10.5,color:C.tm,flexShrink:0}}>{t("disponible")}</span>
+          </div>)}
+        </div>}
+      <div onClick={()=>setSubTab("personal")} style={{marginTop:9,fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Despacho")} →</div>
+    </div>
+    </div>
     </div>
     </>}
     {subTab==="personal"&&<>
