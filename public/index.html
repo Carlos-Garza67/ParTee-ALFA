@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.64 (Auditoria de X: 36 botones de cerrar/quitar homologados al aspa pelona de la casa (sin cajas, bordes ni pills; C.ts para cerrar, C.tm para quitar; cursores busy conservados). Excepciones deliberadas: X sobre fotos conservan scrim para contraste (galeria, thumbs), badge flotante coral, chips de filtro con x integrada, y el par aceptar/rechazar de solicitudes que se mantiene simetrico. Base: v32.63)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.78 (Aviso recien publicado: las tres acciones (Comparte tu link / Completa tu perfil / Lanza tu primera promo) pasan de verde a violeta tenue C.secVio — se distinguen del verde omnipresente del admin en ambos temas. Base: v32.77)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -156,6 +156,12 @@ window.__al=function(){};
 @-webkit-keyframes fi{from{opacity:0;-webkit-transform:translateY(8px);transform:translateY(8px)}to{opacity:1;-webkit-transform:translateY(0);transform:translateY(0)}}@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@-webkit-keyframes pl{0%,100%{opacity:1}50%{opacity:.4}}@keyframes pl{0%,100%{opacity:1}50%{opacity:.4}}.fi{-webkit-animation:fi .3s ease-out backwards;animation:fi .3s ease-out backwards}
 .dash-2col{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
 .admin-hdr-mid{display:none}
+.side-only{display:none !important}
+.aviso-card:empty{display:none}
+.aviso-card>div{border-bottom:1px solid var(--bd,rgba(255,255,255,.06))}
+.aviso-card>div:last-child{border-bottom:none}
+.wx-row{grid-template-columns:1fr}
+@media (min-width:1024px){.wx-row-2{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}}
 .admin-hdr-actions{display:none}
 .acct-2col{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
 .acct-col{display:flex;flex-direction:column;gap:12px}.pl{-webkit-animation:pl 1.4s infinite;animation:pl 1.4s infinite}button:active{-webkit-transform:scale(.97);transform:scale(.97)}
@@ -168,7 +174,7 @@ window.__al=function(){};
 .player-card{background:var(--player-card-bg,linear-gradient(145deg,rgba(12,45,90,.5),rgba(22,37,68,.4),rgba(0,184,148,.08)));border-radius:18px;padding:20px;position:relative;overflow:hidden;border:1px solid var(--bd,rgba(255,255,255,.1))}
 .etab{padding:8px 14px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.etab.on{background:linear-gradient(135deg,#e94560,#ff6b6b);color:#fff}.etab.off{background:var(--card-bg,#12141A);color:var(--txt-s,rgba(255,255,255,.55));border:1px solid var(--bd,rgba(255,255,255,.06))}
 .ecard{background:var(--card-bg,#12141A);border:1px solid var(--bd,rgba(255,255,255,.06));border-radius:14px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px}.ecard.sel{border-color:#00b894;background:rgba(0,184,148,.08)}
-.sc{background:var(--card-bg,#12141A);border:1px solid var(--bd,rgba(255,255,255,.06));border-radius:16px;padding:16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}.sc .n{font-size:24px;font-weight:900;margin-bottom:3px;font-family:monospace}.sc .l{font-size:10px;color:var(--txt-m,rgba(255,255,255,.35));font-weight:600;letter-spacing:.05em}
+.sc{background:var(--card-bg,#12141A);border:1px solid var(--bd,rgba(255,255,255,.06));border-radius:14px;padding:13px 15px;text-align:left;box-shadow:none}.sc .n{font-size:20px;font-weight:800;margin-bottom:3px;font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}.sc .l{font-size:9px;color:var(--txt-m,rgba(255,255,255,.35));font-weight:700;letter-spacing:.07em}
 .ar{display:flex;align-items:center;gap:12px;padding:14px;background:var(--card-bg,#12141A);border:1px solid var(--bd,rgba(255,255,255,.06));border-radius:12px;margin-bottom:8px}
 /* v27.27 AdminBookings split responsive (B) — layout-only, colores por inline; theming de tarjetas por vars CSS */
 .ab-split{display:block}.ab-rail{display:block}.ab-main{display:block}
@@ -279,7 +285,7 @@ window.__al=function(){};
   .admin-container{
     max-width:100% !important;width:100% !important;margin:0 !important;padding:0 !important;
     display:grid !important;
-    grid-template-columns:240px minmax(0, 1fr);
+    grid-template-columns:216px minmax(0, 1fr);
     grid-template-rows:auto 1fr;
     grid-template-areas:"sidebar header" "sidebar content";
     min-height:100vh;
@@ -303,9 +309,17 @@ window.__al=function(){};
   .admin-bnav>div>div:first-child{padding:0 !important}
   .admin-bnav>div>div:nth-child(2){font-size:14px !important;margin-top:0 !important}
   .admin-content .stat-grid{display:grid !important;grid-template-columns:repeat(auto-fit,minmax(150px,1fr)) !important;gap:14px !important}
-  .dash-2col{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+  .dash-2col{grid-template-columns:minmax(0,2.2fr) minmax(0,1fr)}
   .admin-hdr-mid{display:flex}
   .admin-hdr-actions{display:flex;align-items:center;gap:8px;margin-right:6px}
+  /* v32.65 spec 8a: sidebar con marca, grupos y usuario */
+  .admin-bnav .side-only{display:flex !important}
+  .admin-bnav .side-glabel{display:block !important}
+  .admin-bnav>div[data-active="1"]{background:var(--w06,rgba(255,255,255,.06)) !important}
+  .admin-bnav>div[data-active="1"] svg{stroke:var(--grn,#1ee8a5)}
+  .admin-bnav>div[data-active="1"]>div:nth-child(2){color:var(--txt,#F5F5F7) !important;font-weight:700 !important}
+  .admin-bnav>div[data-active="0"]>div:nth-child(2){color:var(--txt-s,#8E939E) !important}
+  .admin-hdr-brand{display:none !important}
   .acct-2col{grid-template-columns:1fr 1fr}
 }
 
@@ -315,7 +329,7 @@ window.__al=function(){};
   .bnav{max-width:560px !important}
   .modal-box{max-width:540px !important}
   .bsheet{max-width:560px !important}
-  .admin-container{grid-template-columns:260px minmax(0, 1fr) !important}
+  .admin-container{grid-template-columns:216px minmax(0, 1fr) !important}
   .admin-content{max-width:1600px !important;padding:32px 40px !important}
 }
 
@@ -635,7 +649,7 @@ function getLang(){return _lang}
 var C=DARK;
 const ThemeCtx=createContext({theme:"dark",toggle:()=>{}});
 const useTheme=()=>useContext(ThemeCtx);
-function applyCSS(t){const v=t==="dark"?DARK:LIGHT;const r=document.documentElement;r.setAttribute("data-theme",t);r.style.setProperty("--app-bg",v.bg);r.style.setProperty("--nav-bg",v.nav);r.style.setProperty("--bd",v.bd);r.style.setProperty("--card-bg",v.cd);r.style.setProperty("--card2-bg",v.c2);r.style.setProperty("--txt",v.txt);r.style.setProperty("--txt-s",v.ts);r.style.setProperty("--txt-m",v.tm);r.style.setProperty("--player-card-bg",t==="dark"?"linear-gradient(145deg,rgba(12,45,90,.5),rgba(22,37,68,.4),rgba(0,184,148,.08))":"linear-gradient(145deg,rgba(4,120,87,.5),rgba(6,95,70,.5),rgba(0,184,148,.12))");
+function applyCSS(t){const v=t==="dark"?DARK:LIGHT;const r=document.documentElement;r.setAttribute("data-theme",t);r.style.setProperty("--app-bg",v.bg);r.style.setProperty("--nav-bg",v.nav);r.style.setProperty("--bd",v.bd);r.style.setProperty("--card-bg",v.cd);r.style.setProperty("--card2-bg",v.c2);r.style.setProperty("--txt",v.txt);r.style.setProperty("--txt-s",v.ts);r.style.setProperty("--txt-m",v.tm);r.style.setProperty("--w06",v.w06||(t==="dark"?"rgba(255,255,255,.06)":"rgba(0,0,0,.04)"));r.style.setProperty("--grn",v.grn);r.style.setProperty("--player-card-bg",t==="dark"?"linear-gradient(145deg,rgba(12,45,90,.5),rgba(22,37,68,.4),rgba(0,184,148,.08))":"linear-gradient(145deg,rgba(4,120,87,.5),rgba(6,95,70,.5),rgba(0,184,148,.12))");
   r.style.setProperty("--el-card",v.elCard||(t==="dark"?"rgba(255,255,255,.04)":"#f6f7f9"));r.style.setProperty("--el-card-bd",v.elCardBd||(t==="dark"?"rgba(255,255,255,.08)":"rgba(0,0,0,.05)"));
   try{const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.content=t==="dark"?"#0A0B10":"#f0f1f4"}catch(e){}}
 const TL={public:t("Publico"),private:t("Privado"),"semi-private":t("Semi")};const TC={public:C.grn,private:C.acc,"semi-private":C.gld};
@@ -8000,39 +8014,23 @@ function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=us
     // v20.27.3 #8: distinguir rejected (en revisión inicial, con reason visible) vs suspended (post-active).
     const wasRejected=!!course.rejection_reason;
     const reason=course.rejection_reason||course.suspension_reason||"No visible para jugadores. Contacta soporte para más información.";
-    return<div style={{background:C.acc+"12",border:"1px solid "+C.acc+"30",borderRadius:14,padding:14,marginBottom:16}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-        <div dangerouslySetInnerHTML={{__html:ic("alert",18,C.acc)}}/>
-        <div style={{fontSize:13,fontWeight:800,color:C.acc}}>{wasRejected?t("Revisión completada — cambios necesarios"):t("Locación suspendida")}</div>
-      </div>
-      <div style={{fontSize:12,color:C.txt,lineHeight:1.5,marginBottom:wasRejected?12:0,fontWeight:wasRejected?500:400}}>{reason}</div>
-      {wasRejected&&<button onClick={submitReview} disabled={submitting} style={{width:"100%",padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:submitting?"wait":"pointer",opacity:submitting?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-        {submitting?t("Enviando..."):t("Corregir y reenviar a revisión")}
-      </button>}
+    return<div style={{display:"flex",alignItems:"center",gap:9,padding:"10px 0"}}>
+      <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("alert",14,C.acc)}}/>
+      <span style={{fontSize:12,color:C.ts2||C.ts,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={reason}><span style={{fontWeight:700,color:C.accTx||C.acc}}>{wasRejected?"Cambios necesarios.":"Locación suspendida."}</span> {reason}</span>
+      {wasRejected&&<span onClick={submitting?undefined:submitReview} style={{flexShrink:0,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer",fontSize:11.5,opacity:submitting?.6:1}}>{submitting?"Enviando…":"Reenviar a revisión"}</span>}
     </div>
   }
   const isPending=status==="pending_review";const barColor=isPending?C.gld:C.acc;const barBg=isPending?C.gld+"12":C.acc+"10";const barBd=isPending?C.gld+"30":C.acc+"25";
   const firstPending=comp.items.find(i=>!i.p);
-  return<div style={{background:barBg,border:"1px solid "+barBd,borderRadius:14,padding:14,marginBottom:16}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-      <div style={{width:32,height:32,borderRadius:"50%",background:barColor+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(isPending?"clock":"edit",16,barColor)}}/>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:13,fontWeight:800,color:barColor,letterSpacing:"-0.01em"}}>{isPending?t("En revisión"):t("Borrador — No visible")}</div>
-        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{isPending?t("Te notificaremos cuando sea aprobada"):t("Completa los requisitos para enviar a revisión")}</div>
-      </div>
-      <div style={{fontSize:20,fontWeight:900,color:barColor,..._s.mono}}>{comp.pct}%</div>
-    </div>
-    <div style={{height:6,background:C.cd,borderRadius:6,overflow:"hidden",marginBottom:12}}>
-      <div style={{width:comp.pct+"%",height:"100%",background:barColor,borderRadius:6,transition:"width .3s"}}/>
-    </div>
-    <div style={{display:"flex",flexDirection:"column",gap:7}}>
-      {comp.items.map(it=>{const clickable=!it.p&&status==="draft"&&navTo;return<div key={it.k} onClick={clickable?()=>goToReq(it.k):undefined} style={{display:"flex",alignItems:"center",gap:10,fontSize:12,cursor:clickable?"pointer":"default",padding:clickable?"2px 6px":0,margin:clickable?"-2px -6px":0,borderRadius:8,transition:"background .15s"}} onMouseEnter={clickable?e=>{e.currentTarget.style.background=barColor+"12"}:undefined} onMouseLeave={clickable?e=>{e.currentTarget.style.background="transparent"}:undefined}>
-        <div style={{width:18,height:18,borderRadius:"50%",background:it.p?C.grn+"20":C.cd,border:"1px solid "+(it.p?C.grn+"40":C.bd),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(it.p?"check":"x",10,it.p?C.grn:C.tm)}}/>
-        <span style={{flex:1,color:it.p?C.ts:C.txt,textDecoration:it.p?"line-through":"none",fontWeight:it.p?400:600}}>{it.l}</span>
-        {clickable&&<span style={{opacity:.5}} dangerouslySetInnerHTML={{__html:ic("right",12,barColor)}}/>}
-      </div>})}
-    </div>
-    {status==="draft"&&<button onClick={comp.allDone?submitReview:()=>firstPending&&goToReq(firstPending.k)} disabled={submitting||(!comp.allDone&&!navTo)} style={{width:"100%",marginTop:14,padding:12,background:comp.allDone?`linear-gradient(135deg,${C.grn},#00cec9)`:barColor+"15",border:comp.allDone?"none":"1px solid "+barColor+"35",borderRadius:12,color:comp.allDone?"#fff":barColor,fontSize:13,fontWeight:700,cursor:submitting?"wait":"pointer",opacity:submitting?.6:1,boxShadow:comp.allDone?"0 6px 20px rgba(0,184,148,.25)":"none",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{submitting?t("Enviando..."):comp.allDone?t("Enviar a revisión"):t("Completar: ")+(firstPending?.l||t("siguiente requisito"))}{!comp.allDone&&!submitting&&<span dangerouslySetInnerHTML={{__html:ic("right",14,barColor)}}/>}</button>}
+  return<div style={{display:"flex",alignItems:"center",gap:9,padding:"10px 0"}}>
+    <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(isPending?"clock":"info",14,barColor)}}/>
+    <span style={{fontSize:12,color:C.ts2||C.ts,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+      <span style={{fontWeight:700,color:C.txt}}>{isPending?"En revisión.":"Tu locación está en borrador."}</span>{" "}
+      {isPending?"Te notificaremos cuando sea aprobada.":comp.allDone
+        ?<span onClick={submitting?undefined:submitReview} style={{fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{submitting?"Enviando…":"Enviar a revisión"}</span>
+        :<React.Fragment>Sigue: <span onClick={()=>navTo&&goToReq(firstPending.k)} style={{fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{firstPending?.l||"siguiente requisito"}</span></React.Fragment>}
+    </span>
+    <span style={{flexShrink:0,fontSize:11,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>{comp.pct}%</span>
   </div>
 }
 
@@ -8595,19 +8593,19 @@ function AdminClock(){
   </div>;
 }
 function WeatherPanel({weather,course}){
-  const j=weather;const CY="#43d9ff";
+  const j=weather;const CY=C.secBlu||"#4a72c4";
   const WMO=(c)=>({e:WMO_EMOJI(c),l:c===0?"Despejado":c<=3?"Nublado":c<=48?"Niebla":c<=57?"Llovizna":c<=67?"Lluvia":c<=77?"Nieve":c<=82?"Chubascos":c<=86?"Nieve":"Tormenta"});
   if(!j)return null;
   const hh=j.hourly||{},times=hh.time||[],nowH=((j.current&&j.current.time)||times[0]||"").slice(0,13);
   let si=times.findIndex(tt=>tt.slice(0,13)>=nowH);if(si<0)si=0;
-  const hourly=[];for(let k=0;k<14&&si+k<times.length&&hourly.length<7;k+=2){const i=si+k;hourly.push({h:times[i].slice(11,13)+"h",t:Math.round(hh.temperature_2m?.[i]??0),code:hh.weather_code?.[i]??0,wind:Math.round(hh.wind_speed_10m?.[i]??0),gust:Math.round(hh.wind_gusts_10m?.[i]??0)})}
+  const hourly=[];for(let k=0;k<10&&si+k<times.length&&hourly.length<5;k+=2){const i=si+k;hourly.push({h:times[i].slice(11,13)+"h",t:Math.round(hh.temperature_2m?.[i]??0),code:hh.weather_code?.[i]??0,wind:Math.round(hh.wind_speed_10m?.[i]??0),gust:Math.round(hh.wind_gusts_10m?.[i]??0)})}
   let advisory=null;if(hourly.length){let pk=hourly[0];for(const x of hourly)if(x.gust>pk.gust)pk=x;if(pk.gust>=20)advisory={gust:pk.gust,at:pk.h}}
   const hasH=hourly.length>0;
   if(!hasH&&!j.current)return null;
-  return<div style={{background:C.cd,border:"1px solid "+CY+"25",borderRadius:16,padding:16}}>
-    <div style={{fontSize:11,fontWeight:800,color:CY,letterSpacing:"0.05em",marginBottom:14}}>CLIMA EN EL CAMPO{course.city?" · "+course.city:""}</div>
+  return<div style={{padding:"2px 2px 0"}}>
+    <div style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em",marginBottom:12}}>Clima en el campo{course.city?<span style={{color:C.ts,fontWeight:600}}> · {course.city}</span>:null}</div>
     {hasH?<div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:2}}>
-      {hourly.map((h,i)=>{const tc=h.t>=26?C.gld:C.grn;return<div key={i} style={{flex:1,minWidth:0,textAlign:"center",padding:"11px 4px",background:C.bg,border:"1px solid "+(i===0?CY+"66":C.bd),borderRadius:12}}>
+      {hourly.map((h,i)=>{const tc=h.t>=26?C.gld:C.grn;return<div key={i} style={{flex:1,minWidth:0,textAlign:"center",padding:"9px 4px",background:C.cd,border:"1px solid "+(i===0?CY+"55":C.bd),borderRadius:11}}>
         <div style={{fontSize:11,color:C.tm,marginBottom:8,..._s.mono}}>{h.h}</div>
         <div style={{marginBottom:8,display:"flex",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:WMO_EMOJI(h.code,22)}}/>
         <div style={{fontSize:16,fontWeight:800,color:tc,marginBottom:6,..._s.mono}}>{h.t}°</div>
@@ -8620,7 +8618,7 @@ function WeatherPanel({weather,course}){
     {advisory&&<div style={{background:CY+"12",border:"1px solid "+CY+"25",borderRadius:10,padding:"9px 11px",fontSize:11,color:CY,lineHeight:1.5,marginTop:12}}>Ráfagas de {advisory.gust} km/h hacia las {advisory.at} — considera adelantar salidas.</div>}
   </div>;
 }
-function AdminDash({course,onRefresh,navTo,weather}){const[custInbox,setCustInbox]=useState(false);const[custN,setCustN]=useState({esc:0,wa:0});const[custMsgs,setCustMsgs]=useState([]);const[st,setSt]=useState(null);const[selDow,setSelDow]=useState(null);const[monthly,setMonthly]=useState([]);const[ld,setLd]=useState(true);const[csvRange,setCsvRange]=useState(false);const[csvFrom,setCsvFrom]=useState("");const[csvTo,setCsvTo]=useState(new Date().toISOString().slice(0,10));const[atRiskOpen,setAtRiskOpen]=useState(false);const[dashV2,setDashV2]=useState(null);const[cust360,setCust360]=useState(null);
+function AdminDash({course,onRefresh,navTo,weather}){const{p:selfP}=useA();const[salFil,setSalFil]=useState("all");const[custInbox,setCustInbox]=useState(false);const[custN,setCustN]=useState({esc:0,wa:0});const[custMsgs,setCustMsgs]=useState([]);const[st,setSt]=useState(null);const[selDow,setSelDow]=useState(null);const[monthly,setMonthly]=useState([]);const[ld,setLd]=useState(true);const[csvRange,setCsvRange]=useState(false);const[csvFrom,setCsvFrom]=useState("");const[csvTo,setCsvTo]=useState(new Date().toISOString().slice(0,10));const[atRiskOpen,setAtRiskOpen]=useState(false);const[dashV2,setDashV2]=useState(null);const[cust360,setCust360]=useState(null);
   const ft=course.facility_type||"campo";const unitLabel=ft==="campo"?t("Jugadores"):ft==="plataforma"?t("Visitantes"):t("Sesiones");
   useEffect(()=>{let stop=false;const fn=async()=>{try{const[e,w]=await Promise.all([sb.rpc("count_course_open_escalations",{p_course_id:course.id}),sb.rpc("get_wa_inbox",{p_course_id:course.id})]);if(stop)return;const esc=(e.data&&e.data.ok)?(e.data.count||0):0;const th=(w.data&&w.data.ok)?(w.data.threads||[]):[];const pend=th.filter(x=>x.kind==="jugador"&&x.awaiting_reply);setCustN({esc,wa:pend.length});setCustMsgs(pend.slice(0,3));}catch(_){}};fn();const id=setInterval(fn,30000);return()=>{stop=true;clearInterval(id)};},[course.id]);const unitIcon=ft==="campo"?ic("golf",14,C.txt):ft==="plataforma"?ic("target",14,C.txt):ic("smartphone",14,C.txt);const capLabel=ft==="campo"?t("Hoyos"):ft==="plataforma"?t("Bahías"):t("Cabinas");const capCount=ft==="campo"?(course.hole_count||18):ft==="plataforma"?(course.stations_count||0):(course.cabins_count||0);
   useEffect(()=>{
@@ -8702,6 +8700,7 @@ function AdminDash({course,onRefresh,navTo,weather}){const[custInbox,setCustInbo
       {l:t("Momentum"),v:momentumPts,max:15,hint:momentumPts<8?t("Tu revenue bajó vs semana pasada"):t("Tendencia positiva")},
       {l:t("Actividad reciente"),v:actPts,max:10,hint:actPts<5?t("Pocas reservas últimos 14d"):t("Actividad sana")}
     ];
+    try{window.__parteeHealth={items:healthBreakdown,health}}catch(x){}
     setSt({
       bks:allBk.length,allBk,todayCount:todayBks.length,todayPax:todayBks.reduce((s2,b)=>s2+(b.party_size||0),0),todayRev:todayBks.reduce((s2,b)=>s2+Number(b.total_cost||0),0),
       rev,occ:cap?Math.round(booked/cap*100):0,avg,
@@ -8714,7 +8713,7 @@ function AdminDash({course,onRefresh,navTo,weather}){const[custInbox,setCustInbo
       wow,mom,atRisk,health,healthBreakdown,futureSlots,freeToday,dowDetail
     });setLd(false)
   }).catch(()=>setLd(false))},[]);
-  if(ld||!st)return<div className="fi" style={{padding:16}}><CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>;
+  if(ld||!st)return<div className="fi" style={{padding:16}}><div className="aviso-card" style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"2px 16px",marginBottom:16}}><CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/></div><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>;
   const maxP=Math.max(...monthly.map(m=>m.players),1);
   const maxDow=Math.max(...st.dowOcc,1);
   const DOW_LABELS=["D","L","M","M","J","V","S"];const DOW_SHORT=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
@@ -8730,46 +8729,60 @@ function AdminDash({course,onRefresh,navTo,weather}){const[custInbox,setCustInbo
     window.__toast?.(t("CSV exportado"),"success");setCsvRange(false)
   };
   return<div className="fi">
-    <CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/>
     {custInbox&&<CustomerInbox course={course} onExit={()=>setCustInbox(false)}/>}
     {cust360&&<Customer360 course={course} userId={cust360} onClose={()=>setCust360(null)}/>}
 
-    {/* v32.34 rearme: Daily Pulse (el cron seguia generandolo sin UI) + banner de baja actividad */}
-    <LowActivityBanner course={course} st={st} navTo={navTo}/>
-    <div style={{marginBottom:16}}><DailyPulseCard course={course}/></div>
-
+    {/* v32.66 spec 8a: saludo operativo — fecha arriba, nombre grande, frase-resumen con datos reales del dia */}
     <div style={{marginBottom:16}}>
-      <h3 style={{fontSize:16,fontWeight:800,color:C.txt,letterSpacing:"-0.02em"}}>{t("Resumen")}</h3>
-      <div style={{fontSize:12,color:C.tm,marginTop:2,textTransform:"capitalize"}}>{new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})}</div>
+      <div style={{fontSize:12,color:C.ts,textTransform:"capitalize"}}>{new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})} · {new Date().toTimeString().slice(0,5)}</div>
+      <div style={{fontSize:22,fontWeight:800,color:C.txt,letterSpacing:"-0.02em",marginTop:2}}>{(()=>{const h=new Date().getHours();return h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches"})()}{selfP?.full_name?", "+selfP.full_name.split(" ")[0]:""}</div>
+      <div style={{fontSize:12.5,color:C.ts,marginTop:4}}>{(()=>{const tb=dashV2?.today_bookings||[];const noun=ft==="campo"?"salidas":"reservas";if(!tb.length)return "Sin "+noun+" hoy todavía.";const fut=tb.filter(b=>b.booking_time&&(new Date(ymdLocal()+"T"+b.booking_time.slice(0,5)).getTime()>Date.now()));const base=tb.length+" "+(tb.length===1?noun.slice(0,-1):noun)+" hoy";return fut.length?base+", la siguiente a las "+fut[0].booking_time.slice(0,5)+".":base+".";})()}</div>
     </div>
+
+    {/* v32.34 rearme: Daily Pulse (el cron seguia generandolo sin UI) + banner de baja actividad */}
+    {/* v32.67 regla 8 del spec 8a: onboarding, pulse y baja actividad comparten UNA card de avisos, una linea por aviso, acciones como links */}
+    <div className="aviso-card" style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"2px 16px",marginBottom:16}}>
+      <CourseStatusBanner course={course} onRefresh={onRefresh} navTo={navTo}/>
+      <DailyPulseCard course={course}/>
+      <LowActivityBanner course={course} st={st} navTo={navTo}/>
+    </div>
+
+    {/* v32.68 spec 8a: fila de KPIs operativos del dia — caps 9/700/.07em, numeros 20 mono */}
+    {(()=>{const tb=dashV2?.today_bookings||[];const unpaid=tb.filter(b=>b.payment_status!=="paid");const up=unpaid.reduce((a,b)=>a+(Number(b.total_cost)||0),0);const jug=tb.reduce((a,b)=>a+(Number(b.party_size)||0),0);const inbox=custN.esc+custN.wa;const nounU=ft==="campo"?"EN CAMPO":ft==="simulador"?"EN CABINAS":"EN BAHÍAS";const noun=ft==="campo"?"salidas":ft==="simulador"?"sesiones":"reservas";
+    return<div className="stat-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:16}}>
+      <div className="sc"><div style={{fontSize:9,color:C.tm,fontWeight:700,marginBottom:5,letterSpacing:".07em"}}>POR ATENDER</div><div style={{display:"flex",alignItems:"baseline",gap:7}}><span className="n" style={{color:inbox>0?(C.accTx||C.acc):C.txt,fontSize:20,marginBottom:0}}>{inbox}</span><span style={{fontSize:10.5,color:C.tm}}>{inbox===1?"mensaje":"mensajes"}</span></div></div>
+      <div className="sc"><div style={{fontSize:9,color:C.tm,fontWeight:700,marginBottom:5,letterSpacing:".07em"}}>HOY {nounU}</div><div style={{display:"flex",alignItems:"baseline",gap:7}}><span className="n" style={{color:C.txt,fontSize:20,marginBottom:0}}>{tb.length}</span><span style={{fontSize:10.5,color:C.tm}}>{noun}{ft==="campo"&&jug>0?" · "+jug+" jug.":""}</span></div></div>
+      <div className="sc"><div style={{fontSize:9,color:C.gld,fontWeight:700,marginBottom:5,letterSpacing:".07em"}}>POR COBRAR</div><div style={{display:"flex",alignItems:"baseline",gap:7}}><span className="n" style={{color:C.txt,fontSize:20,marginBottom:0}}>${fm(up)}</span><span style={{fontSize:10.5,color:C.tm}}>{unpaid.length} {unpaid.length===1?"reserva":"reservas"}</span></div></div>
+      <div className="sc"><div style={{fontSize:9,color:C.tm,fontWeight:700,marginBottom:5,letterSpacing:".07em"}}>POR LIQUIDAR</div><div style={{display:"flex",alignItems:"baseline",gap:7}}><span className="n" style={{color:C.grnTxt||C.grn,fontSize:20,marginBottom:0}}>${fm(st.pendSettle||0)}</span><span style={{fontSize:10.5,color:C.tm}}>neto</span></div></div>
+    </div>})()}
 
     <div className="dash-2col">
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        {(course.facility_type||"campo")!=="simulador"&&<WeatherPanel weather={weather} course={course}/>}
-        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:16,padding:16}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <div style={{fontSize:11,fontWeight:800,color:C.txt,letterSpacing:"0.05em"}}>{(course.facility_type||"campo")==="campo"?"SALIDAS DE HOY":t("RESERVAS DE HOY")}</div>
+        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+            <div style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{(course.facility_type||"campo")==="campo"?"Salidas de hoy":"Reservas de hoy"}</div>
+            {(()=>{const tb=dashV2?.today_bookings||[];if(!tb.length)return null;const unc=tb.filter(b=>b.payment_status!=="paid").length;const seg=(k,l)=><span onClick={()=>setSalFil(k)} style={{padding:"3px 10px",borderRadius:7,background:salFil===k?"rgba(30,232,165,.14)":"transparent",color:salFil===k?(C.grnTxt||C.grn):C.ts,fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{l}</span>;
+            return<div style={{display:"flex",gap:2,background:C.c2||C.bg,border:"1px solid "+C.bd,borderRadius:9,padding:3}}>{seg("all","Todas · "+tb.length)}{seg("unpaid","Por cobrar · "+unc)}</div>})()}
+            <span onClick={()=>navTo(1)} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer",whiteSpace:"nowrap"}}>{ft==="campo"?"Tee Sheet →":"Reservas →"}</span>
             {dashV2?.today_bookings?.length>0&&<div style={{fontSize:11,color:C.tm}}>{dashV2.today_bookings.filter(b=>{if(!b.checked_in)return false;const endMin=ft==="campo"?360:(course.session_minutes||60);return !(b.booking_time&&(new Date(ymdLocal()+"T"+b.booking_time.slice(0,5)).getTime()+endMin*60000<Date.now()))}).length}/{dashV2.today_bookings.length} {ft==="campo"?t("en campo"):ft==="simulador"?t("en cabinas"):t("en bahías")}</div>}
           </div>
           {(!dashV2?.today_bookings||dashV2.today_bookings.length===0)?<div style={{fontSize:12,color:C.tm,textAlign:"center",padding:"24px 0"}}>{(course.facility_type||"campo")==="campo"?"Sin salidas hoy":t("Sin reservas hoy")}</div>:
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {dashV2.today_bookings.slice(0,8).map(b=><div key={b.id} onClick={()=>b.user_id&&setCust360(b.user_id)} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",background:C.bg,borderRadius:10,cursor:b.user_id?"pointer":"default"}}>
-              <div style={{fontSize:13,fontWeight:800,color:C.grn,minWidth:44,..._s.mono}}>{b.booking_time?.slice(0,5)}</div>
+            {dashV2.today_bookings.filter(b=>salFil==="unpaid"?b.payment_status!=="paid":true).slice(0,8).map(b=><div key={b.id} onClick={()=>b.user_id&&setCust360(b.user_id)} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",background:C.bg,borderRadius:10,cursor:b.user_id?"pointer":"default"}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.grnTxt||C.grn,minWidth:40,..._s.mono}}>{b.booking_time?.slice(0,5)}</div><span style={{width:26,height:26,borderRadius:"50%",background:(C.secBlu||"#5b86e5")+"33",color:C.secBlu||"#9db6f2",fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{(b.user_name||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase()||"?"}</span>
               <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.user_name||"Sin nombre"}</div><div style={{fontSize:10,color:C.ts}}>{b.party_size} jug · ${fm(b.total_cost||0)}</div></div>
-              {(()=>{const endMin=ft==="campo"?360:(course.session_minutes||60);const over=b.booking_time&&(new Date(ymdLocal()+"T"+b.booking_time.slice(0,5)).getTime()+endMin*60000<Date.now());const col=over?C.tm:(b.payment_status==="paid"?C.grn:C.gld);const lbl=over?t("FINALIZADA"):(b.payment_status==="paid"?(ft==="campo"?t("EN CAMPO"):ft==="simulador"?t("EN CABINA"):t("EN BAHÍA")):"CHECK-IN");return<span style={{fontSize:9,fontWeight:700,color:col,background:col+"15",padding:"3px 8px",borderRadius:6}}>{lbl}</span>})()}
+              {(()=>{const endMin=ft==="campo"?360:(course.session_minutes||60);const over=b.booking_time&&(new Date(ymdLocal()+"T"+b.booking_time.slice(0,5)).getTime()+endMin*60000<Date.now());const col=over?C.tm:(b.payment_status==="paid"?(C.grnTxt||C.grn):(C.gld));const lbl=over?t("FINALIZADA"):(b.payment_status==="paid"?"PAGADO":"POR COBRAR");return<span style={{fontSize:9,fontWeight:800,color:col,background:col+"1f",padding:"3px 8px",borderRadius:6}}>{lbl}</span>})()}
             </div>)}
             {dashV2.today_bookings.length>8&&<div style={{fontSize:11,color:C.tm,textAlign:"center",marginTop:2}}>+{dashV2.today_bookings.length-8} más en Reservas</div>}
           </div>}
-          {st.freeToday&&st.freeToday.length>0&&<div style={{marginTop:12,display:"flex",gap:10,flexWrap:"wrap",alignItems:"stretch"}}>
-            <div style={{flex:"1 1 180px",background:C.bg,border:"1px solid #43d9ff30",borderRadius:12,padding:"11px 13px"}}>
-              <div style={{fontSize:10,fontWeight:800,color:"#43d9ff",letterSpacing:".05em",marginBottom:6}}>HUECOS LIBRES HOY</div>
-              <div style={{fontSize:13,fontWeight:700,color:C.txt,..._s.mono}}>{st.freeToday.slice(0,8).join(" · ")}{st.freeToday.length>8?" · +"+(st.freeToday.length-8):""}</div>
-            </div>
-            <button onClick={()=>navTo(2)} style={{flexShrink:0,padding:"0 16px",background:C.grn+"18",border:"1px solid "+C.grn+"40",borderRadius:12,color:C.grn,fontSize:12,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>Promocionar huecos →</button>
+          {st.freeToday&&st.freeToday.length>0&&<div style={{marginTop:12,paddingTop:10,borderTop:"1px solid "+C.bd,display:"flex",alignItems:"center",gap:14,fontSize:11,color:C.tm,flexWrap:"wrap"}}>
+            <span>{st.freeToday.length} {st.freeToday.length===1?"horario libre":"horarios libres"} hoy</span>
+            <span>siguiente libre {st.freeToday[0]}</span>
+            <span onClick={()=>navTo(2)} style={{marginLeft:"auto",fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>Promocionar huecos →</span>
           </div>}
         </div>
-        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:16,padding:16}}>
-          <div style={{fontSize:11,fontWeight:800,color:C.txt,letterSpacing:"0.05em",marginBottom:12}}>{t("OCUPACIÓN DE LA SEMANA")}</div>
+        <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:16}}>
+          <div style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em",marginBottom:12}}>Ocupación de la semana</div>
           <div style={{display:"flex",gap:6,marginBottom:14}}>{st.dowOcc.map((v,i)=>{const col=v>=80?C.grn:v>=50?C.gld:C.acc;return<div key={i} onClick={()=>setSelDow(selDow===i?null:i)} style={{flex:1,background:C.bg,border:"1px solid "+(selDow===i?C.grn:C.bd),borderRadius:10,padding:"9px 3px",textAlign:"center",cursor:"pointer"}}>
             <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:6}}>{DOW_LABELS[i]}</div>
             <div style={{fontSize:18,fontWeight:800,color:col,marginBottom:7,..._s.mono}}>{v}%</div>
@@ -8783,10 +8796,14 @@ function AdminDash({course,onRefresh,navTo,weather}){const[custInbox,setCustInbo
           <div style={{fontSize:10,color:C.tm,fontWeight:600,marginBottom:6}}>Horario fuerte</div>
           {(st.occBands||[]).map((x,i)=>{const c=x.v>=80?C.grn:x.v>=50?C.gld:C.acc;return<div key={i} style={{marginBottom:6}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.ts,marginBottom:3}}><span>{x.l}</span><span style={{fontWeight:700,color:c}}>{x.v}%</span></div><div style={{height:5,background:C.bg,borderRadius:6}}><div style={{width:x.v+"%",height:"100%",background:c,borderRadius:6}}/></div></div>;})}
         </div>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={()=>{const csv="Mes,Reservas,Ingresos,Jugadores,Ticket\n"+monthly.map(m=>m.label+","+m.bookings+","+m.revenue+","+m.players+","+m.avgTicket).join("\n");const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=course.course_name.replace(/\s/g,"_")+"_lifetime.csv";a.click()}} style={{flex:1,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("download",14,C.txt)+" CSV mensual"}}/>
+    </div>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <div style={{background:C.cd,border:"1px solid "+((custN.esc+custN.wa)>0?C.acc+"40":C.bd),borderRadius:16,padding:16}}>
-          <div style={{fontSize:11,fontWeight:800,color:C.txt,letterSpacing:"0.05em",marginBottom:12}}>{t("ATENCIÓN A CLIENTES")}</div>
+        {(course.facility_type||"campo")!=="simulador"&&<WeatherPanel weather={weather} course={course}/>}
+        <div style={{background:C.cd,border:"1px solid "+((custN.esc+custN.wa)>0?C.acc+"40":C.bd),borderRadius:14,padding:16}}>
+          <div style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em",marginBottom:12}}>Bandeja{(custN.esc+custN.wa)>0&&<span style={{marginLeft:7,fontSize:10,color:C.accTx||C.acc,fontWeight:700,fontFamily:"ui-monospace,Menlo,monospace"}}>{custN.esc+custN.wa}</span>}</div>
           {custMsgs&&custMsgs.length>0?<>
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
               {custMsgs.map(m=><div key={m.phone} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",background:C.bg,borderRadius:10}}>
@@ -8806,15 +8823,9 @@ function AdminDash({course,onRefresh,navTo,weather}){const[custInbox,setCustInbo
             <button onClick={()=>setCustInbox(true)} style={{width:"100%",padding:11,background:(custN.esc+custN.wa)>0?"linear-gradient(135deg,"+C.acc+",#ff6b6b)":C.bg,border:"1px solid "+C.bd,borderRadius:10,color:(custN.esc+custN.wa)>0?"#fff":C.ts,fontSize:12,fontWeight:700,cursor:"pointer"}}>Abrir bandeja</button>
           </>}
         </div>
-        <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10}}>
-          <div className="sc"><div style={{fontSize:10,color:C.grn,fontWeight:800,marginBottom:5,letterSpacing:".05em"}}>HOY</div><div className="n" style={{color:C.grn,fontSize:26}}>${fm(st.todayRev||0)}</div><div style={{fontSize:10,color:C.ts,marginTop:2}}>{st.todayCount||0} {(st.todayCount||0)===1?"reserva":"reservas"}</div></div>
-          <div className="sc"><div style={{fontSize:10,color:C.tm,fontWeight:800,marginBottom:5,letterSpacing:".05em"}}>SEMANA</div><div className="n" style={{color:C.txt,fontSize:26}}>${fm(st.wow.cur.revenue)}</div><div style={{fontSize:10,color:C.ts,marginTop:2}}>{renderDelta(st.wow.revPct,"$")}</div></div>
-          <div className="sc" style={{border:"1px solid "+C.grn+"25"}}><div style={{fontSize:10,color:C.tm,fontWeight:800,marginBottom:5,letterSpacing:".05em"}}>LIQUIDADO</div><div className="n" style={{color:C.txt,fontSize:26}}>${fm(st.settledAmt||0)}</div></div>
-          <div className="sc" style={{border:"1px solid "+C.acc+"25"}}><div style={{fontSize:10,color:C.acc,fontWeight:800,marginBottom:5,letterSpacing:".05em"}}>POR LIQUIDAR</div><div className="n" style={{color:C.acc,fontSize:26}}>${fm(st.pendSettle||0)}</div></div>
-        </div>
-        <div style={{background:"linear-gradient(135deg,"+C.cd+","+C.bg+")",border:"1px solid "+C.bd,borderRadius:16,padding:16}}>
+        <div style={{padding:"2px 2px 0"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-            <div style={{fontSize:11,fontWeight:800,color:C.txt,letterSpacing:"0.05em"}}>HEALTH SCORE</div>
+            <div style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>Health score</div>
             <div style={{fontSize:26,fontWeight:800,lineHeight:1,color:st.health>=67?C.grn:st.health>=34?C.gld:C.acc,..._s.mono}}>{st.health}</div>
           </div>
           {st.healthBreakdown.slice(0,3).map(b=><div key={b.l} style={{marginBottom:12}}>
@@ -8822,19 +8833,10 @@ function AdminDash({course,onRefresh,navTo,weather}){const[custInbox,setCustInbo
               <span style={{fontSize:12,color:C.ts}}>{b.l}</span>
               <span style={{fontSize:11,color:C.tm,..._s.mono}}>{b.v}/{b.max}</span>
             </div>
-            <div style={{height:6,background:C.bg,borderRadius:6,overflow:"hidden"}}><div style={{width:Math.round(b.v/b.max*100)+"%",height:"100%",background:b.v/b.max>=.7?C.grn:b.v/b.max>=.4?C.gld:C.acc,borderRadius:6}}/></div>
+            <div style={{height:6,background:C.cd,borderRadius:6,overflow:"hidden"}}><div style={{width:Math.round(b.v/b.max*100)+"%",height:"100%",background:b.v/b.max>=.7?C.grn:b.v/b.max>=.4?C.gld:C.acc,borderRadius:6}}/></div>
           </div>)}
         </div>
-        {st.healthBreakdown.find(b=>b.v/b.max<.6)&&<div style={{background:C.acc+"0d",border:"1px solid "+C.acc+"25",borderRadius:16,padding:16}}>
-          <div style={{fontSize:11,fontWeight:800,color:C.gld,letterSpacing:"0.05em",marginBottom:12}}>{t("REQUIERE ACCIÓN")}</div>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {st.healthBreakdown.filter(b=>b.v/b.max<.6).slice(0,4).map(b=><div key={b.l} style={{fontSize:12,color:C.txt,lineHeight:1.4}}>· {b.hint} <span style={{color:C.tm}}>→</span></div>)}
-          </div>
-        </div>}
       </div>
-    </div>
-    <div style={{display:"flex",gap:8,marginTop:16}}>
-      <button onClick={()=>{const csv="Mes,Reservas,Ingresos,Jugadores,Ticket\n"+monthly.map(m=>m.label+","+m.bookings+","+m.revenue+","+m.players+","+m.avgTicket).join("\n");const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=course.course_name.replace(/\s/g,"_")+"_lifetime.csv";a.click()}} style={{flex:1,padding:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("download",14,C.txt)+" CSV mensual"}}/>
     </div>
   </div>}
 
@@ -14429,20 +14431,11 @@ function LowActivityBanner({course,st,navTo}){
     ...(!profileComplete?[{icon:ic("camera",16),title:t("Completa tu perfil del campo"),sub:!hasPhotos?t("Sube al menos 3 fotos para tu listing público"):!hasLogo?t("Falta logo del campo"):t("Selecciona tus amenities"),onClick:()=>navTo?.(4,{sub:"perfil"})}]:[]),
     {icon:ic("target",16),title:t("Lanza tu primera promo"),sub:t("Bienvenida con -15% o usa Smart Promotions con IA"),onClick:()=>navTo?.(2)}
   ];
-  return<div style={{background:`linear-gradient(135deg,${C.gld}15,${C.grn}08)`,border:"1px solid "+C.gld+"40",borderRadius:14,padding:16,marginBottom:14,position:"relative"}}>
-    <button onClick={dismiss} title={t("Ocultar")} style={{position:"absolute",top:6,right:8,background:"transparent",border:"none",color:C.tm,fontSize:22,cursor:"pointer",padding:4,lineHeight:1,fontWeight:300}}>×</button>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,paddingRight:24}}>
-      <div style={{flexShrink:0,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("rocket",24)}}/>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:14,fontWeight:800,color:C.txt,letterSpacing:"-.01em"}}>{t("Tu campo está recién publicado")}</div>
-        <div style={{fontSize:11,color:C.tm,marginTop:2}}>{tips.length} {t("acciones rápidas para acelerar tu primer mes")}</div>
-      </div>
-    </div>
-    <div style={{display:"flex",flexDirection:"column",gap:6}}>{tips.map((tip,i)=><div key={i} onClick={tip.onClick} style={{padding:"10px 12px",background:C.cd,border:"1px solid "+C.bd,borderRadius:10,cursor:"pointer",display:"flex",alignItems:"center",gap:10,transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background=C.gld+"08"}} onMouseLeave={e=>{e.currentTarget.style.background=C.cd}}>
-      <div style={{flexShrink:0,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:tip.icon}}/>
-      <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:700,color:C.txt}}>{tip.title}</div><div style={{fontSize:10,color:C.tm,marginTop:1}}>{tip.sub}</div></div>
-      <span style={{color:C.gld,fontSize:14,flexShrink:0}}>›</span>
-    </div>)}</div>
+  return<div style={{display:"flex",alignItems:"center",gap:9,padding:"10px 0"}}>
+    <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("rocket",14,C.gld)}}/>
+    <span style={{fontSize:12,color:C.txt,fontWeight:700,flexShrink:0}}>{t("Tu campo está recién publicado")}.</span>
+    <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:18,fontSize:12,minWidth:0,overflow:"hidden"}}><span onClick={copyLink} style={{fontWeight:700,color:C.secVio||"#a78bfa",cursor:"pointer",whiteSpace:"nowrap"}}>Comparte tu link</span>{!profileComplete&&<span onClick={()=>navTo?.(4)} style={{fontWeight:700,color:C.secVio||"#a78bfa",cursor:"pointer",whiteSpace:"nowrap"}}>Completa tu perfil</span>}<span onClick={()=>navTo?.(2)} style={{fontWeight:700,color:C.secVio||"#a78bfa",cursor:"pointer",whiteSpace:"nowrap"}}>Lanza tu primera promo</span></span>
+    <span onClick={dismiss} title={t("Ocultar")} style={{flexShrink:0,color:C.tm,fontSize:12,cursor:"pointer",padding:"2px 2px",lineHeight:1}}>✕</span>
   </div>
 }
 
@@ -14638,6 +14631,20 @@ function AdminVentas({course}){
 }
 
 // Tab 3 · INSIGHTS — Decisiones basadas en data (verbo: DECIDIR)
+// v32.74: Requiere accion — hints del health score (calculados en Resumen, cacheados en window.__parteeHealth) mostrados en Insights.
+function HealthActionCard(){
+  const h=window.__parteeHealth;
+  if(!h||!h.items)return null;
+  const need=h.items.filter(b=>b.v/b.max<.6);
+  if(!need.length)return null;
+  return<div style={{background:C.acc+"0d",border:"1px solid "+C.acc+"25",borderRadius:14,padding:16,marginBottom:18}}>
+    <div style={{display:"flex",alignItems:"center",marginBottom:10}}><span style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>Requiere acción</span><span style={{marginLeft:"auto",fontSize:11,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>Health {h.health}</span></div>
+    <div style={{display:"flex",flexDirection:"column",gap:9}}>
+      {need.map(b=><div key={b.l} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.ts2||C.ts,lineHeight:1.4}}><span style={{width:5,height:5,borderRadius:99,background:C.gld,flexShrink:0}}/><span><span style={{fontWeight:700,color:C.txt}}>{b.l}:</span> {b.hint}</span></div>)}
+    </div>
+  </div>
+}
+
 // v20.30 Fase D.1: consolida YieldHeatmap + WeeklyInsightCard + ChurnRiskPanel + IntelligencePanel
 // movidos desde AdminDash. AdminDash (Hoy) mantiene DailyPulseCard (anomalías de hoy).
 // v22.0: Insights re-organizada en sub-tabs por finalidad (mismo patron AdminSubNav que
@@ -14688,7 +14695,7 @@ function AdminInsights({course,initialSub}){
     <AdminSubNav items={items} active={sub} onChange={setSub}/>
     <div key={sub} className="fi">
       {isPro?<>
-        {sub==="resumen"&&<WeeklyInsightCard course={course}/>}
+        {sub==="resumen"&&<React.Fragment><HealthActionCard/><WeeklyInsightCard course={course}/></React.Fragment>}
         {sub==="demanda"&&<><YieldHeatmap course={course}/>{(course.facility_type||"campo")==="campo"&&<ObservedOccupancy course={course}/>}</>}
         {sub==="clientes"&&<><ChurnRiskPanel course={course}/><div style={{marginTop:18}}><IntelligencePanel course={course}/></div></>}
         {sub==="mercado"&&<PremiumInsights course={course} goTo={setSub} unlocked/>}
@@ -15515,21 +15522,37 @@ function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,set
   if(ld)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="pl" style={{color:C.ts}}>Cargando...</div></div>;
   if(!course)return<div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><div style={{textAlign:"center"}}><h2 style={{color:C.txt}}>{t("Sin locación")}</h2><button onClick={out} style={{marginTop:20,padding:"12px 30px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Cerrar Sesión")}</button></div></div>;
   // v20.30 Fase B+C: 8 tabs → 5 tabs con verbo mental único. Antes: Dashboard/Reservas/Slots/Promos/Extras/Pagos/Insights/Perfil
-  const ft=course.facility_type||"campo";const TAREA={0:"resumen",1:"reservas",2:"ventas",3:"insights",5:"en_vivo"};let tabs=[{idx:0,icn:"chart",l:"Resumen"},...(ft==="campo"?[{idx:5,icn:"pin",l:t("En Vivo")}]:[]),{idx:1,icn:"clock",l:ft==="campo"?"Tee Time":t("Reservas")},{idx:2,icn:"dollar",l:"Ventas"},{idx:3,icn:"gem",l:"Insights"},{idx:4,icn:"user",l:ft==="plataforma"?t("Plataforma"):ft==="simulador"?t("Simulador"):"Campo"}];if(isTeam){tabs=tabs.filter(tb=>tb.idx!==4&&teamPerms&&teamPerms[TAREA[tb.idx]])}const allowedIdx=new Set(tabs.map(tb=>tb.idx));
+  const ft=course.facility_type||"campo";const TAREA={0:"resumen",1:"reservas",2:"ventas",3:"insights",5:"en_vivo"};let tabs=[{idx:0,icn:"chart",l:"Resumen"},...(ft==="campo"?[{idx:5,icn:"pin",l:t("En Vivo")}]:[]),{idx:1,icn:"clock",l:ft==="campo"?"Tee Time":t("Reservas")},{idx:2,icn:"dollar",l:"Ventas"},{idx:3,icn:"gem",l:"Insights"},{idx:4,icn:"settings",l:ft==="plataforma"?"Mi plataforma":ft==="simulador"?"Mi simulador":"Mi campo"}];if(isTeam){tabs=tabs.filter(tb=>tb.idx!==4&&teamPerms&&teamPerms[TAREA[tb.idx]])}const allowedIdx=new Set(tabs.map(tb=>tb.idx));
   const lst=course.listing_status||"draft";const LST={draft:{l:"BORRADOR",c:C.acc},pending_review:{l:"EN REVISIÓN",c:C.gld},active:{l:"PUBLICADO",c:C.grn},suspended:{l:"SUSPENDIDO",c:C.acc}}[lst]||{l:"BORRADOR",c:C.acc};
   const isPro=["pro","pro_plus","enterprise"].includes(course.subscription_plan||"free")&&(course.subscription_status||"active")==="active";
   return<div className="admin-container" style={{background:C.bg}}>
-    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{position:"relative",display:"flex",alignItems:"center"}}><ParteeMark size={24} color={C.grn}/>{/* v20.30 Fase E.3: status dot animado junto al logo, color por listing_status */}<div style={{position:"absolute",right:-2,bottom:-2,width:9,height:9,borderRadius:"50%",background:LST.c,border:"2px solid "+C.bg,boxShadow:"0 0 0 0 "+LST.c+"60",animation:lst==="active"?"parteePulseGrn 2.5s infinite":lst==="pending_review"?"parteePulseGld 2s infinite":"none"}}/></div><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div className="admin-hdr-mid"><AdminClock/>{wx&&wx.current&&<div style={{display:"flex",alignItems:"center",gap:7,fontSize:12,color:C.ts,paddingLeft:12,marginLeft:2,borderLeft:"1px solid "+C.bd}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:WMO_EMOJI(wx.current.weather_code,15)}}/><span style={{color:C.txt,fontWeight:700,..._s.mono}}>{Math.round(wx.current.temperature_2m)}°</span><span>viento {Math.round(wx.current.wind_speed_10m)} km/h</span></div>}</div><div style={{display:"flex",alignItems:"center",gap:6}}><div className="admin-hdr-actions"><button onClick={()=>navTo(1,{sub:"reservas"})} style={{padding:"7px 13px",background:"linear-gradient(135deg,#00b894,#00cec9)",border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>+ Nueva reserva</button><button onClick={()=>navTo(1,{sub:"slots"})} style={{padding:"7px 13px",background:"transparent",border:"1px solid "+C.bd,borderRadius:9,color:C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Bloquear horario</button></div><div onClick={()=>setTab(0)} style={{padding:"3px 9px",borderRadius:7,background:LST.c+"15",border:"1px solid "+LST.c+"35",cursor:lst==="active"?"default":"pointer"}} title={lst==="active"?"":"Ver detalles en Dashboard"}><span style={{fontSize:9,fontWeight:700,color:LST.c,letterSpacing:".05em"}}>{LST.l}</span></div>{course?.subscription_plan&&course.subscription_plan!=="free"&&(course.subscription_status||"active")==="active"&&<PremiumBadge plan={course.subscription_plan}/>}<NotifBell/></div></div>
+    <div className="admin-header" style={{background:C.bg,padding:"10px 20px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div className="admin-hdr-brand" style={{display:"flex",alignItems:"center",gap:8}}><div style={{position:"relative",display:"flex",alignItems:"center"}}><ParteeMark size={24} color={C.grn}/>{/* v20.30 Fase E.3: status dot animado junto al logo, color por listing_status */}<div style={{position:"absolute",right:-2,bottom:-2,width:9,height:9,borderRadius:"50%",background:LST.c,border:"2px solid "+C.bg,boxShadow:"0 0 0 0 "+LST.c+"60",animation:lst==="active"?"parteePulseGrn 2.5s infinite":lst==="pending_review"?"parteePulseGld 2s infinite":"none"}}/></div><div><div style={{fontSize:12,color:C.ts}}>{course.course_name}</div></div></div><div className="admin-hdr-mid"><AdminClock/>{wx&&wx.current&&<div style={{display:"flex",alignItems:"center",gap:7,fontSize:12,color:C.ts,paddingLeft:12,marginLeft:2,borderLeft:"1px solid "+C.bd}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:WMO_EMOJI(wx.current.weather_code,15)}}/><span style={{color:C.txt,fontWeight:700,..._s.mono}}>{Math.round(wx.current.temperature_2m)}°</span><span>viento {Math.round(wx.current.wind_speed_10m)} km/h</span></div>}</div><div style={{display:"flex",alignItems:"center",gap:6}}><div className="admin-hdr-actions"><button onClick={()=>navTo(1,{sub:"reservas"})} style={{padding:"7px 13px",background:"linear-gradient(135deg,#00b894,#00cec9)",border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>+ Nueva reserva</button><button onClick={()=>navTo(1,{sub:"slots"})} style={{padding:"7px 13px",background:"transparent",border:"1px solid "+C.bd,borderRadius:9,color:C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Bloquear horario</button></div>{course?.subscription_plan&&course.subscription_plan!=="free"&&(course.subscription_status||"active")==="active"&&<PremiumBadge plan={course.subscription_plan}/>}<NotifBell/></div></div>
     <div className="admin-content" style={{padding:16,paddingBottom:70}}>{allowedIdx.has(0)&&tab===0&&<AdminDash course={course} onRefresh={loadC} navTo={navTo} weather={wx}/>}{allowedIdx.has(1)&&tab===1&&<AdminTeeTime course={course} initialSub={navSub?.t===1?navSub.sub:null}/>}{allowedIdx.has(2)&&tab===2&&<AdminVentas course={course}/>}{allowedIdx.has(3)&&tab===3&&<AdminInsights course={course} initialSub={navSub?.t===3?navSub.sub:null}/>}{allowedIdx.has(4)&&tab===4&&<AdminCampo course={course} onOut={out} onRefresh={loadC} autoEdit={autoEdit} focusField={focusField} onAutoEditConsumed={clearAutoEdit} initialSub={navSub?.t===4?navSub.sub:null}/>}{allowedIdx.has(5)&&tab===5&&<LiveMap course={course}/>}</div>
-    <div className="bnav admin-bnav" role="navigation">{tabs.map((tb)=>{
+    <div className="bnav admin-bnav" role="navigation">
+    {/* v32.65 spec 8a: en desktop el bnav es sidebar — marca+estado arriba, grupos OPERACION/NEGOCIO/CONFIGURACION, usuario abajo; side-only invisible en movil */}
+    <div className="side-only" style={{alignItems:"center",gap:10,padding:"0 6px 14px"}}>
+      <div style={{position:"relative",display:"flex",alignItems:"center",flexShrink:0}}><ParteeMark size={24} color={C.grn}/><div style={{position:"absolute",right:-2,bottom:-2,width:8,height:8,borderRadius:"50%",background:LST.c,border:"2px solid "+(C.nav||C.bg)}}/></div>
+      <div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,color:C.txt,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{course.course_name}</div><div style={{fontSize:9,fontWeight:700,color:C.tm,letterSpacing:".07em",marginTop:2}}>{LST.l}{isPro&&<span style={{color:C.gld}}> · PRO</span>}</div></div>
+    </div>
+    {tabs.map((tb,ti)=>{
+      const grpOf=(ix)=>ix===2||ix===3?"NEGOCIO":ix===4?"CONFIGURACIÓN":"OPERACIÓN";
+      const grp=grpOf(tb.idx);const showLbl=ti===0||grpOf(tabs[ti-1].idx)!==grp;
       // v20.30 Fase E.1: Counter badges. Campo tab muestra "!" cuando course requiere accion del admin.
       // v20.86: pending_review NO dispara "!". Semantica correcta: pending_review = el admin ya
       // completo todo, Partee debe aprobar; el "!" sugeria al admin que aun tiene pendientes y
       // generaba ansiedad falsa. Solo draft y suspended son pendientes reales del admin.
       const needsAdminAction=lst==="draft"||lst==="suspended";
       const badge=tb.idx===4?(needsAdminAction?"!":null):null;
-      return<div key={tb.idx} onClick={()=>setTab(tb.idx)} style={{background:tab===tb.idx?`linear-gradient(135deg,${C.grn},#00cec9)`:"transparent",position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===tb.idx?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:ic(tb.icn,20,tab===tb.idx?"#ffffff":(C.grnTxt||C.grn))}}/></div><div style={{fontSize:9,fontWeight:tab===tb.idx?800:600,color:tab===tb.idx?"#ffffff":(C.grnTxt||C.grn),marginTop:2}}>{tb.l}</div>{tab===tb.idx&&<div className="nav-indic" style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}{badge!==null&&<div style={{position:"absolute",top:0,right:"22%",minWidth:14,height:14,borderRadius:7,background:C.acc,color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",border:"1.5px solid "+C.bg,boxShadow:"0 2px 6px "+C.acc+"40"}}>{badge}</div>}</div>;
-    })}</div>
+      return<React.Fragment key={tb.idx}>{showLbl&&<div className="side-only side-glabel" style={{padding:"12px 10px 5px",fontSize:9,fontWeight:700,letterSpacing:".07em",color:C.tm}}>{grp}</div>}<div data-active={tab===tb.idx?"1":"0"} onClick={()=>setTab(tb.idx)} style={{background:tab===tb.idx?`linear-gradient(135deg,${C.grn},#00cec9)`:"transparent",position:"relative"}}><div style={{padding:"4px 8px",borderRadius:8,background:"transparent"}}><div style={{fontSize:20,transition:"transform .2s",transform:tab===tb.idx?"scale(1.1)":"scale(1)"}} dangerouslySetInnerHTML={{__html:ic(tb.icn,20,tab===tb.idx?"#ffffff":(C.grnTxt||C.grn))}}/></div><div style={{fontSize:9,fontWeight:tab===tb.idx?800:600,color:tab===tb.idx?"#ffffff":(C.grnTxt||C.grn),marginTop:2}}>{tb.l}</div>{tab===tb.idx&&<div className="nav-indic" style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:20,height:3,borderRadius:2,background:C.grn,boxShadow:"0 0 8px "+C.grn+"60"}}/>}{badge!==null&&<div style={{position:"absolute",top:0,right:"22%",minWidth:14,height:14,borderRadius:7,background:C.acc,color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",border:"1.5px solid "+C.bg,boxShadow:"0 2px 6px "+C.acc+"40"}}>{badge}</div>}</div>
+    </React.Fragment>
+    })}
+    <div className="side-only" style={{flex:1}}/>
+    <div className="side-only" style={{borderTop:"1px solid "+C.bd,padding:"12px 6px 0",alignItems:"center",gap:9}}>
+      <div style={{width:29,height:29,borderRadius:"50%",background:(C.secBlu||"#5b86e5")+"33",color:C.secBlu||"#9db6f2",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{(p?.full_name||"A").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase()}</div>
+      <div style={{flex:1,minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p?.full_name||"Admin"}</div><div style={{fontSize:9.5,color:C.tm}}>{isTeam?"Equipo":"Administrador"}</div></div>
+      <button onClick={out} title="Cerrar sesión" aria-label="Cerrar sesión" style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("logout",14,C.tm)}}/>
+    </div>
+    </div>
     <button onClick={()=>{hap();setConcierge(true)}} aria-label="Abrir Pinny, tu caddie virtual" style={{position:"fixed",right:16,bottom:74,zIndex:90,width:54,height:54,borderRadius:27,border:"none",background:`linear-gradient(135deg,${C.grn},#00cec9)`,boxShadow:"0 6px 20px rgba(0,184,148,.45)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}><ParteeMark size={28} color="#fff"/>{isPro&&<span style={{position:"absolute",top:-5,right:-6,background:`linear-gradient(135deg,${C.gld},#e67e22)`,color:"#fff",fontSize:8,fontWeight:800,letterSpacing:".05em",padding:"2px 5px",borderRadius:8,border:"2px solid "+C.bg,boxShadow:"0 2px 6px rgba(0,0,0,.3)",lineHeight:1}}>PRO</span>}</button>
     {concierge&&<AdminConciergeChat course={course} onClose={()=>setConcierge(false)}/>}
      {adminSupportOpen&&<MySupportRequests adminMode onClose={()=>setAdminSupportOpen(false)}/>}
@@ -16733,7 +16756,7 @@ function DailyPulseCard({course}){const{p}=useA();const isTeam=p?.user_role==="c
 
   const WMO=(c)=>c===0?{l:"Despejado",e:ic("sun",22,"#f4b942")}:c<=3?{l:"Nublado",e:ic("cloud",22)}:c<=48?{l:"Niebla",e:ic("fog",22)}:c<=57?{l:"Llovizna",e:ic("rain",22)}:c<=67?{l:"Lluvia",e:ic("rain",22)}:c<=77?{l:"Nieve",e:ic("snow",22)}:c<=82?{l:"Chubascos",e:ic("rain",22)}:c<=86?{l:"Nieve",e:ic("snow",22)}:{l:"Tormenta",e:ic("storm",22)};
   const wxChip=wx?<div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,paddingLeft:12,borderLeft:"1px solid "+C.bd,marginLeft:4}}><span style={{display:"inline-flex",lineHeight:1}} dangerouslySetInnerHTML={{__html:WMO(wx.weather_code).e}}/><div style={{textAlign:"right"}}><div style={{fontSize:17,fontWeight:800,color:C.txt,lineHeight:1,..._s.mono}}>{Math.round(wx.temperature_2m)}°</div><div style={{fontSize:9,color:C.tm,marginTop:2}}>{WMO(wx.weather_code).l}</div></div></div>:null;
-  if(ld)return<Skeleton w="100%" h={80}/>;
+  if(ld)return<div style={{padding:"8px 0"}}><Skeleton w="100%" h={34}/></div>;
   if(!data)return null;
 
   const m=data.metrics||{};
@@ -16742,12 +16765,9 @@ function DailyPulseCard({course}){const{p}=useA();const isTeam=p?.user_role==="c
 
   // Si no hay alertas, render compacto con solo hero metrics
   if(!hasAlerts){
-    return<div style={{marginBottom:14,padding:12,background:`linear-gradient(135deg,${C.grn}08,${C.cd})`,border:"1px solid "+C.grn+"30",borderRadius:12,display:"flex",alignItems:"center",gap:12}}>
-      <div style={{width:36,height:36,borderRadius:18,background:C.grn+"20",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("star",18,C.gld)}}/>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:13,fontWeight:800,color:C.txt}}>{t("Buenos días — todo en orden")}</div>
-        <div style={{fontSize:10,color:C.tm,marginTop:1,..._s.mono}}>{m.bookings_today} hoy · ${fm(m.revenue_today)} · {m.bookings_tomorrow} mañana</div>
-      </div>
+    return<div style={{display:"flex",alignItems:"center",gap:9,padding:"10px 0"}}>
+      <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("check",14,C.grnTxt||C.grn)}}/>
+      <span style={{fontSize:12,color:C.ts2||C.ts,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><span style={{fontWeight:700,color:C.txt}}>Pulse de hoy · todo en orden.</span> <span style={{..._s.mono}}>{m.bookings_today} hoy · ${fm(m.revenue_today)} · {m.bookings_tomorrow} mañana</span></span>
       {wxChip}
     </div>;
   }
@@ -16759,27 +16779,17 @@ function DailyPulseCard({course}){const{p}=useA();const isTeam=p?.user_role==="c
     return{bg:C.tm+"15",border:C.tm+"40",fg:C.tm};
   }
 
-  return<div style={{marginBottom:14,padding:12,background:`linear-gradient(135deg,${C.cd},${C.acc}05)`,border:"1px solid "+C.acc+"40",borderRadius:12}}>
-    <div style={{..._s.flexB,marginBottom:10}}>
-      <div>
-        <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
-          <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("bell",14)}}/>Pulse de hoy · {an.length} alerta{an.length===1?"":"s"}
-        </div>
-        <div style={{fontSize:10,color:C.tm,marginTop:1,..._s.mono}}>{m.bookings_today} hoy · ${fm(m.revenue_today)} · ayer ${fm(m.revenue_yesterday)}</div>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>{wxChip}{!isTeam&&<button onClick={dispatchPush} disabled={busy} title={t("Marcar como notificado (en v20.11 será automático cada mañana)")} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+C.bd,background:"transparent",color:busy?C.tm:C.ts,fontSize:10,fontWeight:700,cursor:busy?"default":"pointer",letterSpacing:.3}}>{busy?"…":"Notificar"}</button>}</div>
+  return<div style={{padding:"3px 0 5px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0"}}>
+      <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("bell",14,C.accTx||C.acc)}}/>
+      <span style={{fontSize:12,color:C.ts2||C.ts,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><span style={{fontWeight:700,color:C.txt}}>Pulse de hoy · {an.length} alerta{an.length===1?"":"s"}.</span> <span style={{..._s.mono}}>{m.bookings_today} hoy · ${fm(m.revenue_today)} · ayer ${fm(m.revenue_yesterday)}</span></span>
+      <span style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>{wxChip}{!isTeam&&<span onClick={busy?undefined:dispatchPush} title={t("Marcar como notificado (en v20.11 será automático cada mañana)")} style={{fontSize:11,fontWeight:700,color:busy?C.tm:(C.ts2||C.ts),cursor:busy?"default":"pointer"}}>{busy?"…":"Notificar"}</span>}</span>
     </div>
-
-    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-      {an.map((a,i)=>{const sv=severityColors(a.severity);
-      return<div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 11px",background:sv.bg,border:"1px solid "+sv.border,borderRadius:8}}>
-        <span style={{fontSize:18,lineHeight:1,marginTop:1}}>{a.icon}</span>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:12,fontWeight:800,color:sv.fg,marginBottom:2}}>{a.title}</div>
-          <div style={{fontSize:10,color:C.ts,lineHeight:1.4}}>{a.detail}</div>
-        </div>
-      </div>})}
-    </div>
+    {an.map((a,i)=>{const sv=severityColors(a.severity);
+    return<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0 5px 23px",fontSize:12,minWidth:0}}>
+      <span style={{fontSize:13,lineHeight:1,flexShrink:0}}>{a.icon}</span>
+      <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:C.ts2||C.ts}} title={a.detail}><span style={{fontWeight:700,color:sv.fg}}>{a.title}</span> · {a.detail}</span>
+    </div>})}
   </div>;
 }
 
