@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.93 (Calendario: desaparece el recuadro explicador de Bloqueos — el boton + Crear bloqueo (coral) vive ahora junto a + Generar 30 dias en el header de Tee Times (via window.__pbmOpen registrado por AdminBlockManager); si hay bloqueos activos aparece solo una linea discreta con dot coral N bloqueos activos · Ver/Ocultar que despliega la lista y stats de siempre; el modal de crear y toda la logica (revert, refunds, summary) intactos. Base: v32.92)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.94 (Reservas re-arquitecturada al patron Mercury/Airwallex aprobado: MUERE el riel izquierdo — todo el control vive en una toolbar (chips cortos Hoy/Manana/7d/30d/Pasadas/Rango + navegacion de dia inline + busqueda pill 210px + Filtros como dropdown con dot verde cuando hay activos + CSV pelon) y una linea de contexto (resumen mono enriquecido con por-cobrar en oro + acciones Kiosco check-in y + Walk-in como texto); el cuerpo master-detail recupera todo el ancho. Las cards de Check-in y Walk-ins desaparecen del top: el kiosco abre igual y Walk-in abre su modal via window.__pwiOpen; la card de registros de walk-ins (aplanada, sin gradiente) vive ahora al pie. Counter Mostrando X de Y absorbido por el resumen; Borrar todo vive en el dropdown de filtros. Cero funcionalidad perdida. Base: v32.93)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -9036,6 +9036,7 @@ function AdminClaimsCard({course}){
   </div>;
 }
 function AdminWalkInsCard({course}){
+  useEffect(()=>{window.__pwiOpen=()=>{if((course.facility_type||"campo")!=="campo"){setGuestOpen(true);return}setShowModal(true);setOpen(true)};return()=>{try{delete window.__pwiOpen}catch(x){}}},[]);
   const[guestOpen,setGuestOpen]=useState(false);const[data,setData]=useState(null);const[ld,setLd]=useState(false);const[open,setOpen]=useState(false);
   const[showModal,setShowModal]=useState(false);const[busyId,setBusyId]=useState(null);
   async function load(){setLd(true);
@@ -9055,7 +9056,7 @@ function AdminWalkInsCard({course}){
   const PM={cash:{l:ic("dollar",11)+" Cash",c:C.grn},card:{l:ic("creditcard",11)+" Tarjeta",c:"#6c5ce7"},transfer:{l:ic("building",11)+" Transfer",c:C.gld},complimentary:{l:ic("gift",11)+" Cortesía",c:C.acc},other:{l:"Otro",c:C.tm}};
   const walkIns=data?.walk_ins||[];const summary=data?.summary||{};
   const today=new Date().toISOString().slice(0,10);
-  return<div style={{background:`linear-gradient(135deg,${C.grn}10,#00cec908)`,border:"1px solid "+C.grn+"30",borderRadius:14,padding:12,marginBottom:14}}>
+  return<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:12,marginBottom:14,marginTop:14}}>
     <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",gap:10}}>
       <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
         <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("walk",18)}}/>
@@ -9872,7 +9873,7 @@ function AdminBookings({course}){
   const[quickFilter,setQuickFilter]=useState("today"); // today|tomorrow|next7|next30|past7|custom
   const[statusFilter,setStatusFilter]=useState("all");
   const[paymentFilter,setPaymentFilter]=useState("all");
-  const[bkSearch,setBkSearch]=useState("");
+  const[bkSearch,setBkSearch]=useState("");const[fOpen,setFOpen]=useState(false);
   const[bks,setBks]=useState([]);
   const[ld,setLd]=useState(true);
   const[det,setDet]=useState(null);
@@ -9939,10 +9940,10 @@ function AdminBookings({course}){
   const QUICK_CHIPS=[
     {k:"today",l:"Hoy"},
     {k:"tomorrow",l:"Mañana"},
-    {k:"next7",l:"Próx. 7d"},
-    {k:"next30",l:"Próx. 30d"},
-    {k:"past7",l:"Pasadas 7d"},
-    {k:"custom",l:"Custom"}
+    {k:"next7",l:"7d"},
+    {k:"next30",l:"30d"},
+    {k:"past7",l:"Pasadas"},
+    {k:"custom",l:t("Rango")}
   ];
   
   const exportCSV=()=>{
@@ -9965,28 +9966,14 @@ function AdminBookings({course}){
   
   return<div className="fi">
     <BayOrdersPanel course={course}/>
-    <div className="ab-split">
-    <aside className="ab-rail">
-    {/* v21: solo Check-in aqui. Marshal -> En Vivo (Dispatch); Roster -> sub-tab Roster de Tee Time */}
-    {selDate===today&&viewMode==="day"&&
-      <div style={{marginBottom:10}}>
-        <button onClick={()=>setCheckinOpen(true)} style={{width:"100%",padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:14,cursor:"pointer",display:"flex",alignItems:"center",gap:11,textAlign:"left"}}>
-          <span style={{width:34,height:34,borderRadius:10,background:C.grn+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("check",17,C.grn)}}/>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:800,color:C.grn,lineHeight:1.2}}>Check-in</div>
-            <div style={{fontSize:10,color:C.tm,marginTop:1}}>Registra las llegadas de las reservaciones hechas en Partee</div>
-          </div>
-          <span style={{flexShrink:0,opacity:.65}} dangerouslySetInnerHTML={{__html:ic("right",16,C.grn)}}/>
-        </button>
+    <div>
+    <div>
+    <AdminClaimsCard course={course}/>
+    {/* v32.94: toolbar unica (patron Mercury/Airwallex) — muere el riel izquierdo */}
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+      <div className="ab-chips" style={{marginBottom:0}}>
+      {QUICK_CHIPS.map(q=>(<button key={q.k} onClick={()=>applyQuick(q.k)} style={{padding:"6px 12px",background:quickFilter===q.k?C.grn:(C.w05||"rgba(255,255,255,.05)"),border:"none",borderRadius:9,color:quickFilter===q.k?"#fff":C.ts,fontSize:11.5,fontWeight:quickFilter===q.k?700:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,boxShadow:quickFilter===q.k?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{q.l}</button>))}
       </div>
-    }
-    
-    {/* Quick filter chips — riel: scroll horizontal en movil, wrap en desktop (v27.28) */}
-    <div className="ab-chips">
-      {QUICK_CHIPS.map(q=>(<button key={q.k} onClick={()=>applyQuick(q.k)} style={{padding:"6px 13px",background:quickFilter===q.k?C.grn:(C.w05||"rgba(255,255,255,.05)"),border:"none",borderRadius:9,color:quickFilter===q.k?"#fff":C.ts,fontSize:11.5,fontWeight:quickFilter===q.k?700:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,boxShadow:quickFilter===q.k?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{q.l}</button>))}
-    </div>
-    
-    {/* Date controls — adapt según viewMode */}
     {viewMode==="day"?
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:22,marginBottom:12}}>
         <button onClick={()=>navDay(-1)} aria-label="Día anterior" style={{width:30,height:30,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",15,C.ts2||C.ts)}}/>
@@ -10010,46 +9997,42 @@ function AdminBookings({course}){
         </div>
       </div>
     }
-    
-    {/* Stats agregados sobre filtered */}
-    <div style={{fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace",margin:"2px 2px 12px"}}>{confirmedFilt.length} {t("confirmadas")} · <span style={{color:C.grnTxt||C.grn}}>${fm(totalRev)}</span> · {totalPax} jug</div>
-    
-    {/* Walk-ins card (mantiene) */}
-    <AdminClaimsCard course={course}/><AdminWalkInsCard course={course}/>
-    
-    {/* Filtros + search bar */}
-    <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
-      <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{...inpSm,flex:"1 1 100px",minWidth:90}}>
+      <div style={{flex:1,minWidth:8}}/>
+      <div style={{position:"relative",width:210,maxWidth:"100%"}}>
+        <input placeholder={t("Nombre, código, teléfono…")} value={bkSearch} onChange={e=>setBkSearch(e.target.value)} style={{width:"100%",boxSizing:"border-box",background:C.cd,border:"1px solid "+C.bd,borderRadius:99,padding:"8px 12px 8px 30px",color:C.txt,fontSize:11.5,outline:"none"}}/>
+        <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",display:"flex"}} dangerouslySetInnerHTML={{__html:ic("search",12,C.tm)}}/>
+      </div>
+      <button onClick={()=>setFOpen(o=>!o)} style={{border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:5,color:(statusFilter!=="all"||paymentFilter!=="all")?(C.grnTxt||C.grn):(C.ts2||C.ts),fontSize:11.5,fontWeight:700,padding:"4px 2px"}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("filter",13,(statusFilter!=="all"||paymentFilter!=="all")?(C.grnTxt||C.grn):C.tm)}}/>{t("Filtros")}{(statusFilter!=="all"||paymentFilter!=="all")&&<span style={{width:6,height:6,borderRadius:99,background:C.grn}}/>}</button>
+      <button onClick={exportCSV} disabled={filtered.length===0} title="Export CSV" aria-label="Export CSV" style={{border:"none",background:"none",cursor:filtered.length?"pointer":"default",opacity:filtered.length?1:.4,padding:4,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("download",14,C.tm)}}/>
+    </div>
+    {fOpen&&<div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+      <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{...inpSm,flex:"0 1 150px",minWidth:120}}>
         <option value="all">Todos status</option>
         <option value="confirmed">{t("Confirmada")}</option>
         <option value="cancelled">{t("Cancelada")}</option>
         <option value="no_show">No-show</option>
         <option value="pending">{t("Pendiente")}</option>
       </select>
-      <select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} style={{...inpSm,flex:"1 1 100px",minWidth:90}}>
+      <select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} style={{...inpSm,flex:"0 1 150px",minWidth:120}}>
         <option value="all">Todo pago</option>
         <option value="paid">{t("Cobrado")}</option>
         <option value="refunded">{t("Reembolsado")}</option>
         <option value="no_show_fee">No-show Fee</option>
         <option value="free">{t("Gratis")}</option>
       </select>
+      {(statusFilter!=="all"||paymentFilter!=="all"||bkSearch)&&<button onClick={()=>{setStatusFilter("all");setPaymentFilter("all");setBkSearch("")}} style={{border:"none",background:"none",color:C.accTx2||C.acc,fontSize:11,fontWeight:700,cursor:"pointer"}}>{t("Borrar todo")}</button>}
+    </div>}
+    {/* linea de contexto: resumen del rango + acciones */}
+    <div style={{display:"flex",alignItems:"center",gap:14,margin:"0 2px 14px",flexWrap:"wrap"}}>
+      <span style={{fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>{filtered.length} {t("reservas")} · {confirmedFilt.length} {t("confirmadas")} · <span style={{color:C.grnTxt||C.grn}}>${fm(totalRev)}</span> · {totalPax} jug{(()=>{const pc=filtered.filter(b=>b.status==="confirmed"&&b.payment_status!=="paid"&&b.payment_status!=="free").reduce((a,b)=>a+(Number(b.total_cost)||0),0);return pc>0?<span style={{color:C.gld}}> · ${fm(pc)} {t("por cobrar")}</span>:null})()}</span>
+      <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:18}}>
+        {selDate===today&&viewMode==="day"&&<span onClick={()=>setCheckinOpen(true)} style={{fontSize:11.5,fontWeight:700,color:C.ts2||C.ts,cursor:"pointer"}}>{t("Kiosco check-in")}</span>}
+        <span onClick={()=>window.__pwiOpen&&window.__pwiOpen()} style={{fontSize:11.5,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>+ Walk-in</span>
+      </span>
     </div>
-    
-    <div style={{display:"flex",gap:8,marginBottom:8}}>
-      <div style={{flex:1,position:"relative"}}>
-        <input placeholder={t("Nombre, código, email, teléfono, Player ID...")} value={bkSearch} onChange={e=>setBkSearch(e.target.value)} style={{...inpSm,paddingLeft:32,width:"100%",fontSize:12}}/>
-        <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}} dangerouslySetInnerHTML={{__html:ic("search",13,C.tm)}}/>
-      </div>
-      <button onClick={exportCSV} disabled={filtered.length===0} title="Export CSV" style={{width:34,height:34,borderRadius:8,border:"1px solid "+C.bd,background:filtered.length===0?C.cd+"50":C.cd,display:"flex",alignItems:"center",justifyContent:"center",cursor:filtered.length===0?"default":"pointer",flexShrink:0,opacity:filtered.length===0?.4:1}} dangerouslySetInnerHTML={{__html:ic("download",14,C.txt)}}/>
     </div>
-    
-    </aside>
-    <div className="ab-main">
+    <div>
     {/* Counter */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"4px 2px"}}>
-      <div style={{fontSize:11,color:C.tm,fontWeight:600}}>Mostrando <span style={{color:C.txt,fontWeight:800}}>{filtered.length}</span> de <span style={{color:C.txt,fontWeight:800}}>{bks.length}</span> reservas</div>
-      {(statusFilter!=="all"||paymentFilter!=="all"||bkSearch)&&<button onClick={()=>{setStatusFilter("all");setPaymentFilter("all");setBkSearch("")}} style={{background:"none",border:"none",color:C.acc,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t("Borrar todo")}</button>}
-    </div>
     
     {/* Lista */}
     <div className="ab-md">
@@ -10159,6 +10142,7 @@ function AdminBookings({course}){
       </div>})()}
     </div>
     </div>
+    <AdminWalkInsCard course={course}/>
     </div>
     </div>
     {cust360&&<Customer360 course={course} userId={cust360} onClose={()=>setCust360(null)}/>}
