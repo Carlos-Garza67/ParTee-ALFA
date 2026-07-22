@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.83 (Subtabs de En Vivo homologados al segmentado del jugador (Todos/Campos/Practicas) pero en verde admin: contenedor C.w07 radio 10 padding 2, pill activa C.grn solida texto blanco, inactivas texto plano, sin iconos ni gradientes ni cajas por boton; se conserva el dot de alerta (coral SOS / oro pendientes) sobre Personal, con aro blanco cuando la pill esta activa. Base: v32.82)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.85 (Cuenta del admin homologada a la estetica de Cuenta del jugador: las 6 secciones (Usuarios, Cobros y pagos, Suscripcion, Facturacion, Notificaciones, Apariencia, Sesion) dejan los accordions glass de 2 columnas con chips de color 32px y pasan a una sola card de celdas iOS monocromas — icono 16 gris, label 13.5/600, chevron derecho que rota 90 grados al abrir, hairlines con sangria 45 y titulo de seccion Cuenta 13/700 — el contenido se despliega inline dentro de la card; boton Cerrar Sesion pasa de coral a verde (peticion explicita), Eliminar cuenta se queda neutro. FiscalDetailsCard intacta arriba. Base: v32.84)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -8763,8 +8763,8 @@ function AdminDash({course,onRefresh,navTo,weather}){const{p:selfP}=useA();const
         <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:16}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
             <div style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{(course.facility_type||"campo")==="campo"?"Salidas de hoy":"Reservas de hoy"}</div>
-            {(()=>{const tb=dashV2?.today_bookings||[];if(!tb.length)return null;const unc=tb.filter(b=>b.payment_status!=="paid").length;const seg=(k,l)=><span onClick={()=>setSalFil(k)} style={{padding:"3px 10px",borderRadius:7,background:salFil===k?"rgba(30,232,165,.14)":"transparent",color:salFil===k?(C.grnTxt||C.grn):C.ts,fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{l}</span>;
-            return<div style={{display:"flex",gap:2,background:C.c2||C.bg,border:"1px solid "+C.bd,borderRadius:9,padding:3}}>{seg("all","Todas · "+tb.length)}{seg("unpaid","Por cobrar · "+unc)}</div>})()}
+            {(()=>{const tb=dashV2?.today_bookings||[];if(!tb.length)return null;const unc=tb.filter(b=>b.payment_status!=="paid").length;const seg=(k,l)=><span onClick={()=>setSalFil(k)} style={{padding:"3px 10px",borderRadius:7,background:salFil===k?C.grn:"transparent",color:salFil===k?"#fff":C.ts,fontSize:10,fontWeight:salFil===k?700:600,cursor:"pointer",whiteSpace:"nowrap",boxShadow:salFil===k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{l}</span>;
+            return<div style={{display:"flex",background:C.w07,borderRadius:9,padding:2}}>{seg("all","Todas · "+tb.length)}{seg("unpaid","Por cobrar · "+unc)}</div>})()}
             <span onClick={()=>navTo(1)} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer",whiteSpace:"nowrap"}}>{ft==="campo"?"Tee Sheet →":"Reservas →"}</span>
             {dashV2?.today_bookings?.length>0&&<div style={{fontSize:11,color:C.tm}}>{dashV2.today_bookings.filter(b=>{if(!b.checked_in)return false;const endMin=ft==="campo"?360:(course.session_minutes||60);return !(b.booking_time&&(new Date(ymdLocal()+"T"+b.booking_time.slice(0,5)).getTime()+endMin*60000<Date.now()))}).length}/{dashV2.today_bookings.length} {ft==="campo"?t("en campo"):ft==="simulador"?t("en cabinas"):t("en bahías")}</div>}
           </div>
@@ -8940,8 +8940,8 @@ function GuestBookingModal({course,onClose,onDone}){
         <div style={{fontSize:15,fontWeight:800,color:C.txt}}>{t("Reserva presencial / telefonica")}</div>
         <button onClick={onClose} style={{border:"none",background:"transparent",cursor:"pointer",display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("x",18,C.tm)}}/>
       </div>
-      <div style={{display:"inline-flex",gap:3,padding:3,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,marginBottom:12}}>
-        {[{k:"ahora",l:t("Llego ahora")},{k:"programada",l:t("Programada")}].map(o=><button key={o.k} onClick={()=>setMode(o.k)} style={{padding:"7px 14px",borderRadius:8,border:"none",background:mode===o.k?C.grn:"transparent",color:mode===o.k?"#fff":C.ts,fontSize:11.5,fontWeight:700,cursor:"pointer"}}>{o.l}</button>)}
+      <div style={{display:"inline-flex",padding:2,background:C.w07,borderRadius:10,marginBottom:12}}>
+        {[{k:"ahora",l:t("Llego ahora")},{k:"programada",l:t("Programada")}].map(o=><button key={o.k} onClick={()=>setMode(o.k)} style={{padding:"7px 14px",borderRadius:8,border:"none",background:mode===o.k?C.grn:"transparent",color:mode===o.k?"#fff":C.ts,fontSize:11.5,fontWeight:mode===o.k?700:600,cursor:"pointer",boxShadow:mode===o.k?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{o.l}</button>)}
       </div>
       <div style={{display:"grid",gap:10}}>
         <div><label style={{fontSize:9.5,color:C.tm,fontWeight:700}}>{t("NOMBRE DEL CLIENTE")}</label><input value={name} onChange={e=>setName(e.target.value.slice(0,60))} placeholder={t("Opcional")} style={inp}/></div>
@@ -10523,54 +10523,52 @@ function AdminAjustesAccordion({course,onOut,onRefresh,ctxOut}){
   const[showDel,setShowDel]=useState(false);const[delReasons,setDelReasons]=useState([]);const[delComment,setDelComment]=useState("");const[contactOk,setContactOk]=useState(false);const[deleting,setDeleting]=useState(false);
 
   const SECTIONS=[
-    {k:"cuenta",icon:ic("user",18,C.grn),label:t("Usuarios"),color:C.grn,content:<>
+    {k:"cuenta",icon:ic("user",16,C.ts2||"#C7CBD4"),label:t("Usuarios"),color:C.grn,content:<>
       <StaffManager course={course} showIntro/>
       <AdminTeamAccessCard course={course}/>
       <AdminAccountCard/>
       <ChangePassword/>
     </>},
-    {k:"cobros",icon:ic("credit",18,C.gld),label:t("Cobros y pagos"),color:C.gld,content:<>
+    {k:"cobros",icon:ic("credit",16,C.ts2||"#C7CBD4"),label:t("Cobros y pagos"),color:C.gld,content:<>
       <AdminPayoutsSetup course={course} onRefresh={onRefresh}/>
       <CourseSpeiCard course={course}/>
     </>},
-    {k:"suscripcion",icon:ic("dollar",18,C.secBlu||"#5b86e5"),label:t("Suscripción"),color:C.secBlu||"#5b86e5",content:<>
+    {k:"suscripcion",icon:ic("dollar",16,C.ts2||"#C7CBD4"),label:t("Suscripción"),color:C.secBlu||"#5b86e5",content:<>
       <AdminSubscriptionCard course={course} onRefresh={onRefresh}/>
     </>},
-    {k:"facturacion",icon:ic("clipboard",18,C.secBlu||"#5b86e5"),label:t("Datos de facturación"),color:C.secBlu||"#5b86e5",content:<>
+    {k:"facturacion",icon:ic("clipboard",16,C.ts2||"#C7CBD4"),label:t("Datos de facturación"),color:C.secBlu||"#5b86e5",content:<>
       <BillingDataCard course={course} onRefresh={onRefresh}/>
     </>},
-    {k:"notifs",icon:ic("bell",18,C.acc),label:t("Notificaciones"),color:C.acc,content:<>
+    {k:"notifs",icon:ic("bell",16,C.ts2||"#C7CBD4"),label:t("Notificaciones"),color:C.acc,content:<>
       <AdminRegularNotifsControls course={course}/>
       <AdminNotifPrefsCard course={course}/>
       {isPro&&<AutomationHealthCard course={course}/>}
     </>},
-    {k:"apariencia",icon:ic("settings",18,C.ts),label:t("Apariencia"),color:C.ts,content:<>
+    {k:"apariencia",icon:ic("settings",16,C.ts2||"#C7CBD4"),label:t("Apariencia"),color:C.ts,content:<>
       <ThemeToggle/><LangToggle/>
     </>},
-    {k:"sesion",icon:ic("alert",18,C.acc),label:t("Sesión y cuenta"),color:C.acc,content:<>
+    {k:"sesion",icon:ic("logout",16,C.ts2||"#C7CBD4"),label:t("Sesión y cuenta"),color:C.acc,content:<>
       <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>{t("Cierra sesión en este dispositivo o elimina permanentemente tu cuenta de course_admin.")}</div>
       <button onClick={()=>{
         const doOut=ctxOut||onOut;
         if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>doOut());
         else doOut();
-      }} style={{width:"100%",padding:11,background:"transparent",border:"1px solid "+C.acc,borderRadius:12,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:8}}>{t("Cerrar Sesión")}</button>
+      }} style={{width:"100%",padding:11,background:"transparent",border:"1px solid "+C.grn,borderRadius:12,color:C.grnTxt||C.grn,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:8}}>{t("Cerrar Sesión")}</button>
       <button onClick={()=>{setDelReasons([]);setDelComment("");setContactOk(false);setShowDel(true)}} style={{width:"100%",padding:11,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
     </>}
   ];
 
   return<div>
-    <div className="acct-2col">
-    {[SECTIONS.slice(0,4),SECTIONS.slice(4)].map((_col,_ci)=><div key={_ci} className="acct-col">
-    {_col.map(sec=><div key={sec.k} id={"acctsec-"+sec.k}>
-      <div onClick={()=>setOpenSec(openSec===sec.k?null:sec.k)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:C.glass||C.w04||C.cd,border:"1px solid "+(C.glassBd||C.bd),borderRadius:openSec===sec.k?"14px 14px 0 0":14,cursor:"pointer",boxShadow:C.shCard||"none",userSelect:"none"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:32,height:32,borderRadius:10,background:sec.color+"10",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sec.icon}}/>
-          <span style={{fontSize:14,fontWeight:700,color:C.txt}}>{sec.label}</span>
-        </div>
-        <div style={{transform:openSec===sec.k?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",16,C.tm)}}/>
+    <div style={{padding:"14px 4px 6px",fontSize:13,fontWeight:700,color:C.ts}}>{t("Cuenta")}</div>
+    <div style={{background:C.cd,borderRadius:14,overflow:"hidden"}}>
+    {SECTIONS.map((sec,i)=><div key={sec.k} id={"acctsec-"+sec.k}>
+      {i>0&&<div style={{height:1,background:C.bd,marginLeft:45}}/>}
+      <div onClick={()=>{hap&&hap();setOpenSec(openSec===sec.k?null:sec.k)}} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",userSelect:"none"}}>
+        <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:sec.icon}}/>
+        <span style={{flex:1,fontSize:13.5,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sec.label}</span>
+        <span style={{display:"inline-flex",transform:openSec===sec.k?"rotate(90deg)":"none",transition:"transform .18s"}} dangerouslySetInnerHTML={{__html:ic("right",13,C.mut||"#5B6270")}}/>
       </div>
-      {openSec===sec.k&&<div style={{padding:16,background:C.el||C.cd,border:"1px solid "+(C.elBd||C.bd),borderTop:"none",borderRadius:"0 0 14px 14px"}}>{sec.content}</div>}
-    </div>)}
+      {openSec===sec.k&&<div style={{padding:"2px 16px 18px"}}>{sec.content}</div>}
     </div>)}
     </div>
     {showDel&&ReactDOM.createPortal(<div onClick={()=>{if(!deleting){setShowDel(false);setDelReasons([]);setDelComment("");setContactOk(false)}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -11243,8 +11241,8 @@ function PricingRuleModal({course,rule,onClose,onSaved}){
       {/* Adjustment */}
       <div style={{marginBottom:14}}>
         <div style={sectionH}>Ajuste de precio</div>
-        <div style={{display:"flex",gap:6,marginBottom:8}}>
-          {[{k:"percent",l:"% Porcentaje"},{k:"fixed",l:"$ Fijo MXN"}].map(o=><button key={o.k} onClick={()=>setAdjType(o.k)} style={{flex:1,padding:"8px 10px",borderRadius:8,border:"1px solid "+(adjType===o.k?"#6c5ce7":C.bd),background:adjType===o.k?"#6c5ce715":C.cd,color:adjType===o.k?"#6c5ce7":C.ts,fontSize:11,fontWeight:700,cursor:"pointer"}}>{o.l}</button>)}
+        <div style={{display:"flex",background:C.w07,borderRadius:10,padding:2,marginBottom:8}}>
+          {[{k:"percent",l:"% Porcentaje"},{k:"fixed",l:"$ Fijo MXN"}].map(o=><button key={o.k} onClick={()=>setAdjType(o.k)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:adjType===o.k?C.grn:"transparent",color:adjType===o.k?"#fff":C.ts,fontSize:11,fontWeight:adjType===o.k?700:600,cursor:"pointer",boxShadow:adjType===o.k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{o.l}</button>)}
         </div>
         <input type="number" step="0.1" value={adjVal} onChange={e=>setAdjVal(e.target.value)} placeholder={adjType==="percent"?"Ej: -15 (descuento) o +20 (premium)":"Ej: -200 (descuento $) o +500 (premium $)"} style={inpS}/>
         <div style={{fontSize:9,color:C.tm,marginTop:4}}>{adjType==="percent"?"Rango: -50 a +50 (no cero)":"Rango: -5000 a +5000 MXN (no cero)"}</div>
@@ -12463,8 +12461,8 @@ function PremiumInsights({course,goTo,unlocked}){const{s}=useA();const{sub,isPre
     {isPremium?<div style={{background:"linear-gradient(135deg,#f59e0b20,#d9770620)",border:"1px solid #f59e0b40",borderRadius:14,padding:12,marginBottom:16,display:"flex",alignItems:"center",gap:10}}><span dangerouslySetInnerHTML={{__html:ic("gem",20,C.gld)}}/><div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>Premium Activo<PremiumBadge plan={sub?.plan}/></div></div></div>:null}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:2}}>
       <h4 style={{fontSize:13,fontWeight:700,color:C.txt,margin:0}}>{t("Como vas vs campos similares")}</h4>
-      <div style={{display:"inline-flex",gap:3,padding:3,background:C.cd,border:"1px solid "+C.bd,borderRadius:9}}>
-        {[{k:"cat",l:t("Mi categoria")},{k:"region",l:t("Mi region")}].map(o=><button key={o.k} onClick={()=>setMktScope(o.k)} style={{padding:"5px 11px",borderRadius:7,border:"none",background:mktScope===o.k?C.acc:"transparent",color:mktScope===o.k?"#fff":C.ts,fontSize:10.5,fontWeight:700,cursor:"pointer"}}>{o.l}</button>)}
+      <div style={{display:"inline-flex",padding:2,background:C.w07,borderRadius:9}}>
+        {[{k:"cat",l:t("Mi categoria")},{k:"region",l:t("Mi region")}].map(o=><button key={o.k} onClick={()=>setMktScope(o.k)} style={{padding:"5px 11px",borderRadius:7,border:"none",background:mktScope===o.k?C.grn:"transparent",color:mktScope===o.k?"#fff":C.ts,fontSize:10.5,fontWeight:mktScope===o.k?700:600,cursor:"pointer",boxShadow:mktScope===o.k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{o.l}</button>)}
       </div>
     </div>
     {ok&&<div style={{fontSize:10,color:C.tm,marginBottom:10}}>{b?(t("Comparado con")+" "+scopeLbl+" · "+t("solo venues de tu mismo tipo")+" · "+t("datos anonimos de Partee")):(mktScope==="region"?t("Aún no hay 3+ campos de tu tipo en tu region para comparar."):t("Aún no hay 3+ campos de tu tipo en tu categoria para comparar."))}</div>}
@@ -15063,7 +15061,7 @@ function CourseEscalations({course,onChange}){
     </div>}
   </div>;
 }
-function CustomerInbox({course, onExit}){const[sub,setSub]=useState("soporte");const subs=[{k:"soporte",l:t("Soporte"),icon:"clipboard"},{k:"mensajes",l:t("Mensajes"),icon:"mail"}];return ReactDOM.createPortal(<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}><div style={{position:"sticky",top:0,zIndex:10,background:C.bg,borderBottom:"1px solid "+C.bd,padding:"14px 18px"}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{minWidth:0}}><div style={{fontSize:11,color:C.tm,fontWeight:600,letterSpacing:1.5}}>{t("ATENCIÓN A CLIENTES")}</div><div style={{fontSize:18,fontWeight:900,color:C.txt,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{course.course_name}</div></div><button onClick={onExit} style={{padding:"10px 16px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,flexShrink:0}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("x",14,C.txt)}}/>{t("Cerrar")}</button></div><div style={{display:"flex",gap:8}}>{subs.map(x=>{const on=sub===x.k;return <button key={x.k} onClick={()=>setSub(x.k)} style={{flex:1,height:44,borderRadius:13,border:on?"none":"1px solid "+C.bd,background:on?"linear-gradient(135deg,"+C.grn+",#00cec9)":C.cd,color:on?"#fff":C.ts,fontSize:13,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic(x.icon,16,on?"#fff":C.tm)}}/>{x.l}</button>;})}</div></div><div style={{padding:"14px 18px 40px"}}>{sub==="soporte"&&<CourseEscalations course={course} onChange={()=>{}}/>}{sub==="mensajes"&&<WaInbox course={course} only="jugador"/>}</div></div>,document.body);}
+function CustomerInbox({course, onExit}){const[sub,setSub]=useState("soporte");const subs=[{k:"soporte",l:t("Soporte"),icon:"clipboard"},{k:"mensajes",l:t("Mensajes"),icon:"mail"}];return ReactDOM.createPortal(<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}><div style={{position:"sticky",top:0,zIndex:10,background:C.bg,borderBottom:"1px solid "+C.bd,padding:"14px 18px"}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{minWidth:0}}><div style={{fontSize:11,color:C.tm,fontWeight:600,letterSpacing:1.5}}>{t("ATENCIÓN A CLIENTES")}</div><div style={{fontSize:18,fontWeight:900,color:C.txt,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{course.course_name}</div></div><button onClick={onExit} style={{padding:"10px 16px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,flexShrink:0}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("x",14,C.txt)}}/>{t("Cerrar")}</button></div><div style={{display:"flex",background:C.w07,borderRadius:10,padding:2}}>{subs.map(x=>{const on=sub===x.k;return <button key={x.k} onClick={()=>setSub(x.k)} style={{flex:1,textAlign:"center",fontSize:13,fontWeight:on?700:600,color:on?"#fff":C.ts,background:on?C.grn:"transparent",border:"none",borderRadius:8,padding:"7px 0",cursor:"pointer",boxShadow:on?"0 1px 3px rgba(0,0,0,.3)":"none",whiteSpace:"nowrap",overflow:"hidden",WebkitTapHighlightColor:"transparent"}}>{x.l}</button>;})}</div></div><div style={{padding:"14px 18px 40px"}}>{sub==="soporte"&&<CourseEscalations course={course} onChange={()=>{}}/>}{sub==="mensajes"&&<WaInbox course={course} only="jugador"/>}</div></div>,document.body);}
 function WaInbox({course, only}){
   const [threads,setThreads]=useState(null);
   const [openP,setOpenP]=useState(null);
@@ -15294,9 +15292,9 @@ function LiveMap({course}){
         <button onClick={refreshAll} aria-label="Refrescar" style={{width:34,height:38,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><span dangerouslySetInnerHTML={{__html:ic("refresh",16,C.acc)}}/></button>
       </div>
     </div>
-    <div style={{display:"flex",gap:6,marginBottom:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:4}}>
-      <button onClick={()=>setMapView("sat")} style={{flex:1,padding:"7px 10px",borderRadius:9,border:"none",background:mapView==="sat"?"rgba(30,232,165,.14)":"transparent",color:mapView==="sat"?(C.grnTxt||C.grn):C.ts,fontSize:12,fontWeight:800,cursor:"pointer"}}>{t("Satelital")}</button>
-      <button onClick={()=>setMapView("schema")} style={{flex:1,padding:"7px 10px",borderRadius:9,border:"none",background:mapView==="schema"?"rgba(30,232,165,.14)":"transparent",color:mapView==="schema"?(C.grnTxt||C.grn):C.ts,fontSize:12,fontWeight:800,cursor:"pointer"}}>{t("Esquema Partee")}</button>
+    <div style={{display:"flex",marginBottom:12,background:C.w07,borderRadius:10,padding:2}}>
+      <button onClick={()=>setMapView("sat")} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:mapView==="sat"?C.grn:"transparent",color:mapView==="sat"?"#fff":C.ts,fontSize:12,fontWeight:mapView==="sat"?700:600,cursor:"pointer",boxShadow:mapView==="sat"?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{t("Satelital")}</button>
+      <button onClick={()=>setMapView("schema")} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:mapView==="schema"?C.grn:"transparent",color:mapView==="schema"?"#fff":C.ts,fontSize:12,fontWeight:mapView==="schema"?700:600,cursor:"pointer",boxShadow:mapView==="schema"?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{t("Esquema Partee")}</button>
     </div>
     {/* v32.80: consola En Vivo — mapa (izq) + rail de operacion (der) en desktop; apilado en movil */}
     <div className="live-2col">
@@ -16118,8 +16116,8 @@ function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="cou
         {/* v20.5.1: export PNG */}
         <button onClick={exportPNG} disabled={exporting||!data?.cells?.length} title="Exportar como imagen PNG" style={{padding:"5px 9px",borderRadius:6,border:"1px solid "+C.bd,background:"transparent",color:exporting?C.tm:C.txt,fontSize:10,fontWeight:700,cursor:exporting||!data?.cells?.length?"default":"pointer",opacity:!data?.cells?.length?.5:1}}>{exporting?"...":t("Descargar")}</button>
         {/* Toggle modo */}
-        <div style={{display:"flex",gap:4,padding:3,background:C.cd,border:"1px solid "+C.bd,borderRadius:8}}>
-          {[{k:"forecast",l:"Próximas 4 semanas"},{k:"historical",l:"Últimas 4 semanas"}].map(m=><button key={m.k} onClick={()=>setMode(m.k)} style={{padding:"5px 11px",borderRadius:6,border:"none",background:mode===m.k?C.acc:"transparent",color:mode===m.k?"#fff":C.tm,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:.3}}>{m.l}</button>)}
+        <div style={{display:"flex",padding:2,background:C.w07,borderRadius:8}}>
+          {[{k:"forecast",l:"Próximas 4 semanas"},{k:"historical",l:"Últimas 4 semanas"}].map(m=><button key={m.k} onClick={()=>setMode(m.k)} style={{padding:"5px 11px",borderRadius:6,border:"none",background:mode===m.k?C.grn:"transparent",color:mode===m.k?"#fff":C.tm,fontSize:10,fontWeight:mode===m.k?700:600,cursor:"pointer",letterSpacing:.3,boxShadow:mode===m.k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{m.l}</button>)}
         </div>
       </div>
     </div>
@@ -16323,8 +16321,8 @@ function AdminCampaignsCard({course}){
       </div>
     </div>
 
-    {!ld&&campaigns.length>0&&<div style={{display:"flex",gap:6,marginBottom:8}}>
-      {[["act",t("Activas"),_act.length],["arch",t("Archivo"),_arch.length]].map(([k,l,n])=><button key={k} onClick={()=>setView(k)} style={{padding:"5px 11px",borderRadius:8,border:"1px solid "+(view===k?C.grn:C.bd),background:view===k?C.grn+"15":"transparent",color:view===k?(C.grnTxt||C.grn):C.tm,fontSize:10.5,fontWeight:700,cursor:"pointer"}}>{l} ({n})</button>)}
+    {!ld&&campaigns.length>0&&<div style={{display:"inline-flex",background:C.w07,borderRadius:9,padding:2,marginBottom:8}}>
+      {[["act",t("Activas"),_act.length],["arch",t("Archivo"),_arch.length]].map(([k,l,n])=><button key={k} onClick={()=>setView(k)} style={{padding:"5px 11px",borderRadius:7,border:"none",background:view===k?C.grn:"transparent",color:view===k?"#fff":C.tm,fontSize:10.5,fontWeight:view===k?700:600,boxShadow:view===k?"0 1px 3px rgba(0,0,0,.3)":"none",cursor:"pointer"}}>{l} ({n})</button>)}
     </div>}
     {ld?<Skeleton w="100%" h={120}/>:campaigns.length===0?<div style={{textAlign:"center",padding:24,color:C.tm,fontSize:11}}>
       <div style={{marginBottom:4,display:"flex",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("inbox",22)}}/>
