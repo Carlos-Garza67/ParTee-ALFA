@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.81 (En Vivo: el boton Configurar hoyos baja del header a justo debajo del mapa, alineado a la derecha — junto al contexto que configura; el header queda solo con el refrescar. Base: v32.80)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.83 (Subtabs de En Vivo homologados al segmentado del jugador (Todos/Campos/Practicas) pero en verde admin: contenedor C.w07 radio 10 padding 2, pill activa C.grn solida texto blanco, inactivas texto plano, sin iconos ni gradientes ni cajas por boton; se conserva el dot de alerta (coral SOS / oro pendientes) sobre Personal, con aro blanco cuando la pill esta activa. Base: v32.82)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -15219,7 +15219,7 @@ function LiveMap({course}){
   const doComplete=async(id)=>{try{const{data,error}=await sb.rpc("complete_dispatch_task",{p_task_id:id});if(error||!(data&&data.ok))throw 0;window.__toast&&window.__toast(t("Tarea completada"),"success");refreshAll()}catch(e){window.__toast&&window.__toast(t("No se pudo completar"),"error")}};
   const doCancelTask=async(id)=>{try{const{data,error}=await sb.rpc("cancel_dispatch_task",{p_task_id:id});if(error||!(data&&data.ok))throw 0;window.__toast&&window.__toast(t("Tarea cancelada"),"info");refreshAll()}catch(e){window.__toast&&window.__toast(t("No se pudo cancelar"),"error")}};
   const doCreateTask=async()=>{if(!tForm.title.trim()){window.__toast&&window.__toast(t("Escribe una descripción"),"error");return}try{const{data,error}=await sb.rpc("create_dispatch_task",{p_course_id:course.id,p_task_type:tForm.type,p_title:tForm.title.trim(),p_hole:tForm.hole?parseInt(tForm.hole):null,p_zone:tForm.zone||null,p_assign_to:tForm.assign||null});if(error||!(data&&data.ok))throw 0;window.__toast&&window.__toast(t("Tarea creada"),"success");if(tForm.assign)notifyStaff(tForm.assign,{title:tForm.title.trim(),hole:tForm.hole?parseInt(tForm.hole):null,group:null,typeLabel:tTypeMeta(tForm.type).label,task_id:data.task_id});setTForm({type:"bebidas",title:"",hole:"",zone:"",assign:""});setTaskOpen(false);refreshAll()}catch(e){window.__toast&&window.__toast(t("No se pudo crear"),"error")}};
-  const doAssignPick=async(staffId)=>{const a=assignFor;if(!a)return;try{let res,error;if(a.mode==="task"){const r=await sb.rpc("assign_dispatch_task",{p_task_id:a.id,p_staff_id:staffId});res=r.data;error=r.error;}else{const pl={p_course_id:course.id,p_assign_to:staffId,p_source:a.mode,p_hole:a.hole||null};if(a.mode==="fnb"){pl.p_task_type="bebidas";pl.p_title=t("Pedido F&B")+(a.group?" · "+a.group:"");pl.p_booking_id=a.booking_id;}else if(a.mode==="sos"){pl.p_task_type="incidencia";pl.p_title="SOS"+(a.group?" · "+a.group:"");pl.p_source_alert_id=a.alert_id;}else if(a.mode==="pace"){pl.p_task_type="ritmo";pl.p_title=t("Revisar ritmo")+(a.group?" · "+a.group:"");pl.p_booking_id=a.booking_id;}const r=await sb.rpc("create_dispatch_task",pl);res=r.data;error=r.error;}if(error)throw 0;if(!(res&&res.ok)){window.__toast&&window.__toast(res&&res.reason==="already_dispatched"?t("Ya está despachada"):t("No se pudo asignar"),"error");return}window.__toast&&window.__toast(t("Asignado"),"success");const tk=a.mode==="task"?((board.tasks||[]).find(x=>x.id===a.id)||{}):null;notifyStaff(staffId,a.mode==="task"?{title:tk.title,hole:tk.target_hole,group:tk.group_name,typeLabel:tTypeMeta(tk.task_type).label,task_id:a.id}:{title:(a.mode==="fnb"?t("Pedido F&B"):a.mode==="sos"?"SOS":t("Revisar ritmo"))+(a.group?" · "+a.group:""),hole:a.hole,group:a.group,typeLabel:a.mode==="fnb"?t("Bebidas"):a.mode==="sos"?t("Incidencia"):t("Ritmo"),task_id:res&&res.task_id});setAssignFor(null);refreshAll()}catch(e){window.__toast&&window.__toast(t("No se pudo asignar"),"error")}};
+  const doAssignPick=async(staffId,aOv)=>{const a=aOv||assignFor;if(!a)return;try{let res,error;if(a.mode==="task"){const r=await sb.rpc("assign_dispatch_task",{p_task_id:a.id,p_staff_id:staffId});res=r.data;error=r.error;}else{const pl={p_course_id:course.id,p_assign_to:staffId,p_source:a.mode,p_hole:a.hole||null};if(a.mode==="fnb"){pl.p_task_type="bebidas";pl.p_title=t("Pedido F&B")+(a.group?" · "+a.group:"");pl.p_booking_id=a.booking_id;}else if(a.mode==="sos"){pl.p_task_type="incidencia";pl.p_title="SOS"+(a.group?" · "+a.group:"");pl.p_source_alert_id=a.alert_id;}else if(a.mode==="pace"){pl.p_task_type="ritmo";pl.p_title=t("Revisar ritmo")+(a.group?" · "+a.group:"");pl.p_booking_id=a.booking_id;}const r=await sb.rpc("create_dispatch_task",pl);res=r.data;error=r.error;}if(error)throw 0;if(!(res&&res.ok)){window.__toast&&window.__toast(res&&res.reason==="already_dispatched"?t("Ya está despachada"):t("No se pudo asignar"),"error");return}window.__toast&&window.__toast(t("Asignado"),"success");const tk=a.mode==="task"?((board.tasks||[]).find(x=>x.id===a.id)||{}):null;notifyStaff(staffId,a.mode==="task"?{title:tk.title,hole:tk.target_hole,group:tk.group_name,typeLabel:tTypeMeta(tk.task_type).label,task_id:a.id}:{title:(a.mode==="fnb"?t("Pedido F&B"):a.mode==="sos"?"SOS":t("Revisar ritmo"))+(a.group?" · "+a.group:""),hole:a.hole,group:a.group,typeLabel:a.mode==="fnb"?t("Bebidas"):a.mode==="sos"?t("Incidencia"):t("Ritmo"),task_id:res&&res.task_id});setAssignFor(null);refreshAll()}catch(e){window.__toast&&window.__toast(t("No se pudo asignar"),"error")}};
   useEffect(()=>{
     let alive=true,interval=null,visHandler=null;
     loadLeaflet().then(()=>{
@@ -15283,7 +15283,7 @@ function LiveMap({course}){
     Object.keys(sosMarkersRef.current).forEach(id=>{if(!seen.has(id)){map.removeLayer(sosMarkersRef.current[id]);delete sosMarkersRef.current[id]}});
   },[sos]);
   return <div>
-    {(()=>{const subs=[{k:"campo",l:t("El campo"),icon:"map"},{k:"personal",l:t("Personal"),icon:"users"},{k:"mensajes",l:t("Equipo"),icon:"mail"}];return <div style={{display:"flex",gap:8,marginBottom:14}}>{subs.map(sb2=>{const on=subTab===sb2.k;const sosAl=sb2.k==="personal"&&sos.length>0;const al=sb2.k==="personal"&&(sos.length>0||board.fnb_unassigned.length>0||(board.tasks||[]).some(x=>!x.assigned_staff_id));return <button key={sb2.k} onClick={()=>setSubTab(sb2.k)} style={{flex:1,height:44,borderRadius:13,border:on?"none":"1px solid "+C.bd,background:on?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,color:on?"#fff":C.ts,fontSize:13,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,position:"relative",boxShadow:on?"0 6px 18px "+C.grn+"33":"none"}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic(sb2.icon,16,on?"#fff":C.tm)}}/>{sb2.l}{al&&<span style={{position:"absolute",top:7,right:11,width:8,height:8,borderRadius:"50%",background:sosAl?C.acc:C.gld}}/>}</button>;})}</div>;})()}
+    {(()=>{const subs=[{k:"campo",l:t("El campo"),icon:"map"},{k:"personal",l:t("Personal"),icon:"users"},{k:"mensajes",l:t("Equipo"),icon:"mail"}];return <div style={{display:"flex",background:C.w07,borderRadius:10,padding:2,marginBottom:14}}>{subs.map(sb2=>{const on=subTab===sb2.k;const sosAl=sb2.k==="personal"&&sos.length>0;const al=sb2.k==="personal"&&(sos.length>0||board.fnb_unassigned.length>0||(board.tasks||[]).some(x=>!x.assigned_staff_id));return <button key={sb2.k} onClick={()=>{hap&&hap();setSubTab(sb2.k)}} style={{flex:1,textAlign:"center",fontSize:13,fontWeight:on?700:600,color:on?"#fff":C.ts,background:on?C.grn:"transparent",border:"none",borderRadius:8,padding:"7px 0",cursor:"pointer",boxShadow:on?"0 1px 3px rgba(0,0,0,.3)":"none",whiteSpace:"nowrap",overflow:"hidden",WebkitTapHighlightColor:"transparent",position:"relative"}}>{sb2.l}{al&&<span style={{position:"absolute",top:5,right:8,width:7,height:7,borderRadius:"50%",background:sosAl?C.acc:C.gld,border:on?"1.5px solid #fff":"none"}}/>}</button>;})}</div>;})()}
     {subTab==="campo"&&<>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,gap:10}}>
       <div style={{flex:1,minWidth:0}}>
@@ -15381,47 +15381,24 @@ function LiveMap({course}){
     </div>
     </div>
     </>}
-    {subTab==="personal"&&<>
-    {sos.length>0&&<div className="btn-pulse" style={{marginBottom:14,background:C.acc+"14",border:"1px solid "+C.acc+"55",borderRadius:14,padding:"12px 14px"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-        <span dangerouslySetInnerHTML={{__html:ic("alert",18,C.acc)}}/>
-        <span style={{fontSize:14,fontWeight:800,color:C.acc}}>{(sos.length===1?t("Alerta SOS"):t("Alertas SOS activas"))+" · "+sos.length}</span>
-      </div>
-      {sos.map(a=><div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 0",borderTop:"1px solid "+C.acc+"22"}}>
-        <div style={{minWidth:0}}>
-          <div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.player_name||t("Jugador")}</div>
-          <div style={{fontSize:11,color:C.ts}}>{(a.hole_number?t("Hoyo ")+a.hole_number+" · ":"")+(a.created_at?new Date(a.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}):"")}</div>
-        </div>
-        <div style={{display:"flex",gap:6,flexShrink:0}}>
-          <button onClick={()=>setAssignFor({mode:"sos",alert_id:a.id,hole:a.hole_number,group:a.player_name})} style={{padding:"8px 11px",background:C.cd,border:"1px solid "+C.acc+"45",borderRadius:10,color:C.acc,fontSize:12,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("user",13,C.acc)}}/>{t("Asignar")}</button>
-          <button onClick={()=>resolveSos(a.id)} style={{padding:"8px 12px",background:C.acc,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("check",14,"#fff")}}/>{t("Resolver")}</button>
-        </div>
-      </div>)}
-    </div>}
-    {/* CENTRO DE PERSONAL: en turno (roster en vivo) + tareas + F&B + roster de caddies + broadcast */}
-    <div style={{marginTop:4}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,gap:8,flexWrap:"wrap"}}>
-        <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.txt,display:"flex",alignItems:"center",gap:7}}><span dangerouslySetInnerHTML={{__html:ic("users",18,C.grn)}}/>{t("Personal y despacho")}</h3>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setDispatchOpen(true)} style={{padding:"8px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.ts,fontSize:12,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("mail",14,C.ts)}}/>{t("Mensaje al equipo")}</button>
-          <button onClick={()=>setTaskOpen(o=>!o)} style={{flexShrink:0,padding:"8px 12px",borderRadius:10,border:"1px solid "+C.grn+"40",background:taskOpen?C.grn+"18":C.cd,color:C.grn,fontSize:12,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic(taskOpen?"x":"plus",14,C.grn)}}/>{taskOpen?t("Cerrar"):t("Nueva tarea")}</button>
-        </div>
-      </div>
-      {board.roster&&board.roster.length>0&&<div style={{marginBottom:14}}>
-        <div style={{fontSize:12,fontWeight:800,color:C.ts,marginBottom:8,display:"flex",alignItems:"center",gap:6}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("group",14,C.grn)}}/>{t("En turno")}<span style={{fontSize:11,color:C.tm,fontWeight:700}}>· {board.roster.filter(r=>!r.task).length} {t("libres")}</span></div>
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {board.roster.map(r=>{const busy=!!r.task;return <div key={r.id} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 11px",borderRadius:11,background:C.cd,border:"1px solid "+(busy?C.gld+"40":C.grn+"35")}}>
-            <span style={{width:9,height:9,borderRadius:"50%",background:busy?C.gld:C.grn,flexShrink:0}}/>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.full_name}<span style={{marginLeft:7,fontSize:10,fontWeight:700,color:C.tm}}>{RSTAFF_LBL[r.role]||r.role}</span></div>
-              {busy&&<div style={{fontSize:11,color:C.ts,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:1}}>{r.task.title}{r.task.target_hole?" · "+t("Hoyo ")+r.task.target_hole:""}</div>}
-            </div>
-            {busy
-              ?<span style={{fontSize:10,fontWeight:800,color:r.task.acknowledged?C.grn:C.gld,background:(r.task.acknowledged?C.grn:C.gld)+"18",padding:"3px 8px",borderRadius:7,whiteSpace:"nowrap",flexShrink:0}}>{r.task.acknowledged?""+t("En camino"):t("Asignado")}</span>
-              :<span style={{fontSize:11,fontWeight:800,color:C.grn,flexShrink:0}}>{t("Libre")}</span>}
-          </div>;})}
-        </div>
-      </div>}
+    {subTab==="personal"&&(()=>{
+      const sugFor=(pref)=>{const f=board.free_staff||[];if(!f.length)return null;return f.find(s=>s.role===pref)||f[0]};
+      const prefOf=(k)=>k==="fnb"||k==="bebidas"?"beverage_cart":k==="mantenimiento"?"maintenance":"marshal";
+      const fstN=(s)=>((s&&s.full_name)||"").split(" ")[0]||t("staff");
+      const ageMin=(iso)=>{if(!iso)return null;const m=Math.max(0,Math.round((Date.now()-new Date(iso).getTime())/60000));return m};
+      const unTasks=(board.tasks||[]).filter(tk=>!tk.assigned_staff_id), asTasks=(board.tasks||[]).filter(tk=>!!tk.assigned_staff_id);
+      const qN=sos.length+(board.fnb_unassigned||[]).length+(board.tasks||[]).length;
+      const aLink={fontSize:11.5,fontWeight:700,cursor:"pointer",flexShrink:0};
+      const rowB={display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid "+C.bd,flexWrap:"wrap"};
+      return <React.Fragment>
+    <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:12,flexWrap:"wrap"}}>
+      <span style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{t("Personal")}</span>
+      <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:16}}>
+        <span onClick={()=>setDispatchOpen(true)} style={{...aLink,color:C.ts2||C.ts}}>{t("Despacho")}</span>
+        <span onClick={()=>setRosterOpen(true)} style={{...aLink,color:C.ts2||C.ts}}>{t("Staff y equipo")}</span>
+        <span onClick={()=>setTaskOpen(o=>!o)} style={{...aLink,color:C.grnTxt||C.grn}}>+ {t("Nueva tarea")}</span>
+      </span>
+    </div>
       {taskOpen&&<div style={{marginBottom:12,padding:"12px",borderRadius:14,border:"1px solid "+C.bd,background:C.c2}}>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
           {TASK_TYPES.map(tt=><button key={tt.k} onClick={()=>setTForm(f=>({...f,type:tt.k}))} style={{padding:"6px 10px",borderRadius:9,border:"1px solid "+(tForm.type===tt.k?C.grn:C.bd),background:tForm.type===tt.k?C.grn+"18":C.cd,color:tForm.type===tt.k?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic(tt.icon,12,tForm.type===tt.k?C.grn:C.tm)}}/>{tt.label}</button>)}
@@ -15437,75 +15414,57 @@ function LiveMap({course}){
         </select>
         <button onClick={doCreateTask} style={{width:"100%",height:40,borderRadius:10,border:"none",background:C.grn,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}>{t("Crear tarea")}</button>
       </div>}
-      {board.tasks.length>0&&<div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:12}}>
-        {board.tasks.map(tk=>{
-          const meta=tTypeMeta(tk.task_type);
-          const assigned=!!tk.assigned_staff_id;
-          const srcBadge=tk.source==="fnb"?"F&B":tk.source==="sos"?"SOS":tk.source==="pace"?t("Ritmo"):null;
-          return <div key={tk.id} style={{padding:"10px 12px",borderRadius:12,background:C.cd,border:"1px solid "+(assigned?C.grn+"45":C.gld+"45")}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{flexShrink:0,display:"flex"}} dangerouslySetInnerHTML={{__html:ic(meta.icon,15,assigned?C.grn:C.gld)}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tk.title}{srcBadge?<span style={{marginLeft:6,fontSize:9,fontWeight:800,color:C.tm,background:C.tm+"18",padding:"1px 6px",borderRadius:6}}>{srcBadge}</span>:null}</div>
-                <div style={{fontSize:11,color:C.ts,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{[tk.target_hole?t("Hoyo ")+tk.target_hole:null,tk.group_name,tk.target_zone].filter(Boolean).join(" · ")||meta.label}</div>
-              </div>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,flexWrap:"wrap"}}>
-              {assigned
-                ?<span style={{fontSize:11,fontWeight:700,color:C.grn,background:C.grn+"15",border:"1px solid "+C.grn+"30",padding:"4px 8px",borderRadius:8,display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("user",12,C.grn)}}/>{tk.assignee_name+" · "+(RSTAFF_LBL[tk.assignee_role]||tk.assignee_role)}</span>
-                :<button onClick={()=>setAssignFor({mode:"task",id:tk.id})} style={{fontSize:11,fontWeight:800,color:C.gld,background:C.gld+"15",border:"1px solid "+C.gld+"40",padding:"5px 10px",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("user",12,C.gld)}}/>{t("Asignar")}</button>}
-              {assigned&&tk.acknowledged_at&&<span style={{fontSize:10,fontWeight:800,color:C.grn,background:C.grn+"18",border:"1px solid "+C.grn+"40",padding:"3px 8px",borderRadius:7,display:"flex",alignItems:"center",gap:4}}>{t("En camino")}</span>}
-              <div style={{flex:1}}/>
-              {assigned&&tk.assignee_phone&&<button onClick={()=>waStaff(tk.assignee_phone,taskWaMsg(tk))} title={t("Avisar por WhatsApp")} style={{padding:"6px 9px",borderRadius:8,border:"1px solid "+C.grn+"40",background:C.cd,color:C.grn,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("phone",12,C.grn)}}/>{t("Avisar")}</button>}
-              {assigned&&<button onClick={()=>setAssignFor({mode:"task",id:tk.id})} title={t("Reasignar")} style={{padding:"6px 9px",borderRadius:8,border:"1px solid "+C.bd,background:C.cd,color:C.ts,cursor:"pointer",display:"flex"}} dangerouslySetInnerHTML={{__html:ic("refresh",12,C.ts)}}/>}
-              <button onClick={()=>doComplete(tk.id)} style={{padding:"6px 11px",borderRadius:8,border:"none",background:C.grn,color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("check",12,"#fff")}}/>{t("Hecha")}</button>
-              <button onClick={()=>doCancelTask(tk.id)} title={t("Cancelar")} style={{background:"none",border:"none",color:C.tm,fontSize:16,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
-            </div>
-          </div>;
-        })}
-      </div>}
-      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
-        <span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("utensils",14,C.gld)}}/>
-        <span style={{fontSize:12,fontWeight:800,color:C.ts}}>{t("Pedidos F&B")}</span>
-        <span style={{fontSize:11,color:C.tm}}>{board.fnb_unassigned.length}</span>
+    <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"4px 16px 6px",marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"baseline",padding:"10px 0 6px"}}>
+        <span style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{t("Cola de despacho")}</span>
+        <span style={{marginLeft:8,fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>{qN}</span>
+        {(board.free_staff||[]).length>0&&qN>0&&<span style={{marginLeft:"auto",fontSize:10,color:C.tm}}>{t("1 toque asigna al sugerido")}</span>}
       </div>
-      {board.fnb_unassigned.length===0
-        ?<div style={{fontSize:12,color:C.tm,padding:"2px 0"}}>{t("Sin pedidos de F&B ahora")}</div>
-        :<div style={{display:"flex",flexDirection:"column",gap:7}}>
-          {board.fnb_unassigned.map(o=>{
-            const items=Array.isArray(o.items)?o.items:[];
-            const itemsLabel=items.map(i=>i.quantity+"× "+i.name).join(" · ");
-            const liveGps=o.hole_source==="gps"&&o.has_signal;
-            const holeChip=!o.current_hole
-              ?<span style={{fontSize:10,fontWeight:700,color:C.tm,background:C.tm+"15",padding:"2px 8px",borderRadius:7,whiteSpace:"nowrap",flexShrink:0}}>{t("sin hoyo")}</span>
-              :liveGps
-                ?<span style={{fontSize:10,fontWeight:800,color:C.grn,background:C.grn+"15",padding:"2px 8px",borderRadius:7,whiteSpace:"nowrap",flexShrink:0}}>{t("Hoyo ")+o.current_hole}</span>
-                :<span style={{fontSize:10,fontWeight:800,color:C.gld,background:C.gld+"15",padding:"2px 8px",borderRadius:7,whiteSpace:"nowrap",flexShrink:0}}>{t("Hoyo ")+o.current_hole+(o.hole_source==="player"?" · "+t("indicado"):"")}</span>;
-            return <div key={o.booking_id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,background:C.cd,border:"1px solid "+C.bd}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:2}}>
-                  <span style={{fontSize:13,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{o.group_name||t("Grupo")}</span>
-                  {holeChip}
-                </div>
-                <div style={{fontSize:11,color:C.ts,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{itemsLabel}</div>
-              </div>
-              <button onClick={()=>setAssignFor({mode:"fnb",booking_id:o.booking_id,hole:o.current_hole,group:o.group_name})} style={{flexShrink:0,padding:"8px 11px",background:C.cd,border:"1px solid "+C.gld+"45",borderRadius:10,color:C.gld,fontSize:12,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("user",13,C.gld)}}/>{t("Asignar")}</button>
-              <button onClick={()=>markFnbDelivered(o.booking_id)} style={{flexShrink:0,padding:"8px 11px",background:C.grn,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("check",13,"#fff")}}/>{t("Entregar")}</button>
-            </div>;
-          })}
-        </div>}
+      {qN===0&&<div style={{fontSize:12,color:C.tm,padding:"4px 0 12px"}}>{t("Sin pendientes ahora")} ✓</div>}
+      {sos.map(a=>{const s2=sugFor("marshal");const am=ageMin(a.created_at);return <div key={"s"+a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",margin:"0 -12px",background:C.acc+"0d",borderLeft:"2px solid "+C.acc,flexWrap:"wrap"}}>
+        <span style={{flexShrink:0,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("alert",14,C.acc)}}/>
+        <span style={{flex:1,fontSize:12,minWidth:160,color:C.txt}}><span style={{fontWeight:700,color:C.accTx2||C.acc}}>SOS · {a.player_name||t("Jugador")}</span><span style={{color:C.ts}}>{(a.hole_number?" · "+t("Hoyo ")+a.hole_number:"")+(a.lat!=null?" · GPS "+Number(a.lat).toFixed(3)+", "+Number(a.lng).toFixed(3):"")}</span></span>
+        {am!=null&&<span style={{fontSize:10,color:C.accTx2||C.acc,fontFamily:"ui-monospace,Menlo,monospace",flexShrink:0}}>{am} min</span>}
+        {s2&&<span onClick={()=>doAssignPick(s2.id,{mode:"sos",alert_id:a.id,hole:a.hole_number,group:a.player_name})} style={{...aLink,color:C.accTx2||C.acc}}>{t("Asignar a")} {fstN(s2)}</span>}
+        {s2&&<span onClick={()=>setAssignFor({mode:"sos",alert_id:a.id,hole:a.hole_number,group:a.player_name})} style={{fontSize:10.5,color:C.tm,cursor:"pointer",flexShrink:0}}>{t("otro")} ▾</span>}
+        <span onClick={()=>resolveSos(a.id)} style={{...aLink,color:C.ts2||C.ts}}>{t("Resolver")}</span>
+      </div>})}
+      {(board.fnb_unassigned||[]).map(o=>{const items=Array.isArray(o.items)?o.items:[];const il=items.map(i=>i.quantity+"× "+i.name).join(" · ");const s2=sugFor("beverage_cart");const hTx=!o.current_hole?t("sin hoyo"):t("Hoyo ")+o.current_hole+((o.hole_source==="gps"&&o.has_signal)?"":" ~");return <div key={"f"+o.booking_id} style={rowB}>
+        <span style={{flexShrink:0,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("utensils",14,C.ts)}}/>
+        <span style={{flex:1,fontSize:12,minWidth:160,color:C.txt}}><span style={{fontWeight:700}}>F&B · {o.group_name||t("Grupo")}</span><span style={{color:C.ts}}> · {hTx}{il?" · "+il:""}</span></span>
+        {s2&&<span onClick={()=>doAssignPick(s2.id,{mode:"fnb",booking_id:o.booking_id,hole:o.current_hole,group:o.group_name})} style={{...aLink,color:C.gld}}>{t("Asignar a")} {fstN(s2)}</span>}
+        {s2&&<span onClick={()=>setAssignFor({mode:"fnb",booking_id:o.booking_id,hole:o.current_hole,group:o.group_name})} style={{fontSize:10.5,color:C.tm,cursor:"pointer",flexShrink:0}}>{t("otro")} ▾</span>}
+        <span onClick={()=>markFnbDelivered(o.booking_id)} style={{...aLink,color:C.grnTxt||C.grn}}>{t("Entregado")}</span>
+      </div>})}
+      {(board.tasks||[]).map(tk=>{const meta=tTypeMeta(tk.task_type);const assigned=!!tk.assigned_staff_id;const src=tk.source==="fnb"?"F&B":tk.source==="sos"?"SOS":tk.source==="pace"?t("Ritmo"):null;const s2=assigned?null:sugFor(prefOf(tk.task_type));const ctx=[tk.target_hole?t("Hoyo ")+tk.target_hole:null,tk.target_zone||null,tk.group_name||null].filter(Boolean).join(" · ");return <div key={"t"+tk.id} style={rowB}>
+        <span style={{flexShrink:0,display:"flex"}} dangerouslySetInnerHTML={{__html:ic(meta.icon,14,assigned?C.grn:C.ts)}}/>
+        <span style={{flex:1,fontSize:12,minWidth:160,color:C.txt}}><span style={{fontWeight:700}}>{tk.title}</span><span style={{color:C.ts}}>{(src?" · "+src:"")+(ctx?" · "+ctx:"")}{assigned&&tk.assignee_name?" · "+tk.assignee_name:""}</span></span>
+        {assigned&&<span style={{fontSize:9,fontWeight:800,color:tk.acknowledged_at?C.grn:C.gld,background:(tk.acknowledged_at?C.grn:C.gld)+"14",padding:"2px 7px",borderRadius:5,flexShrink:0}}>{tk.acknowledged_at?t("VISTO"):t("ENVIADA")}</span>}
+        {assigned&&tk.assignee_phone&&<span onClick={()=>waStaff(tk.assignee_phone,taskWaMsg(tk))} title={t("Avisar por WhatsApp")} style={{flexShrink:0,display:"flex",cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("send",13,C.tm)}}/>}
+        {!assigned&&s2&&<span onClick={()=>doAssignPick(s2.id,{mode:"task",id:tk.id})} style={{...aLink,color:C.gld}}>{t("Asignar a")} {fstN(s2)}</span>}
+        {!assigned&&<span onClick={()=>setAssignFor({mode:"task",id:tk.id})} style={{fontSize:10.5,color:C.tm,cursor:"pointer",flexShrink:0}}>{s2?t("otro")+" ▾":t("Asignar")}</span>}
+        {assigned&&<span onClick={()=>setAssignFor({mode:"task",id:tk.id})} style={{fontSize:10.5,color:C.tm,cursor:"pointer",flexShrink:0}}>{t("Reasignar")}</span>}
+        <span onClick={()=>doComplete(tk.id)} style={{...aLink,color:C.grnTxt||C.grn}}>{t("Completar")}</span>
+        <span onClick={()=>doCancelTask(tk.id)} title={t("Cancelar")} style={{fontSize:14,color:C.tm,cursor:"pointer",lineHeight:1,flexShrink:0,padding:"2px 4px"}}>✕</span>
+      </div>})}
     </div>
-    <div style={{marginTop:18}}>
-      <button onClick={()=>setRosterOpen(true)} style={{width:"100%",padding:"14px 16px",borderRadius:14,border:"1px solid "+C.bd,background:C.cd,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
-        <span style={{width:40,height:40,borderRadius:12,background:C.grn+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("flag",20,C.grn)}}/>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{t("Staff y equipo")}</div>
-          <div style={{fontSize:11,color:C.ts,marginTop:2}}>{t("Personal, carritos y asignaciones del día")}</div>
-        </div>
-        <span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("right",18,C.tm)}}/>
-      </button>
+    <div style={{padding:"0 2px"}}>
+      <div style={{display:"flex",alignItems:"baseline",marginBottom:6,gap:8}}>
+        <span style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{t("En turno")}</span>
+        {(board.roster||[]).length>0&&<span style={{fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>{(board.free_staff||[]).length+" "+t("libres")+" · "+((board.roster||[]).filter(r=>!!r.task).length)+" "+t("ocupados")}</span>}
+        <span onClick={()=>setSubTab("mensajes")} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Mensaje a todos")} →</span>
+      </div>
+      {(board.roster||[]).length===0
+        ?<div style={{fontSize:12,color:C.tm,padding:"2px 0"}}>{t("Nadie en turno ahora.")} <span onClick={()=>setRosterOpen(true)} style={{fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Staff y equipo")} →</span></div>
+        :(board.roster||[]).map((r,ri)=>{const busy=!!r.task;return <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:ri<(board.roster.length-1)?"1px solid "+C.bd:"none",fontSize:12}}>
+          <span style={{width:7,height:7,borderRadius:99,background:busy?C.gld:C.grn,flexShrink:0}}/>
+          <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:C.txt}}>{r.full_name} <span style={{color:C.tm}}>· {RSTAFF_LBL[r.role]||r.role}</span></span>
+          {busy
+            ?<span style={{fontSize:11,color:C.ts,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:220}}>{r.task.title}{r.task.target_hole?" · "+t("Hoyo ")+r.task.target_hole:""}{r.task.acknowledged?<span style={{color:C.grnTxt||C.grn}}> · {t("visto")}</span>:null}</span>
+            :<span style={{fontSize:11,fontWeight:700,color:C.grnTxt||C.grn}}>{t("Libre")}</span>}
+        </div>})}
     </div>
-    </>}
+    </React.Fragment>})()}
     {subTab==="mensajes"&&<WaInbox course={course} only="staff"/>}
     {geoOpen&&<HoleGeoEditor course={course} onClose={()=>setGeoOpen(false)}/>}
     {dispatchOpen&&<DispatchModal course={course} onClose={()=>setDispatchOpen(false)}/>}
