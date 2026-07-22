@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.86 (WaInbox rediseñado al patron OpenPhone aprobado: master-detail de 2 paneles en desktop (lista 300px con avatares de iniciales tintados por tipo, nombre y preview en bold + dot coral cuando espera respuesta, hora en mono, fila activa resaltada; hilo a la derecha con header avatar+nombre+tipo+telefono+link wa.me+refresh pelon, burbujas con tinte verde/gris y radios asimetricos, sello de hora en mono con tu/auto, compose de pill + boton circular verde y la nota de ventana de 24h) — en movil conserva el flujo lista->hilo con boton volver (wa-back se oculta en desktop); contador N sin responder junto al titulo; toda la logica de datos intacta: get_wa_inbox/get_wa_thread cada 15s, wa_admin_reply + edge whatsapp-send. Aplica igual a Equipo (staff) y a la Bandeja de jugadores por ser componente compartido. Base: v32.85)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v32.93 (Calendario: desaparece el recuadro explicador de Bloqueos — el boton + Crear bloqueo (coral) vive ahora junto a + Generar 30 dias en el header de Tee Times (via window.__pbmOpen registrado por AdminBlockManager); si hay bloqueos activos aparece solo una linea discreta con dot coral N bloqueos activos · Ver/Ocultar que despliega la lista y stats de siempre; el modal de crear y toda la logica (revert, refunds, summary) intactos. Base: v32.92)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -166,6 +166,9 @@ window.__al=function(){};
 @media (min-width:1024px){.live-2col{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}}
 .wa-2col{display:grid;grid-template-columns:1fr;gap:14px}
 @media (min-width:1024px){.wa-2col{grid-template-columns:300px minmax(0,1fr)}.wa-listp{display:block !important}.wa-thrp{display:flex !important}.wa-back{display:none !important}}
+.ab-md{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+.ab-det{display:none}
+@media (min-width:1024px){.ab-md{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}.ab-det{display:block;position:sticky;top:12px}.ab-exp{display:none !important}}
 .admin-hdr-actions{display:none}
 .acct-2col{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
 .acct-col{display:flex;flex-direction:column;gap:12px}.pl{-webkit-animation:pl 1.4s infinite;animation:pl 1.4s infinite}button:active{-webkit-transform:scale(.97);transform:scale(.97)}
@@ -9921,6 +9924,7 @@ function AdminBookings({course}){
     }
     return true;
   });
+  useEffect(()=>{const h=(e)=>{if(!det)return;if(e.key!=="ArrowDown"&&e.key!=="ArrowUp")return;const tg=e.target&&e.target.tagName;if(tg==="INPUT"||tg==="TEXTAREA"||tg==="SELECT")return;const idx=filtered.findIndex(x=>x.id===det);if(idx<0)return;if(e.key==="ArrowDown"&&idx<filtered.length-1){setDet(filtered[idx+1].id);e.preventDefault()}else if(e.key==="ArrowUp"&&idx>0){setDet(filtered[idx-1].id);e.preventDefault()}};window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h)});
   
   const stc={confirmed:{l:t("Confirmada"),c:C.grn},cancelled:{l:t("Cancelada"),c:C.acc},pending:{l:t("Pendiente"),c:C.gld},no_show:{l:"No-show",c:C.acc}};
   const DN_local=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
@@ -9966,7 +9970,7 @@ function AdminBookings({course}){
     {/* v21: solo Check-in aqui. Marshal -> En Vivo (Dispatch); Roster -> sub-tab Roster de Tee Time */}
     {selDate===today&&viewMode==="day"&&
       <div style={{marginBottom:10}}>
-        <button onClick={()=>setCheckinOpen(true)} style={{width:"100%",padding:"12px 14px",background:`linear-gradient(135deg,${C.grn}1e,${C.gld}10)`,border:"1px solid "+C.grn+"45",borderRadius:14,cursor:"pointer",display:"flex",alignItems:"center",gap:11,textAlign:"left"}}>
+        <button onClick={()=>setCheckinOpen(true)} style={{width:"100%",padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:14,cursor:"pointer",display:"flex",alignItems:"center",gap:11,textAlign:"left"}}>
           <span style={{width:34,height:34,borderRadius:10,background:C.grn+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("check",17,C.grn)}}/>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:13,fontWeight:800,color:C.grn,lineHeight:1.2}}>Check-in</div>
@@ -9979,19 +9983,19 @@ function AdminBookings({course}){
     
     {/* Quick filter chips — riel: scroll horizontal en movil, wrap en desktop (v27.28) */}
     <div className="ab-chips">
-      {QUICK_CHIPS.map(q=>(<button key={q.k} onClick={()=>applyQuick(q.k)} style={{padding:"7px 14px",background:quickFilter===q.k?C.acc+"20":C.cd,border:"1px solid "+(quickFilter===q.k?C.acc:C.bd),borderRadius:14,color:quickFilter===q.k?C.acc:C.txt,fontSize:12,fontWeight:quickFilter===q.k?700:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{q.l}</button>))}
+      {QUICK_CHIPS.map(q=>(<button key={q.k} onClick={()=>applyQuick(q.k)} style={{padding:"6px 13px",background:quickFilter===q.k?C.grn:(C.w05||"rgba(255,255,255,.05)"),border:"none",borderRadius:9,color:quickFilter===q.k?"#fff":C.ts,fontSize:11.5,fontWeight:quickFilter===q.k?700:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,boxShadow:quickFilter===q.k?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{q.l}</button>))}
     </div>
     
     {/* Date controls — adapt según viewMode */}
     {viewMode==="day"?
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:22,marginBottom:12}}>
-        <button onClick={()=>navDay(-1)} style={{width:34,height:34,borderRadius:18,border:"1px solid "+C.bd,background:C.cd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/>
+        <button onClick={()=>navDay(-1)} aria-label="Día anterior" style={{width:30,height:30,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",15,C.ts2||C.ts)}}/>
         <div style={{textAlign:"center",minWidth:130}}>
           <div style={{fontSize:14,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>
-          {selDate===today&&<div style={{fontSize:9,color:C.acc,fontWeight:700,letterSpacing:1}}>HOY</div>}
+          {selDate===today&&<div style={{fontSize:9,color:C.grnTxt||C.grn,fontWeight:700,letterSpacing:1}}>HOY</div>}
           <input type="date" value={selDate} onChange={e=>{setSelDate(e.target.value);setQuickFilter("custom")}} style={{marginTop:3,background:"transparent",border:"none",color:C.tm,fontSize:10,textAlign:"center"}}/>
         </div>
-        <button onClick={()=>navDay(1)} style={{width:34,height:34,borderRadius:18,border:"1px solid "+C.bd,background:C.cd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/>
+        <button onClick={()=>navDay(1)} aria-label="Día siguiente" style={{width:30,height:30,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",15,C.ts2||C.ts)}}/>
       </div>
     :
       <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12,padding:10,background:C.cd,borderRadius:10,border:"1px solid "+C.bd}}>
@@ -10008,11 +10012,7 @@ function AdminBookings({course}){
     }
     
     {/* Stats agregados sobre filtered */}
-    <div className="ab-stats">
-      <div className="ab-stat"><span className="ab-stat-badge" style={{background:C.acc+"18"}} dangerouslySetInnerHTML={{__html:ic("check",15,C.acc)}}/><div className="ab-stat-body"><div className="ab-stat-n" style={{color:C.acc,fontSize:18}}>{confirmedFilt.length}</div><div className="ab-stat-l">{t("Confirmadas")}</div></div></div>
-      <div className="ab-stat"><span className="ab-stat-badge" style={{background:C.grn+"18"}} dangerouslySetInnerHTML={{__html:ic("dollar",15,C.grn)}}/><div className="ab-stat-body"><div className="ab-stat-n" style={{color:C.grn,fontSize:15}}>${fm(totalRev)}</div><div className="ab-stat-l">{t("Ingresos")}</div></div></div>
-      <div className="ab-stat"><span className="ab-stat-badge" style={{background:C.txt+"12"}} dangerouslySetInnerHTML={{__html:ic("users",15,C.txt)}}/><div className="ab-stat-body"><div className="ab-stat-n" style={{color:C.txt,fontSize:18}}>{totalPax}</div><div className="ab-stat-l">{t("Jugadores")}</div></div></div>
-    </div>
+    <div style={{fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace",margin:"2px 2px 12px"}}>{confirmedFilt.length} {t("confirmadas")} · <span style={{color:C.grnTxt||C.grn}}>${fm(totalRev)}</span> · {totalPax} jug</div>
     
     {/* Walk-ins card (mantiene) */}
     <AdminClaimsCard course={course}/><AdminWalkInsCard course={course}/>
@@ -10052,25 +10052,28 @@ function AdminBookings({course}){
     </div>
     
     {/* Lista */}
+    <div className="ab-md">
+    <div style={{minWidth:0}}>
     {ld?<div style={{padding:16}}><Skeleton w="100%" h={50} mb={10}/><Skeleton w="80%" h={50}/></div>
       :filtered.length===0?
         <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:12}}>{bks.length===0?"Sin reservas en este rango":"Sin resultados con los filtros aplicados"}</div>
-      :filtered.map(b=>{const _endMin=(course.facility_type||"campo")==="campo"?360:(course.session_minutes||60);const _over=b.status==="confirmed"&&String(b.booking_date||"").slice(0,10)<=ymdLocal()&&b.booking_time&&(new Date(String(b.booking_date).slice(0,10)+"T"+b.booking_time.slice(0,5)).getTime()+_endMin*60000<Date.now());const st=_over?{l:t("Finalizada"),c:C.tm}:(stc[b.status]||stc.pending);const up=b.user_profiles;return<div key={b.id} className="ar" style={{flexDirection:"column",gap:6}}>
+      :<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"2px 14px 6px"}}>{(()=>{const _hr=(b)=>parseInt(String(b.booking_time||"0").slice(0,2))||0;const _gs=viewMode==="day"?[[t("MAÑANA"),filtered.filter(b=>_hr(b)<12)],[t("TARDE"),filtered.filter(b=>_hr(b)>=12)]].filter(g=>g[1].length):[[null,filtered]];return _gs.map(([gl,list])=><React.Fragment key={gl||"g"}>{gl&&<div style={{fontSize:9,fontWeight:800,letterSpacing:".07em",color:C.tm,padding:"11px 0 3px"}}>{gl}</div>}{list.map((b,_bi)=>{const _endMin=(course.facility_type||"campo")==="campo"?360:(course.session_minutes||60);const _over=b.status==="confirmed"&&String(b.booking_date||"").slice(0,10)<=ymdLocal()&&b.booking_time&&(new Date(String(b.booking_date).slice(0,10)+"T"+b.booking_time.slice(0,5)).getTime()+_endMin*60000<Date.now());const st=_over?{l:t("Finalizada"),c:C.tm}:(stc[b.status]||stc.pending);const up=b.user_profiles;return<div key={b.id} onClick={()=>setDet(b.id)} style={{display:"flex",flexDirection:"column",gap:6,padding:"11px 8px",margin:"0 -8px",borderBottom:_bi<list.length-1?"1px solid "+C.bd:"none",cursor:"pointer",borderRadius:10,background:det===b.id?(C.w04||"rgba(255,255,255,.04)"):"transparent"}}>
         <div style={{..._s.flexB,width:"100%"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {viewMode==="range"&&<div style={{fontSize:10,color:C.gld,fontWeight:700,..._s.mono}}>{b.booking_date?.slice(5)}</div>}
-            <div style={{fontSize:16,fontWeight:800,color:C.txt}}>{b.booking_time?.slice(0,5)}</div>
+            <div style={{fontSize:14,fontWeight:700,color:C.txt,fontFamily:"ui-monospace,Menlo,monospace"}}>{b.booking_time?.slice(0,5)}</div>
             <div style={{width:4,height:4,borderRadius:2,background:C.tm}}/>
             <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{b.party_size} jug</span>
+            {(()=>{if(b.checked_in_at)return<span style={{fontSize:10.5,color:C.grnTxt||C.grn,fontWeight:700}}>· {t("llegó")} {String(new Date(b.checked_in_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}))}</span>;if(b.status!=="confirmed"||String(b.booking_date||"").slice(0,10)!==ymdLocal())return null;const _tt=new Date(String(b.booking_date).slice(0,10)+"T"+String(b.booking_time||"00:00").slice(0,5)).getTime();const _mm=Math.round((_tt-Date.now())/60000);if(!isFinite(_mm)||_mm<=0||_mm>240)return null;return<span style={{fontSize:10.5,color:C.ts}}>· {t("llega en")} {_mm>=60?Math.floor(_mm/60)+"h"+String(_mm%60).padStart(2,"0"):_mm+" min"}</span>})()}
           </div>
-          <span style={{fontSize:10,color:st.c,background:st.c+"20",padding:"2px 8px",borderRadius:6}}>{st.l}</span>
+          <span style={{fontSize:8.5,fontWeight:800,color:st.c,background:st.c+"14",padding:"2px 7px",borderRadius:5,letterSpacing:".02em"}}>{st.l}</span>
         </div>
         {b.booking_code&&<div style={{fontSize:11,..._s.mono,color:C.gld,letterSpacing:1,fontWeight:700}}>{b.booking_code}</div>}
         {up&&<div onClick={e=>{e.stopPropagation();if(b.user_id)setCust360(b.user_id)}} style={{display:"flex",gap:8,alignItems:"center",cursor:b.user_id?"pointer":"default",padding:4,margin:-4,borderRadius:8,transition:"background .15s"}} onMouseEnter={e=>{if(b.user_id)e.currentTarget.style.background=C.bd+"50"}} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-          <div style={{width:28,height:28,borderRadius:14,background:C.grn+"25",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("user",14,C.grn)}}/>
+          <div style={{width:28,height:28,borderRadius:14,background:C.grn+"1c",color:C.grnTxt||C.grn,fontSize:9.5,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{(((b.guest_name||up?.full_name||up?.nickname||"J").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join(""))||"J").toUpperCase()}</div>
           <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.txt}}>{b.guest_name||up?.full_name||up?.nickname||"Jugador"}{b.is_guest&&<span style={{fontSize:8.5,fontWeight:800,color:C.gld,background:C.gld+"15",border:"1px solid "+C.gld+"30",padding:"1px 5px",borderRadius:5,marginLeft:5}}>{t("PRESENCIAL")}</span>}</div>{up?.player_id&&<div style={{fontSize:10,color:C.tm}}>ID {up?.player_id}</div>}</div>
           <div style={{display:"flex",gap:4}}>
-            {b.user_id&&!b.checked_in_at&&(()=>{const _t0=new Date(String(b.booking_date||"").slice(0,10)+"T"+String(b.booking_time||"00:00").slice(0,5)).getTime();const _can=isFinite(_t0)&&Date.now()>=_t0-3600000&&!_over;return<button onClick={e=>{e.stopPropagation();if(!_can){window.__toast?.(t("Podrás enviarle recordatorios cuando esté cerca la hora de su reservación"),"info");return}doNotify(b)}} disabled={notifyId===b.id} title={_can?"Avisar al jugador":t("Disponible 1 hora antes de la reserva")} style={{height:28,padding:"0 10px",borderRadius:14,background:_can?C.grn+"15":C.bd+"25",border:"1px solid "+(_can?C.grn+"30":C.bd),display:"flex",alignItems:"center",gap:5,cursor:notifyId===b.id?"wait":"pointer",color:_can?C.grn:C.tm,fontSize:11,fontWeight:700,opacity:_can?1:.55}}><span dangerouslySetInnerHTML={{__html:ic("bell",12,_can?C.grn:C.tm)}}/>Avisar</button>})()}
+            {b.user_id&&!b.checked_in_at&&(()=>{const _t0=new Date(String(b.booking_date||"").slice(0,10)+"T"+String(b.booking_time||"00:00").slice(0,5)).getTime();const _can=isFinite(_t0)&&Date.now()>=_t0-3600000&&!_over;return<button onClick={e=>{e.stopPropagation();if(!_can){window.__toast?.(t("Podrás enviarle recordatorios cuando esté cerca la hora de su reservación"),"info");return}doNotify(b)}} disabled={notifyId===b.id} title={_can?"Avisar al jugador":t("Disponible 1 hora antes de la reserva")} style={{height:28,padding:"0 6px",border:"none",background:"none",display:"flex",alignItems:"center",gap:4,cursor:notifyId===b.id?"wait":"pointer",color:_can?(C.grnTxt||C.grn):C.tm,fontSize:11,fontWeight:700,opacity:_can?1:.55}}><span dangerouslySetInnerHTML={{__html:ic("bell",12,_can?(C.grnTxt||C.grn):C.tm)}}/>{t("Avisar")}</button>})()}
             {(()=>{const isToday=String(b.booking_date||"").slice(0,10)===ymdLocal();const done=!!b.checked_in_at;
               if(!isToday||b.status!=="confirmed"||(_over&&!done))return null;
               return<button onClick={async e=>{e.stopPropagation();if(done)return;
@@ -10080,7 +10083,7 @@ function AdminBookings({course}){
                   else if(r?.reason==="session_over"){window.__toast?.(t("La sesión de esta reserva ya terminó"),"info")}else window.__toast?.(t("No se pudo hacer check-in")+(r?.reason?" ("+r.reason+")":""),"warn");
                   return}
                 window.__toast?.(t("✓ Check-in registrado"),"success");load&&load()}}
-                title={done?t("Ya llegó"):"Check-in"} style={{height:28,padding:"0 10px",borderRadius:8,border:"1px solid "+(done?C.grn:C.grn+"55"),background:done?C.grn:C.grn+"12",color:done?"#fff":C.grn,fontSize:11,cursor:done?"default":"pointer",display:"inline-flex",alignItems:"center",gap:5,fontWeight:700}}>
+                title={done?t("Ya llegó"):"Check-in"} style={{height:28,padding:"0 6px",border:"none",background:"none",color:C.grnTxt||C.grn,fontSize:11,cursor:done?"default":"pointer",display:"inline-flex",alignItems:"center",gap:4,fontWeight:700,opacity:done?.85:1}}>
                 <span dangerouslySetInnerHTML={{__html:ic("check",12,done?"#fff":C.grn)}}/>{done?t("Llegó"):"Check-in"}</button>})()}
             {!_over&&(course.facility_type||"campo")!=="campo"&&b.status!=="cancelled"&&(bayFor===b.id
             ?<span onClick={e=>e.stopPropagation()} style={{display:"inline-flex",alignItems:"center",gap:4}}>
@@ -10088,15 +10091,15 @@ function AdminBookings({course}){
               <button onClick={e=>{e.stopPropagation();const mx=(course.facility_type==="simulador"?course.cabins_count:course.stations_count)||72;const n=parseInt(bayVal);if(!n||n<1||n>mx){window.__toast?.(t("Numero invalido"),"warn");return}sb.rpc("assign_bay",{p_booking_id:b.id,p_bay:n}).then(({data:r,error})=>{if(error||!r?.ok){window.__toast?.(t("No se pudo asignar")+(r?.reason?" ("+r.reason+")":""),"warn")}else{window.__toast?.((course.facility_type==="simulador"?t("Cabina"):t("Bahía"))+" #"+n+" "+t("asignada"),"success");load&&load()}});setBayFor(null)}} style={{height:28,padding:"0 10px",borderRadius:14,border:"none",background:C.gld,color:"#1a1a2e",fontSize:10,fontWeight:800,cursor:"pointer"}}>OK</button>
               <button onClick={e=>{e.stopPropagation();setBayFor(null)}} style={{background:"none",border:"none",color:C.ts,fontSize:14,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
             </span>
-            :<button onClick={e=>{e.stopPropagation();setBayFor(b.id);setBayVal(b.assigned_bay?String(b.assigned_bay):"")}} title={t("Asignar bahía")} style={{height:28,padding:"0 10px",borderRadius:14,background:b.assigned_bay?C.grn+"15":"#6c5ce712",border:"1px solid "+(b.assigned_bay?C.grn+"30":"#6c5ce730"),display:"flex",alignItems:"center",gap:5,cursor:"pointer",color:b.assigned_bay?C.grn:"#6c5ce7",fontSize:11,fontWeight:700}}><span dangerouslySetInnerHTML={{__html:ic("pin",12,b.assigned_bay?C.grn:"#6c5ce7")}}/>{b.assigned_bay?"#"+b.assigned_bay:(course.facility_type==="simulador"?t("Cabina"):t("Bahía"))}</button>)}
+            :<button onClick={e=>{e.stopPropagation();setBayFor(b.id);setBayVal(b.assigned_bay?String(b.assigned_bay):"")}} title={t("Asignar bahía")} style={{height:28,padding:"0 6px",border:"none",background:"none",display:"flex",alignItems:"center",gap:4,cursor:"pointer",color:b.assigned_bay?(C.grnTxt||C.grn):(C.secVio||"#a78bfa"),fontSize:11,fontWeight:700}}><span dangerouslySetInnerHTML={{__html:ic("pin",12,b.assigned_bay?C.grn:"#6c5ce7")}}/>{b.assigned_bay?"#"+b.assigned_bay:(course.facility_type==="simulador"?t("Cabina"):t("Bahía"))}</button>)}
           </div>
         </div>}
         <div style={{..._s.flexB,width:"100%"}}>
-          <div style={{fontSize:14,fontWeight:700,color:C.grn}}>${fm(b.total_cost)} MXN</div>
+          <div style={{fontSize:13,fontWeight:700,color:C.grnTxt||C.grn,fontFamily:"ui-monospace,Menlo,monospace"}}>${fm(b.total_cost)} <span style={{fontSize:10,color:C.tm,fontWeight:600}}>MXN</span></div>
           {b.settlement_status&&<span style={{fontSize:9,fontWeight:700,color:b.settlement_status==="settled"?C.grn:b.settlement_status==="cancelled"?C.acc:C.gld,background:(b.settlement_status==="settled"?C.grn:b.settlement_status==="cancelled"?C.acc:C.gld)+"12",padding:"2px 6px",borderRadius:5}}>{b.settlement_status==="settled"?t("Liquidado"):b.settlement_status==="scheduled"?t("Por liquidar"):t("Cancelado")}</span>}
         </div>
         <button onClick={e=>{e.stopPropagation();setDet(det===b.id?null:b.id)}} style={{background:"none",border:"none",color:C.tm,fontSize:10,cursor:"pointer",padding:0}}>{det===b.id?"▲ Menos":"▼ Detalle"}</button>
-        {det===b.id&&<div style={{width:"100%",padding:"10px 0",borderTop:"1px solid "+C.bd,marginTop:4,display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
+        {det===b.id&&<div className="ab-exp" style={{width:"100%",padding:"10px 0",borderTop:"1px solid "+C.bd,marginTop:4,display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
           <div><span style={{color:C.tm}}>Pago:</span> <span style={{color:b.payment_status==="paid"?C.grn:b.payment_status==="refunded"||b.payment_status==="no_show_fee"?C.acc:C.gld,fontWeight:600}}>{b.payment_status==="paid"?t("Cobrado"):b.payment_status==="refunded"?t("Reembolsado"):b.payment_status==="no_show_fee"?"No-Show Fee":b.payment_status==="free"?t("Gratis"):t("Pendiente")}</span></div>
           <div><span style={{color:C.tm}}>Extras:</span> <span style={{color:C.txt,fontWeight:600}}>${fm(b.extras_total||0)}</span></div>
           {b.promo_code&&<div><span style={{color:C.tm}}>Promo:</span> <span style={{color:C.gld,fontWeight:600}}>{b.promo_code}</span></div>}
@@ -10107,8 +10110,55 @@ function AdminBookings({course}){
 
           {b.user_id&&<button onClick={e=>{e.stopPropagation();setCust360(b.user_id)}} style={{gridColumn:"span 2",marginTop:6,padding:10,background:`linear-gradient(135deg,${C.grn}15,${C.gld}15)`,border:"1px solid "+C.grn+"30",borderRadius:10,color:C.grn,fontSize:12,fontWeight:700,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("user",13,C.grn)+" Ver perfil completo del jugador"}}/>}
         </div>}
-      </div>})}
-    
+      </div>})}</React.Fragment>)})()}</div>}
+    </div>
+    <div className="ab-det">
+    {(()=>{const b2=filtered.find(x=>x.id===det);
+      if(!b2)return<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:28,textAlign:"center",color:C.tm,fontSize:12.5}}>{t("Elige una reserva para ver su detalle")}<div style={{fontSize:10,marginTop:6,color:C.tm,opacity:.7}}>↑↓ {t("para recorrer")}</div></div>;
+      const _em2=(course.facility_type||"campo")==="campo"?360:(course.session_minutes||60);
+      const _ov2=b2.status==="confirmed"&&String(b2.booking_date||"").slice(0,10)<=ymdLocal()&&b2.booking_time&&(new Date(String(b2.booking_date).slice(0,10)+"T"+b2.booking_time.slice(0,5)).getTime()+_em2*60000<Date.now());
+      const st2=_ov2?{l:t("Finalizada"),c:C.tm}:(stc[b2.status]||stc.pending);
+      const up2=b2.user_profiles;const nm2=b2.guest_name||up2?.full_name||up2?.nickname||t("Jugador");
+      const ini2=(((nm2||"J").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join(""))||"J").toUpperCase();
+      const pay2=b2.payment_status;
+      const payL=pay2==="paid"?t("Cobrado"):pay2==="refunded"?t("Reembolsado"):pay2==="no_show_fee"?"No-show Fee":pay2==="free"?t("Gratis"):t("Pendiente");
+      const payC=pay2==="paid"?(C.grnTxt||C.grn):pay2==="refunded"||pay2==="no_show_fee"?C.acc:pay2==="free"?C.ts:C.gld;
+      const _t02=new Date(String(b2.booking_date||"").slice(0,10)+"T"+String(b2.booking_time||"00:00").slice(0,5)).getTime();
+      const _can2=b2.user_id&&!b2.checked_in_at&&isFinite(_t02)&&Date.now()>=_t02-3600000&&!_ov2;
+      const row2={display:"flex",alignItems:"baseline",justifyContent:"space-between",padding:"6px 0",fontSize:12};
+      const mono2={fontFamily:"ui-monospace,Menlo,monospace"};
+      return<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"16px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
+          <span style={{width:40,height:40,borderRadius:"50%",background:C.grn+"1c",color:C.grnTxt||C.grn,fontSize:13,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{ini2}</span>
+          <span style={{minWidth:0,flex:1}}>
+            <span style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}><span style={{fontSize:14.5,fontWeight:800,color:C.txt}}>{nm2}</span><span style={{fontSize:8.5,fontWeight:800,color:st2.c,background:st2.c+"14",padding:"2px 7px",borderRadius:5}}>{st2.l}</span>{b2.is_guest&&<span style={{fontSize:8.5,fontWeight:800,color:C.gld,background:C.gld+"14",padding:"2px 7px",borderRadius:5}}>{t("PRESENCIAL")}</span>}</span>
+            <span style={{display:"block",fontSize:11.5,color:C.ts,marginTop:2,...mono2}}>{String(b2.booking_date||"").slice(5)} · {b2.booking_time?.slice(0,5)} · {b2.party_size} jug{b2.assigned_bay?" · "+((course.facility_type==="simulador"?t("Cabina"):t("Bahía"))+" #"+b2.assigned_bay):""}</span>
+            {b2.booking_code&&<span style={{display:"block",fontSize:10.5,color:C.gld,letterSpacing:1,fontWeight:700,marginTop:2,...mono2}}>{b2.booking_code}</span>}
+          </span>
+        </div>
+        {b2.checked_in_at?<div style={{fontSize:11.5,color:C.grnTxt||C.grn,fontWeight:700,margin:"6px 0 2px"}}>✓ {t("Llegó a las")} {new Date(b2.checked_in_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>:null}
+        <div style={{borderTop:"1px solid "+C.bd,marginTop:10,paddingTop:6}}>
+          <div style={row2}><span style={{color:C.tm}}>{t("Total")}</span><span style={{color:C.grnTxt||C.grn,fontWeight:800,fontSize:14,...mono2}}>${fm(b2.total_cost)} <span style={{fontSize:9,color:C.tm,fontWeight:600}}>MXN</span></span></div>
+          <div style={row2}><span style={{color:C.tm}}>{t("Pago")}</span><span style={{color:payC,fontWeight:700}}>{payL}</span></div>
+          {(b2.extras_total||0)>0&&<div style={row2}><span style={{color:C.tm}}>Extras</span><span style={{color:C.txt,fontWeight:700,...mono2}}>${fm(b2.extras_total||0)}</span></div>}
+          {b2.promo_code&&<div style={row2}><span style={{color:C.tm}}>Promo</span><span style={{color:C.gld,fontWeight:700,...mono2}}>{b2.promo_code}</span></div>}
+          {b2.discount_amount>0&&<div style={row2}><span style={{color:C.tm}}>{t("Descuento")}</span><span style={{color:C.acc,fontWeight:700,...mono2}}>-${fm(b2.discount_amount)}</span></div>}
+          {b2.settlement_status&&<div style={row2}><span style={{color:C.tm}}>{t("Liquidación")}</span><span style={{fontWeight:700,color:b2.settlement_status==="settled"?(C.grnTxt||C.grn):b2.settlement_status==="cancelled"?C.acc:C.gld}}>{b2.settlement_status==="settled"?t("Liquidado"):b2.settlement_status==="cancelled"?t("Cancelado"):t("Por liquidar")}{b2.settlement_date?<span style={{color:C.tm,fontWeight:600}}> · {b2.settlement_date}</span>:null}</span></div>}
+          {b2.settlement_amount>0&&<div style={row2}><span style={{color:C.tm}}>{t("Monto campo")}</span><span style={{color:C.grnTxt||C.grn,fontWeight:700,...mono2}}>${fm(b2.settlement_amount)}</span></div>}
+          {up2?.player_id&&<div style={row2}><span style={{color:C.tm}}>Player ID</span><span style={{color:C.gld,fontWeight:700,...mono2}}>{up2.player_id}</span></div>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:16,borderTop:"1px solid "+C.bd,marginTop:6,paddingTop:12,flexWrap:"wrap"}}>
+          {(()=>{const isT=String(b2.booking_date||"").slice(0,10)===ymdLocal();const done=!!b2.checked_in_at;if(!isT||b2.status!=="confirmed"||(_ov2&&!done))return null;
+            return<span onClick={async()=>{if(done)return;const{data:r,error}=await sb.rpc("checkin_booking",{p_booking_id:b2.id});
+              if(error||!r?.ok){if(r?.reason==="too_early"){const m=Math.max(0,Math.round(r.minutes_until_open||0));window.__toast?.(t("El check-in abre 30 min antes de la hora (en ")+m+" min)","info")}else if(r?.reason==="session_over"){window.__toast?.(t("La sesión de esta reserva ya terminó"),"info")}else window.__toast?.(t("No se pudo hacer check-in"),"error");return}
+              window.__toast?.(t("✓ Check-in registrado"),"success");load&&load()}} style={{fontSize:12,fontWeight:700,color:C.grnTxt||C.grn,cursor:done?"default":"pointer",opacity:done?.7:1}}>{done?"✓ "+t("Llegó"):"Check-in"}</span>})()}
+          {b2.user_id&&!b2.checked_in_at&&<span onClick={()=>{if(!_can2){window.__toast?.(t("Podrás enviarle recordatorios cuando esté cerca la hora de su reservación"),"info");return}doNotify(b2)}} style={{fontSize:12,fontWeight:700,color:_can2?(C.grnTxt||C.grn):C.tm,cursor:"pointer",opacity:_can2?1:.6}}>{t("Avisar")}</span>}
+          {!_ov2&&(course.facility_type||"campo")!=="campo"&&b2.status!=="cancelled"&&<span onClick={()=>{setBayFor(b2.id);setBayVal(b2.assigned_bay?String(b2.assigned_bay):"")}} style={{fontSize:12,fontWeight:700,color:b2.assigned_bay?(C.grnTxt||C.grn):(C.secVio||"#a78bfa"),cursor:"pointer"}}>{b2.assigned_bay?"#"+b2.assigned_bay:(course.facility_type==="simulador"?t("Cabina"):t("Bahía"))}</span>}
+          {b2.user_id&&<span onClick={()=>setCust360(b2.user_id)} style={{marginLeft:"auto",fontSize:12,fontWeight:700,color:C.ts2||C.ts,cursor:"pointer"}}>{t("Perfil 360")} →</span>}
+        </div>
+      </div>})()}
+    </div>
+    </div>
     </div>
     </div>
     {cust360&&<Customer360 course={course} userId={cust360} onClose={()=>setCust360(null)}/>}
@@ -12530,6 +12580,7 @@ function PremiumInsights({course,goTo,unlocked}){const{s}=useA();const{sub,isPre
 // crea notifications a jugadores afectados, log auditable en block_affected_bookings.
 // Quick win: 30min de WhatsApp + 2h refunds manuales → 15 segundos.
 function AdminBlockManager({course}){
+  useEffect(()=>{window.__pbmOpen=()=>{setShowModal(true);setOpen(true)};return()=>{try{delete window.__pbmOpen}catch(x){}}},[]);
   const[data,setData]=useState(null);const[ld,setLd]=useState(false);const[open,setOpen]=useState(false);
   const[showModal,setShowModal]=useState(false);const[busyId,setBusyId]=useState(null);
   async function load(){setLd(true);
@@ -12572,18 +12623,13 @@ function AdminBlockManager({course}){
     }
     return parts.join(" · ");
   }
-  return<div style={{background:`linear-gradient(135deg,${C.acc}10,#d63d5505)`,border:"1px solid "+C.acc+"30",borderRadius:14,padding:12,marginBottom:14}}>
-    <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",gap:10}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-        <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("ban",18)}}/>
-        <div style={{minWidth:0}}>
-          <div style={{fontSize:13,fontWeight:800,color:C.txt}}>Bloqueos {summary.active>0&&<span style={{fontSize:10,fontWeight:700,color:C.acc,background:C.acc+"15",padding:"2px 6px",borderRadius:5,marginLeft:4}}>{summary.active} activo{summary.active===1?"":"s"}</span>}</div>
-          <div style={{fontSize:10,color:C.tm,marginTop:1}}>{t("Cierra slots por clima, mantenimiento o eventos · Refunds automáticos")}</div>
-        </div>
-      </div>
-      <button onClick={e=>{e.stopPropagation();setShowModal(true);if(!open)setOpen(true)}} style={{padding:"6px 12px",background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>+ Crear bloqueo</button>
-    </div>
-    {open&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.acc+"20"}}>
+  return<div style={{marginBottom:12}}>
+    {(summary.active||0)>0&&<div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",padding:"0 2px 8px"}}>
+      <span style={{width:7,height:7,borderRadius:99,background:C.acc,flexShrink:0}}/>
+      <span style={{fontSize:11.5,fontWeight:700,color:C.accTx2||C.acc}}>{summary.active} {t("bloqueo")}{summary.active===1?"":"s"} {t("activo")}{summary.active===1?"":"s"}</span>
+      <span style={{fontSize:11,fontWeight:700,color:C.tm}}>{open?t("Ocultar"):t("Ver")} {open?"▴":"▾"}</span>
+    </div>}
+    {open&&<div style={{paddingTop:2}}>
       {/* Summary */}
       {(summary.total||0)>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6,marginBottom:10}}>
         <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:8,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>{summary.total||0}</div><div style={{fontSize:9,color:C.tm}}>TOTAL</div></div>
@@ -13228,30 +13274,41 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
   const available=slots.filter(s=>s.status==="available");const blocked=slots.filter(s=>s.status==="blocked");const booked=slots.filter(s=>s.status==="booked");
   const bands=(course.facility_type||"campo")==="campo"?[{k:"early",l:"Early Bird (6-9h)",r:[0,9]},{k:"prime",l:"Prime (9-12h)",r:[9,12]},{k:"mid",l:t("Mediodía (12-15h)"),r:[12,15]},{k:"twi",l:t("Twilight (15+)"),r:[15,24]}]:[{k:"early",l:t("Manana (6-9h)"),r:[0,9]},{k:"prime",l:t("Media manana (9-12h)"),r:[9,12]},{k:"mid",l:t("Mediodía (12-15h)"),r:[12,15]},{k:"tarde",l:t("Tarde (15-18h)"),r:[15,18]},{k:"noche",l:t("Prime nocturno (18-22h)"),r:[18,24]}];
   return<div className="fi">
-    <div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:18,fontWeight:700,color:C.txt}}> {(course.facility_type||"campo")==="campo"?t("Tee Times"):t("Horarios")}</h3><button onClick={generateSlots} disabled={gen} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",opacity:gen?.5:1}}>{gen?t("Generando..."):t("+ Generar 30 días")}</button></div>
+    <div style={{..._s.flexB,marginBottom:14}}><h3 style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:".02em",margin:0}}>{(course.facility_type||"campo")==="campo"?t("Tee Times"):t("Horarios")}</h3><div style={{display:"flex",gap:8,alignItems:"center"}}><button onClick={()=>window.__pbmOpen&&window.__pbmOpen()} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.acc},#d63d55)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>{t("+ Crear bloqueo")}</button><button onClick={generateSlots} disabled={gen} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",opacity:gen?.5:1}}>{gen?t("Generando..."):t("+ Generar 30 días")}</button></div></div>
     {/* v27.32: AdminBlockManager de vuelta dentro del calendario (preferencia de Carlos); se quito la sub-tab Bloqueos separada. */}
     <AdminBlockManager course={course}/>
     {/* v20.25: Toggle Calendar (Tee Sheet Pro) / Lista (legacy) */}
-    <div style={{display:"flex",gap:4,padding:3,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,marginBottom:14}}>
-      <button onClick={()=>setView("calendar")} style={{flex:1,padding:"6px 10px",borderRadius:7,border:"none",background:view==="calendar"?C.grn+"20":"transparent",color:view==="calendar"?C.grn:C.tm,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("calendar",13,view==="calendar"?C.grn:C.tm)}}/>Calendario</button>
-      <button onClick={()=>setView("list")} style={{flex:1,padding:"6px 10px",borderRadius:7,border:"none",background:view==="list"?C.grn+"20":"transparent",color:view==="list"?C.grn:C.tm,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("clipboard",13,view==="list"?C.grn:C.tm)}}/>Lista</button>
+    <div style={{display:"flex",padding:2,background:C.w07,borderRadius:10,marginBottom:14}}>
+      <button onClick={()=>setView("calendar")} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:view==="calendar"?C.grn:"transparent",color:view==="calendar"?"#fff":C.ts,fontSize:11.5,fontWeight:view==="calendar"?700:600,cursor:"pointer",boxShadow:view==="calendar"?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{t("Calendario")}</button>
+      <button onClick={()=>setView("list")} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:view==="list"?C.grn:"transparent",color:view==="list"?"#fff":C.ts,fontSize:11.5,fontWeight:view==="list"?700:600,cursor:"pointer",boxShadow:view==="list"?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{t("Lista")}</button>
     </div>
     {view==="calendar"?<TeeSheetPro course={course}/>:<>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><button onClick={()=>navDay(-1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("left",14,C.txt)}}/><div style={{textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>{selDate===today&&<div style={{fontSize:10,color:C.acc,fontWeight:600}}>HOY</div>}<input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} style={{marginTop:4,background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"center"}}/></div><button onClick={()=>navDay(1)} style={{width:36,height:36,borderRadius:20,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.tm)}}/></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div className="sc"><div className="n" style={{color:C.grn,fontSize:18}}>{available.length}</div><div className="l">Disponibles</div></div><div className="sc"><div className="n" style={{color:C.acc,fontSize:18}}>{booked.length}</div><div className="l">{t("Reservados")}</div></div><div className="sc"><div className="n" style={{color:C.tm,fontSize:18}}>{blocked.length}</div><div className="l">Bloqueados</div></div></div>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+      <button onClick={()=>navDay(-7)} aria-label="Semana anterior" style={{width:26,height:30,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("left",14,C.ts2||C.ts)}}/>
+      <div style={{flex:1,display:"flex",gap:4,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+        {Array.from({length:7}).map((_,i9)=>{const _dt=new Date(selDate+"T12:00:00");_dt.setDate(_dt.getDate()-_dt.getDay()+i9);const _ds=ymdLocal(_dt);const _on=selDate===_ds;const _isT=_ds===today;return<button key={_ds} onClick={()=>{hap&&hap();setSelDate(_ds)}} style={{flex:"1 0 44px",minWidth:44,padding:"5px 0",borderRadius:10,border:"none",background:_on?C.grn:(C.w05||"rgba(255,255,255,.05)"),color:_on?"#fff":C.ts,cursor:"pointer",textAlign:"center",WebkitTapHighlightColor:"transparent"}}><span style={{display:"block",fontSize:8.5,fontWeight:_on||_isT?700:600,letterSpacing:".05em"}}>{DN[_dt.getDay()].toUpperCase()}</span><span style={{display:"block",fontSize:13,fontWeight:_on?700:600,fontFamily:"ui-monospace,Menlo,monospace",color:_on?"#fff":(_isT?(C.grnTxt||C.grn):C.txt)}}>{_dt.getDate()}</span></button>})}
+      </div>
+      <button onClick={()=>navDay(7)} aria-label="Semana siguiente" style={{width:26,height:30,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("right",14,C.ts2||C.ts)}}/>
+    </div>
+    <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}{selDate===today&&<span style={{fontSize:9,color:C.grnTxt||C.grn,fontWeight:700,letterSpacing:1,marginLeft:7}}>HOY</span>}</div>
+      <input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} aria-label="Otra fecha" style={{marginLeft:"auto",background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"right",cursor:"pointer"}}/>
+    </div>
+    <div style={{fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace",margin:"0 2px 12px"}}>{slots.length} slots · <span style={{color:C.grnTxt||C.grn}}>{available.length} {t("libres")}</span> · {booked.length} {t("reservados")} · {blocked.length} {t("bloqueados")}</div>
     {ld?<Skeleton w="100%" h={60}/>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}><div dangerouslySetInnerHTML={{__html:ic("calendar",28,C.tm)}} style={{marginBottom:8}}/><p>Sin slots para esta fecha</p><p style={{fontSize:12,marginTop:4}}>Click "Generar 30 días" para crear</p></div>:
-    bands.map(band=>{const bs=slots.filter(x=>{const h=parseInt(x.slot_time);return h>=band.r[0]&&h<band.r[1]});if(!bs.length)return null;return<div key={band.k} style={{marginBottom:14}}><div style={{fontSize:12,fontWeight:700,color:C.ts,marginBottom:6}}>{band.l} ({bs.length})</div>{bs.map(sl=><div key={sl.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:sl.status==="booked"?C.acc+"10":sl.status==="blocked"?C.tm+"15":C.cd,borderRadius:10,border:"1px solid "+(sl.status==="booked"?C.acc+"30":sl.is_offer?C.gld+"40":C.bd),marginBottom:4}}>
-      <div style={{width:50,textAlign:"center",flexShrink:0}}><div style={{fontSize:14,fontWeight:800,color:C.txt}}>{sl.slot_time?.slice(0,5)}</div></div>
+    bands.map(band=>{const bs=slots.filter(x=>{const h=parseInt(x.slot_time);return h>=band.r[0]&&h<band.r[1]});if(!bs.length)return null;return<div key={band.k} style={{marginBottom:12,background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"2px 14px 4px"}}><div style={{fontSize:9,fontWeight:800,letterSpacing:".07em",color:C.tm,padding:"10px 0 3px",textTransform:"uppercase"}}>{band.l} · {bs.length}</div>{bs.map((sl,_si)=><div key={sl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:_si<bs.length-1?"1px solid "+C.bd:"none",opacity:sl.status==="blocked"?.55:1}}>
+      <div style={{width:44,flexShrink:0}}><div style={{fontSize:13,fontWeight:700,color:sl.status==="blocked"?C.tm:C.txt,fontFamily:"ui-monospace,Menlo,monospace"}}>{sl.slot_time?.slice(0,5)}</div></div>
+      <span style={{display:"inline-flex",gap:3,flexShrink:0}} title={(sl.booked_count||0)+"/"+(sl.capacity||4)}>{Array.from({length:sl.capacity||4}).map((_,di)=><span key={di} style={{width:6,height:6,borderRadius:99,background:di<(sl.booked_count||0)?C.grn:(sl.status==="blocked"?"rgba(255,255,255,.07)":C.w07||"rgba(255,255,255,.12)")}}/>)}</span>
       <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
-        <span onClick={()=>{setEditSlot(sl);setEditPrice(sl.price?.toString()||"")}} style={{fontSize:13,fontWeight:700,color:C.grn,cursor:"pointer"}}>${fm(sl.price)}</span>
-        {sl.is_offer&&<span style={{fontSize:9,background:C.gld+"20",color:C.gld,padding:"1px 6px",borderRadius:4,fontWeight:700}}>DEAL</span>}
-        {sl.booked_count>0&&<span style={{fontSize:10,color:C.acc}}>{sl.booked_count}/{sl.capacity||4}</span>}
+        <span onClick={()=>{setEditSlot(sl);setEditPrice(sl.price?.toString()||"")}} title={t("Editar precio")} style={{fontSize:12.5,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer",fontFamily:"ui-monospace,Menlo,monospace"}}>${fm(sl.price)}</span>
+        {sl.is_offer&&<span style={{fontSize:8.5,background:(C.secVio||"#a78bfa")+"1f",color:C.secVio||"#a78bfa",padding:"2px 7px",borderRadius:5,fontWeight:800}}>{t("OFERTA")}</span>}
+        {sl.booked_count>0&&<span style={{fontSize:10,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>{sl.booked_count}/{sl.capacity||4}</span>}
       </div>
       <div style={{display:"flex",gap:4}}>
-        <button onClick={()=>toggleOffer(sl)} title="Hot Deal" style={{width:28,height:28,borderRadius:8,border:"1px solid "+(sl.is_offer?C.gld:C.bd),background:sl.is_offer?C.gld+"15":"transparent",color:sl.is_offer?C.gld:C.tm,fontSize:12,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("flame",12,C.gld)}}/>
-        {sl.status!=="booked"&&<button onClick={()=>toggleSlot(sl)} title={sl.status==="available"?"Bloquear":"Desbloquear"} style={{width:28,height:28,borderRadius:8,border:"1px solid "+(sl.status==="blocked"?C.grn:C.acc)+30,background:sl.status==="blocked"?C.grn+"15":C.acc+"15",color:sl.status==="blocked"?C.grn:C.acc,fontSize:12,cursor:"pointer"}}>{sl.status==="blocked"?"✓":"✕"}</button>}
+        <button onClick={()=>toggleOffer(sl)} title="Hot Deal" style={{border:"none",background:"none",padding:"4px 5px",color:sl.is_offer?(C.secVio||"#a78bfa"):C.tm,fontSize:11,fontWeight:700,cursor:"pointer"}}>{sl.is_offer?t("Quitar oferta"):t("Oferta")}</button>
+        {sl.status!=="booked"&&<button onClick={()=>toggleSlot(sl)} style={{border:"none",background:"none",padding:"4px 5px",color:sl.status==="blocked"?(C.grnTxt||C.grn):C.tm,fontSize:11,fontWeight:700,cursor:"pointer"}}>{sl.status==="blocked"?t("Desbloquear"):t("Bloquear")}</button>}
         <button onClick={()=>deleteSlot(sl.id)} title="Eliminar" style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:4}} dangerouslySetInnerHTML={{__html:ic("x",12,C.acc)}}/>
-        {sl.status==="booked"&&<span style={{fontSize:10,color:C.acc,fontWeight:600,padding:"4px 8px"}}>Reservado</span>}
+        {sl.status==="booked"&&<span style={{fontSize:8.5,fontWeight:800,color:C.grnTxt||C.grn,background:C.grn+"14",padding:"2px 7px",borderRadius:5}}>{t("RESERVADO")}</span>}
       </div>
     </div>)}</div>})}
     {editSlot&&<div className="modal-bg" onClick={()=>setEditSlot(null)}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:14}}>Editar Slot {editSlot.slot_time?.slice(0,5)}</h3>
@@ -14451,8 +14508,8 @@ function AdminPageHeader({title,question}){
 
 // Shared helper: segmented control para sub-tabs internos · v20.30 Fase E.2 polish
 function AdminSubNav({items,active,onChange}){
-  return<div style={{display:"flex",gap:4,background:(C.glass||C.w04),border:"1px solid "+C.bd,borderRadius:10,padding:4,marginBottom:14,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-    {items.map(it=>{const isActive=active===it.k;return<button key={it.k} onClick={()=>onChange(it.k)} onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background=(C.w04||"rgba(255,255,255,.04)")}} onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent"}} style={{padding:"8px 14px",borderRadius:8,border:"none",background:isActive?"linear-gradient(135deg,#00b894,#00cec9)":"transparent",color:isActive?"#fff":C.ts,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all .2s ease",transform:isActive?"scale(1.02)":"scale(1)",boxShadow:isActive?"0 4px 14px rgba(0,184,148,.35),inset 0 1px 0 rgba(255,255,255,.15)":"none"}}>{it.l}</button>;})}
+  return<div style={{display:"flex",background:C.w07,borderRadius:10,padding:2,marginBottom:14,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+    {items.map(it=>{const isActive=active===it.k;return<button key={it.k} onClick={()=>onChange(it.k)} onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background=(C.w04||"rgba(255,255,255,.04)")}} onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent"}} style={{flex:1,padding:"7px 14px",borderRadius:8,border:"none",background:isActive?C.grn:"transparent",color:isActive?"#fff":C.ts,fontSize:12,fontWeight:isActive?700:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,boxShadow:isActive?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{it.l}</button>;})}
   </div>
 }
 
