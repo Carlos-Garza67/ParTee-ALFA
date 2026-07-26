@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v32.96 (Reservas: acciones de mostrador en BARRA POS de ancho completo (opcion H aprobada, patron Square) entre el resumen y la lista — dos mitades con hairline vertical: Registrar llegadas (neutra, icono check, solo hoy en vista dia, abre CheckinTablet) y + Walk-in (tinte verde grn14, abre el modal via __pwiOpen); area tactil grande padding 11, radio 12; los links chicos de la linea de contexto desaparecen y el resumen queda solo. Base: v32.95)","color:#7fd4a3;font-weight:bold");
+console.log("%c[Partee] Build v33.08 (Checkout Pro/form fiscal inline: los selects nativos del OS se sustituyen por un DROPDOWN propio con el lenguaje del wizard — boton con el mismo estilo de input (valor con ellipsis, chevron que rota), lista flotante en card C.cd con sombra, opciones con el codigo SAT en mono verde + descripcion + palomita en la elegida, hover w05, tinte verde en la seleccionada, max-height con scroll; se cierra al elegir o al re-tocar el boton, y solo uno abierto a la vez (bfDd). Persistencia confirmada de ida y vuelta: el form escribe en course_billing_info, la MISMA tabla que lee/escribe BillingDataCard en Cuenta > Datos de facturacion — se llena una vez y queda en la cuenta. Base: v33.07)","color:#7fd4a3;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -169,6 +169,14 @@ window.__al=function(){};
 .ab-md{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
 .ab-det{display:none}
 @media (min-width:1024px){.ab-md{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}.ab-det{display:block;position:sticky;top:12px}.ab-exp{display:none !important}}
+.pv-2col{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+.pv-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8}
+.pv-kpis4{display:grid;grid-template-columns:1fr 1fr;gap:8}
+@media (min-width:1024px){.pv-kpis4{grid-template-columns:1fr 1fr 1fr 1fr}}
+.pv-tbl{display:none}
+.pro-2col{display:grid;grid-template-columns:1fr;gap:0}
+@media (min-width:900px){.pro-2col{grid-template-columns:1.05fr 1fr}.pro-left{border-right:1px solid var(--probd,rgba(255,255,255,.06));border-bottom:none !important}}
+@media (min-width:1024px){.pv-2col{grid-template-columns:minmax(0,1fr) 300px}.pv-kpis{grid-template-columns:1fr 1fr 1fr}.pv-tbl{display:block}.pv-cards{display:none}}
 .admin-hdr-actions{display:none}
 .acct-2col{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
 .acct-col{display:flex;flex-direction:column;gap:12px}.pl{-webkit-animation:pl 1.4s infinite;animation:pl 1.4s infinite}button:active{-webkit-transform:scale(.97);transform:scale(.97)}
@@ -10555,7 +10563,7 @@ function AdminTeamAccessCard({course}){
 function AdminAjustesAccordion({course,onOut,onRefresh,ctxOut}){
   const isPro=["pro","pro_plus","enterprise"].includes(course.subscription_plan||"free")&&(course.subscription_status||"active")==="active";
   const[openSec,setOpenSec]=useState(null); // arranca todo cerrado
-  useEffect(()=>{window.__openAcctSection=(k)=>{setOpenSec(k);setTimeout(()=>{const el=document.getElementById("acctsec-"+k);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})},120)};if(window.__pendingAcctSection){const _pk=window.__pendingAcctSection;window.__pendingAcctSection=null;setOpenSec(_pk);setTimeout(()=>{const el=document.getElementById("acctsec-"+_pk);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})},350)}return()=>{delete window.__openAcctSection}},[]);
+  useEffect(()=>{window.__openAcctSection=(k)=>{setOpenSec(k);setTimeout(()=>{const el=document.getElementById("acctsec-"+k);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})},120)};if(window.__pendingAcctSection){const _pk=window.__pendingAcctSection;window.__pendingAcctSection=null;setOpenSec(_pk);setTimeout(()=>{const el=document.getElementById("acctsec-"+_pk);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})},350)};if(window.__pendingAcctSection){const _k=window.__pendingAcctSection;try{delete window.__pendingAcctSection}catch(x){}setTimeout(()=>{window.__openAcctSection&&window.__openAcctSection(_k)},200)};return()=>{delete window.__openAcctSection}},[]);
   const[showDel,setShowDel]=useState(false);const[delReasons,setDelReasons]=useState([]);const[delComment,setDelComment]=useState("");const[contactOk,setContactOk]=useState(false);const[deleting,setDeleting]=useState(false);
 
   const SECTIONS=[
@@ -13417,9 +13425,11 @@ function CourseSpeiCard({course}){
 
 function ProUpgradeModal({course,currentPlan,isPro,onClose,source}){
   const[step,setStep]=useState(isPro?"manage":"plans");
-  const[selectedPlan,setSelectedPlan]=useState(null); // 'monthly' | 'annual'
+  const[selectedPlan,setSelectedPlan]=useState("annual"); // 'monthly' | 'annual'
+  const[payMethod,setPayMethod]=useState("card");
   const[copied,setCopied]=useState(null);
   const[wantInvoice,setWantInvoice]=useState(null); // v22.3: null=no elegido | true | false
+  const[bfOpen,setBfOpen]=useState(false);const[bf,setBf]=useState({});const[bfBusy,setBfBusy]=useState(false);const[bfDd,setBfDd]=useState(null); // v33.07: form fiscal inline
   const[bill,setBill]=useState(null); // v22.3: datos fiscales desde course_billing_info (tabla segura)
   const[cardBusy,setCardBusy]=useState(false);
   useEffect(()=>{if(!isPro)trackEvent("pro_paywall_abierto",{source:source||"desconocido",plan_actual:currentPlan||"free",course_id:course?.id})},[]);
@@ -13502,65 +13512,126 @@ function ProUpgradeModal({course,currentPlan,isPro,onClose,source}){
         </div>
 
         {/* Chip de plan seleccionado, visible en todos los steps post-plans */}
-        {sel&&(step==="facturacion"||step==="payment-method"||step==="spei"||step==="card-soon")&&<div style={{padding:12,background:C.grn+"10",border:"1px solid "+C.grn+"40",borderRadius:10,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>HAS ELEGIDO</div>
-            <div style={{fontSize:14,fontWeight:800,color:C.txt,marginTop:2}}>{sel.label}</div>
-            <div style={{fontSize:11,color:C.ts,marginTop:1}}>{sel.price} {sel.period}</div>
-            {wantInvoice!==null&&<div style={{fontSize:10,color:wantInvoice?C.grn:C.tm,marginTop:3,display:"flex",alignItems:"center",gap:4}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic(wantInvoice?"clipboard":"x",11,wantInvoice?C.grn:C.tm)}}/>{wantInvoice?"Con factura":"Sin factura"}</div>}
-          </div>
-          <button onClick={backToPlans} style={{padding:"7px 10px",borderRadius:8,border:"1px solid "+C.bd,background:"transparent",color:C.ts,fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>← Cambiar</button>
+        {sel&&(step==="facturacion"||step==="payment-method"||step==="spei"||step==="card-soon")&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 2px",marginBottom:14,borderBottom:"1px solid "+C.bd}}>
+          <span style={{minWidth:0,fontSize:12.5,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><b style={{fontWeight:800}}>{sel.label}</b><span style={{color:C.ts,fontFamily:"ui-monospace,Menlo,monospace"}}> · {sel.price} {sel.period}</span>{wantInvoice!==null&&step!=="facturacion"&&<span style={{color:wantInvoice?(C.grnTxt||C.grn):C.tm,fontSize:11}}> · {wantInvoice?t("con factura"):t("sin factura")}</span>}</span>
+          {step==="facturacion"&&<span onClick={backToPlans} style={{marginLeft:"auto",fontSize:11.5,fontWeight:700,color:C.ts2||C.ts,cursor:"pointer",flexShrink:0}}>{t("Cambiar")}</span>}
         </div>}
 
         {/* ===== STEP 1: PLANS ===== */}
-        {step==="plans"&&<>
-          <div style={{padding:14,background:C.cd,borderRadius:12,marginBottom:14}}>
-            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em",marginBottom:8}}>{t("QUÉ INCLUYE")}</div>
-            <div style={{fontSize:13,color:C.txt,lineHeight:1.7}}>
-              <div style={{marginBottom:4}}><b>Pulse diario</b> {t("· anomalías matutinas AI")}</div>
-              <div style={{marginBottom:4}}><b>Insight semanal</b> · narrativa de Pinny los lunes</div>
-              <div style={{marginBottom:4}}><b>Alertas de abandono</b> · VIPs en riesgo en tiempo real</div>
-              <div style={{marginBottom:4}}><b>{t("Stats de campañas")}</b> · opens/clicks/bounces</div>
-              <div style={{marginBottom:4}}><b>{t("Comisión reducida")}</b> · de 8.5% a 5.5%</div>
-              <div><b>Soporte prioritario</b> · onboarding asistido</div>
+        {step==="plans"&&(()=>{
+          const mono={fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"};
+          return<div className="pro-2col" style={{"--probd":C.bd,margin:"0 -4px"}}>
+          <div className="pro-left" style={{padding:"4px 18px 18px 4px",borderBottom:"1px solid "+C.bd,marginBottom:14,background:`linear-gradient(180deg,${C.gld}0a,transparent 42%)`,borderRadius:"14px 0 0 14px"}}>
+            <span style={{display:"inline-flex",padding:"3px 10px",borderRadius:99,background:C.gld+"14",color:C.gld,fontSize:9.5,fontWeight:800,letterSpacing:".08em"}}>PARTEE PRO</span>
+            <div style={{fontSize:16,fontWeight:800,color:C.txt,margin:"10px 0 3px"}}>{t("El copiloto que hace crecer tu campo")}</div>
+            <div style={{fontSize:11.5,color:C.ts,lineHeight:1.5,marginBottom:14}}>{t("Automatizaciones, alertas en tiempo real y menos comisión en cada reserva.")}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:9}}>
+              {[[t("Comisión 8.5% → 5.5%"),t("en cada reserva")],[t("Pulse diario"),t("anomalías matutinas AI")],[t("Insight semanal"),t("narrativa de Pinny los lunes")],[t("Alertas de abandono"),t("VIPs en riesgo")],[t("Stats de campañas"),"opens · clicks · bounces"],[t("Soporte prioritario"),t("onboarding asistido")]].map((f,i)=><div key={i} style={{display:"flex",gap:9,fontSize:12.5,alignItems:"flex-start"}}>
+                <span style={{display:"flex",flexShrink:0,marginTop:2}} dangerouslySetInnerHTML={{__html:ic("check",13,C.grnTxt||C.grn)}}/>
+                <span style={{color:C.txt}}><b style={{fontWeight:700}}>{f[0]}</b> <span style={{color:C.ts}}>· {f[1]}</span></span>
+              </div>)}
+            </div>
+            <div style={{marginTop:16,padding:"11px 13px",borderRadius:12,background:C.grn+"0d",border:"1px solid "+C.grn+"30"}}>
+              <div style={{fontSize:9,fontWeight:800,letterSpacing:".07em",color:C.grnTxt||C.grn}}>{t("PRO SE PAGA SOLO")}</div>
+              <div style={{fontSize:11.5,color:C.ts2||C.ts,lineHeight:1.55,marginTop:4}}>{t("Con")} <span style={mono}>$50,000</span> USD/mes {t("en reservas, los 3 puntos de comisión ahorran")} <span style={{...mono,color:C.grnTxt||C.grn,fontWeight:700}}>$1,500 USD/mes</span> — {t("el costo del plan.")}</div>
             </div>
           </div>
-          <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>ELIGE TU PLAN</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-            {(()=>{const isSel=selectedPlan==="monthly";return<div onClick={()=>setSelectedPlan("monthly")} style={{padding:14,borderRadius:12,background:isSel?`linear-gradient(135deg,${C.grn}1f,${C.grn}0a)`:C.cd,border:isSel?"2px solid "+C.grn:"1px solid "+C.bd,display:"flex",flexDirection:"column",cursor:"pointer",transition:"all .15s"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,minHeight:16}}><div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>MENSUAL</div>{isSel&&<span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("check",16,C.grn)}}/>}</div>
-              <div style={{fontSize:22,fontWeight:800,color:C.txt}}>$1,500</div>
-              <div style={{fontSize:11,color:C.ts,marginTop:1}}>USD / mes</div>
-              <div style={{fontSize:10,color:C.tm,marginTop:8,lineHeight:1.4,flex:1}}>Sin compromiso · cancela cuando quieras</div>
-            </div>;})()}
-            {(()=>{const isSel=selectedPlan==="annual";return<div onClick={()=>setSelectedPlan("annual")} style={{padding:14,borderRadius:12,background:isSel?`linear-gradient(135deg,${C.grn}1f,${C.grn}0a)`:C.cd,border:isSel?"2px solid "+C.grn:"1px solid "+C.bd,display:"flex",flexDirection:"column",position:"relative",cursor:"pointer",transition:"all .15s"}}>
-              <div style={{position:"absolute",top:-9,right:10,padding:"3px 8px",borderRadius:5,background:C.gld,color:"#0E1A1F",fontSize:9,fontWeight:800,letterSpacing:".05em"}}>AHORRA 27%</div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,minHeight:16}}><div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>ANUAL</div>{isSel&&<span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("check",16,C.grn)}}/>}</div>
-              <div style={{fontSize:22,fontWeight:800,color:C.txt}}>$13,200</div>
-              <div style={{fontSize:11,color:C.ts,marginTop:1}}>{t("USD / año")}</div>
-              <div style={{fontSize:10,color:C.grn,marginTop:8,fontWeight:600,lineHeight:1.4}}>Equivale a $1,100 USD/mes</div>
-              <div style={{fontSize:10,color:C.tm,marginTop:2,lineHeight:1.4,flex:1}}>{t("Ahorras $4,800 USD/año · ~3 meses gratis")}</div>
-            </div>;})()}
+          <div style={{padding:"4px 4px 4px 18px",display:"flex",flexDirection:"column"}}>
+            <div style={{fontSize:10,color:C.tm,fontWeight:800,letterSpacing:".08em",marginBottom:8}}>{t("ELIGE TU PLAN")}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,marginBottom:12}}>
+              {(()=>{const isSel=selectedPlan==="monthly";return<div onClick={()=>setSelectedPlan("monthly")} style={{padding:"13px 16px",borderRadius:12,background:isSel?`linear-gradient(135deg,${C.grn}1f,${C.grn}0a)`:C.cd,border:isSel?"2px solid "+C.grn:"1px solid "+C.bd,cursor:"pointer",transition:"all .15s"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",minHeight:16}}><span style={{fontSize:10.5,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>MENSUAL</span>{isSel&&<span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("check",16,C.grn)}}/>}</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:3}}><span style={{fontSize:21,fontWeight:800,color:C.txt,fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"}}>$1,500</span><span style={{fontSize:11,color:C.ts}}>USD / {t("mes")}</span></div>
+                <div style={{fontSize:11,color:C.tm,marginTop:5,lineHeight:1.45}}>{t("Sin compromiso · cancela cuando quieras")}</div>
+              </div>;})()}
+              {(()=>{const isSel=selectedPlan==="annual";return<div onClick={()=>setSelectedPlan("annual")} style={{padding:"13px 16px",borderRadius:12,background:isSel?`linear-gradient(135deg,${C.grn}1f,${C.grn}0a)`:C.cd,border:isSel?"2px solid "+C.grn:"1px solid "+C.bd,position:"relative",cursor:"pointer",transition:"all .15s"}}>
+                <div style={{position:"absolute",top:-9,right:10,padding:"3px 8px",borderRadius:5,background:C.gld,color:"#0E1A1F",fontSize:9,fontWeight:800,letterSpacing:".05em"}}>{t("AHORRA")} 27%</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",minHeight:16}}><span style={{fontSize:10.5,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>ANUAL</span>{isSel&&<span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("check",16,C.grn)}}/>}</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:3}}><span style={{fontSize:21,fontWeight:800,color:C.txt,fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"}}>$13,200</span><span style={{fontSize:11,color:C.ts}}>{t("USD / año")}</span></div>
+                <div style={{fontSize:11,marginTop:5,lineHeight:1.5}}><span style={{color:C.grnTxt||C.grn,fontWeight:700}}>{t("Equivale a")} $1,100 USD/{t("mes")}</span><span style={{color:C.tm}}> · {t("Ahorras $4,800 USD/año · ~3 meses gratis")}</span></div>
+              </div>;})()}
+            </div>
+            <div style={{marginTop:"auto"}}>
+              <button onClick={()=>{trackEvent("pro_continuar_pago",{source:source||"desconocido",ciclo:selectedPlan,course_id:course?.id});setStep("facturacion")}} disabled={!selectedPlan} style={{width:"100%",padding:13,borderRadius:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",color:"#fff",fontSize:13.5,fontWeight:800,cursor:"pointer",boxShadow:`0 6px 18px ${C.grn}33`,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("lock",13,"#fff")}}/>{t("Continuar al pago seguro")}</button>
+              <div style={{textAlign:"center",fontSize:10,color:C.tm,marginTop:8}}>{t("Procesado por Stripe")} · {t("Cancela cuando quieras")}</div>
+              <button onClick={onClose} style={{width:"100%",padding:10,marginTop:6,borderRadius:10,background:"transparent",border:"none",color:C.tm,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("Ahora no")}</button>
+            </div>
           </div>
-          <button onClick={()=>{if(selectedPlan)setStep("facturacion")}} disabled={!selectedPlan} style={{width:"100%",padding:13,borderRadius:10,background:selectedPlan?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:selectedPlan?"none":"1px solid "+C.bd,color:selectedPlan?"#fff":C.tm,fontSize:14,fontWeight:800,cursor:selectedPlan?"pointer":"not-allowed",marginBottom:10,boxShadow:selectedPlan?"0 4px 14px "+C.grn+"40":"none",transition:"all .15s"}}>Continuar al pago</button>
-          <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cerrar</button>
-        </>}
+          </div>})()}
 
-        {/* ===== STEP 1.5: FACTURACIÓN (CFDI) ===== */}
         {step==="facturacion"&&(()=>{
           const bComplete=!!(bill&&bill.legal_name&&bill.rfc&&bill.tax_regime&&bill.cfdi_use&&bill.zip&&bill.email);
-          return<>
-            <div style={{fontSize:11,color:C.tm,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>{t("¿NECESITAS FACTURA (CFDI)?")}</div>
-            {bComplete?<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:14,marginBottom:14}}>
-              <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>Tu factura se emitirá con estos datos (los configuras en Campo › Cuenta › Datos de facturación):</div>
-              {[["Razón Social",bill?.legal_name],["RFC",bill?.rfc],["Régimen",satLabel(SAT_REGIMEN,bill?.tax_regime)],["Uso CFDI",satLabel(SAT_USO_CFDI,bill?.cfdi_use)],["C.P.",bill?.zip],["Correo",bill?.email]].map((r,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:12,padding:"5px 0",borderBottom:i<5?"1px solid "+C.bd:"none"}}><span style={{fontSize:11,color:C.tm,flexShrink:0}}>{r[0]}</span><span style={{fontSize:12,fontWeight:600,color:C.txt,textAlign:"right",wordBreak:"break-word"}}>{r[1]}</span></div>)}
-            </div>:<div onClick={()=>{onClose&&onClose();if(window.__openAcctSection){window.__openAcctSection("facturacion")}else{window.__pendingAcctSection="facturacion";window.__navigate&&window.__navigate("tab:4:cuenta")}}} style={{background:C.gld+"12",border:"1px solid "+C.gld+"40",borderRadius:12,padding:14,marginBottom:14,display:"flex",gap:10,cursor:"pointer"}}>
-              <span style={{display:"inline-flex",flexShrink:0,marginTop:1}} dangerouslySetInnerHTML={{__html:ic("alert",18,C.gld)}}/>
-              <div><div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:3}}>Faltan tus datos fiscales</div><div style={{fontSize:11,color:C.ts,lineHeight:1.45}}>{t("Para facturar, complétalos en")} <b>{t("Campo › Cuenta › Datos de facturación")}</b>. Puedes continuar sin factura por ahora.</div><div style={{fontSize:12,fontWeight:800,color:C.gld,marginTop:7}}>{t("Ir a Datos de facturación →")}</div></div>
-            </div>}
-            <button onClick={()=>{setWantInvoice(true);setStep("payment-method")}} disabled={!bComplete} style={{width:"100%",padding:13,borderRadius:10,background:bComplete?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:bComplete?"none":"1px solid "+C.bd,color:bComplete?"#fff":C.tm,fontSize:14,fontWeight:800,cursor:bComplete?"pointer":"not-allowed",marginBottom:10,boxShadow:bComplete?"0 4px 14px "+C.grn+"40":"none"}}>Continuar con factura</button>
-            <button onClick={()=>{setWantInvoice(false);setStep("payment-method")}} style={{width:"100%",padding:12,borderRadius:10,background:"transparent",border:"1px solid "+C.bd,color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Continuar sin factura</button>
-          </>;
+          const inv=wantInvoice===true;
+          const blocked=inv&&!bComplete;
+          const Radio=({on})=><span style={{width:16,height:16,borderRadius:"50%",border:on?"5px solid "+C.grn:"1.5px solid "+C.tm,flexShrink:0,boxSizing:"border-box",transition:"border .12s"}}/>;
+          return<React.Fragment>
+            <div style={{fontSize:10,color:C.tm,fontWeight:800,letterSpacing:".08em",marginBottom:8}}>{t("FACTURA (CFDI)")}</div>
+            <div onClick={()=>setWantInvoice(false)} style={{display:"flex",alignItems:"center",gap:11,padding:"13px 14px",borderRadius:12,border:!inv?"1.5px solid "+C.grn:"1px solid "+C.bd,background:!inv?C.grn+"0d":C.cd,cursor:"pointer",marginBottom:8,transition:"all .12s"}}>
+              <Radio on={!inv}/>
+              <span style={{minWidth:0}}>
+                <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.txt}}>{t("Sin factura")}</span>
+                <span style={{display:"block",fontSize:10.5,color:C.tm,marginTop:1}}>{t("Puedes solicitarla después desde Cuenta")}</span>
+              </span>
+            </div>
+            <div onClick={()=>{setWantInvoice(true);if(!bComplete&&!bfOpen){setBf({legal:bill?.legal_name||"",rfc:bill?.rfc||"",regime:bill?.tax_regime||"",uso:bill?.cfdi_use||"",zip:bill?.zip||"",email:bill?.email||""});setBfOpen(true)}}} style={{display:"flex",alignItems:"center",gap:11,padding:"13px 14px",borderRadius:12,border:inv?"1.5px solid "+C.grn:"1px solid "+C.bd,background:inv?C.grn+"0d":C.cd,cursor:"pointer",marginBottom:inv&&bfOpen?0:14,transition:"all .12s",borderBottomLeftRadius:inv&&bfOpen?0:12,borderBottomRightRadius:inv&&bfOpen?0:12}}>
+              <Radio on={inv}/>
+              <span style={{minWidth:0,flex:1}}>
+                <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.txt}}>{t("Con factura CFDI")}</span>
+                {bComplete
+                  ?<span style={{display:"block",fontSize:10.5,color:C.ts,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bill.legal_name} · <span style={{fontFamily:"ui-monospace,Menlo,monospace"}}>{bill.rfc}</span> · <span onClick={e=>{e.stopPropagation();setBf({legal:bill.legal_name||"",rfc:bill.rfc||"",regime:bill.tax_regime||"",uso:bill.cfdi_use||"",zip:bill.zip||"",email:bill.email||""});setBfOpen(o=>!o)}} style={{fontWeight:800,color:C.ts2||C.ts,cursor:"pointer"}}>{t("editar")}</span></span>
+                  :<span style={{display:"block",fontSize:10.5,color:C.gld,marginTop:1}}>{t("Faltan tus datos fiscales")} — <span onClick={e=>{e.stopPropagation();setBf({legal:bill?.legal_name||"",rfc:bill?.rfc||"",regime:bill?.tax_regime||"",uso:bill?.cfdi_use||"",zip:bill?.zip||"",email:bill?.email||""});setBfOpen(true);setWantInvoice(true)}} style={{fontWeight:800,cursor:"pointer",textDecoration:"underline"}}>{t("completarlos")} →</span></span>}
+              </span>
+              {inv&&bComplete&&<span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("check",15,C.grnTxt||C.grn)}}/>}
+            </div>
+            {inv&&bfOpen&&(()=>{
+              const lbl={display:"block",fontSize:9,fontWeight:800,letterSpacing:".06em",color:C.tm,marginBottom:4};
+              const inp={width:"100%",boxSizing:"border-box",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"9px 12px",color:C.txt,fontSize:12.5,outline:"none",fontFamily:"inherit"};
+              const set=(k)=>(e)=>setBf(o=>({...o,[k]:e.target.value}));
+              const ok=!!(bf.legal&&bf.legal.trim()&&bf.rfc&&bf.rfc.trim().length>=12&&bf.regime&&bf.uso&&bf.zip&&String(bf.zip).trim().length===5&&bf.email&&bf.email.includes("@"));
+              const saveBf=async()=>{if(!ok||bfBusy)return;setBfBusy(true);
+                try{
+                  const uid=(await sb.auth.getUser()).data?.user?.id||null;
+                  const{error}=await sb.from("course_billing_info").upsert({course_id:course.id,legal_name:bf.legal.trim(),rfc:bf.rfc.trim().toUpperCase(),tax_regime:bf.regime,cfdi_use:bf.uso,zip:String(bf.zip).trim(),email:bf.email.trim(),updated_by:uid,updated_at:new Date().toISOString()},{onConflict:"course_id"});
+                  if(error){window.__toast?.(friendlyErr(error),"warn");setBfBusy(false);return}
+                  const{data}=await sb.from("course_billing_info").select("*").eq("course_id",course.id).maybeSingle();
+                  setBill(data||null);setBfOpen(false);window.__toast?.(t("✓ Datos fiscales guardados"),"success");
+                }catch(e){window.__toast?.(t("No se pudo guardar"),"warn")}
+                setBfBusy(false)};
+              return<div style={{border:"1px solid "+C.grn,borderTop:"none",borderRadius:"0 0 12px 12px",padding:"14px 14px 12px",marginBottom:14,background:C.cd}}>
+                <div style={{marginBottom:10}}><label style={lbl}>{t("RAZÓN SOCIAL")}</label><input value={bf.legal||""} onChange={set("legal")} placeholder="Vidanta Golf S.A. de C.V." style={inp}/></div>
+                <div style={{display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:8,marginBottom:10}}>
+                  <div><label style={lbl}>RFC</label><input value={bf.rfc||""} onChange={e=>setBf(o=>({...o,rfc:e.target.value.toUpperCase()}))} placeholder="VGO891203ABC" maxLength={13} style={{...inp,fontFamily:"ui-monospace,Menlo,monospace",textTransform:"uppercase"}}/></div>
+                  <div><label style={lbl}>{t("C.P.")}</label><input value={bf.zip||""} onChange={set("zip")} placeholder="63735" maxLength={5} inputMode="numeric" style={{...inp,fontFamily:"ui-monospace,Menlo,monospace"}}/></div>
+                </div>
+                {(()=>{const Dd=({k,label,opts})=>{const open=bfDd===k;const val=bf[k]||"";const cur=opts.find(o=>o.c===val);return<div style={{position:"relative",minWidth:0}}>
+                    <label style={lbl}>{label}</label>
+                    <button type="button" onClick={()=>setBfDd(open?null:k)} style={{...inp,display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left"}}>
+                      <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:cur?C.txt:C.tm}}>{cur?cur.c+" · "+cur.l:t("Elige…")}</span>
+                      <span style={{display:"flex",flexShrink:0,transform:open?"rotate(180deg)":"none",transition:"transform .15s"}} dangerouslySetInnerHTML={{__html:ic("down",13,C.tm)}}/>
+                    </button>
+                    {open&&<div style={{position:"absolute",zIndex:40,top:"100%",left:0,right:0,marginTop:4,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,boxShadow:"0 12px 32px rgba(0,0,0,.35)",maxHeight:200,overflowY:"auto",padding:4}}>
+                      {opts.map(o=><div key={o.c} onClick={()=>{setBf(x=>({...x,[k]:o.c}));setBfDd(null)}} onMouseEnter={e=>{e.currentTarget.style.background=C.w05||"rgba(255,255,255,.05)"}} onMouseLeave={e=>{e.currentTarget.style.background=val===o.c?(C.grn+"14"):"transparent"}} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12,background:val===o.c?(C.grn+"14"):"transparent"}}>
+                        <span style={{fontFamily:"ui-monospace,Menlo,monospace",fontWeight:700,color:C.grnTxt||C.grn,flexShrink:0}}>{o.c}</span>
+                        <span style={{flex:1,minWidth:0,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.l}</span>
+                        {val===o.c&&<span style={{display:"flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("check",13,C.grnTxt||C.grn)}}/>}
+                      </div>)}
+                    </div>}
+                  </div>};
+                  return<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                    <Dd k="regime" label={t("RÉGIMEN FISCAL")} opts={SAT_REGIMEN}/>
+                    <Dd k="uso" label={t("USO DEL CFDI")} opts={SAT_USO_CFDI}/>
+                  </div>})()}
+                <div style={{marginBottom:12}}><label style={lbl}>{t("EMAIL DE FACTURACIÓN")}</label><input value={bf.email||""} onChange={set("email")} type="email" placeholder="admin@tucampo.mx" style={inp}/></div>
+                <div style={{display:"flex",alignItems:"center",gap:14}}>
+                  <button onClick={saveBf} disabled={!ok||bfBusy} style={{padding:"9px 18px",borderRadius:10,border:"none",background:ok?C.grn:C.w07,color:ok?"#fff":C.tm,fontSize:12,fontWeight:800,cursor:ok?"pointer":"default",opacity:bfBusy?.6:1}}>{bfBusy?t("Guardando…"):t("Guardar datos")}</button>
+                  <span onClick={()=>setBfOpen(false)} style={{fontSize:11.5,fontWeight:600,color:C.tm,cursor:"pointer"}}>{t("Cancelar")}</span>
+                  <span style={{marginLeft:"auto",fontSize:9.5,color:C.tm}}>{t("Se guarda en tu Cuenta")}</span>
+                </div>
+              </div>})()}
+            <button onClick={()=>{if(blocked)return;setStep("payment-method")}} disabled={blocked} style={{width:"100%",padding:13,borderRadius:12,background:blocked?C.w07:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",color:blocked?C.tm:"#fff",fontSize:13.5,fontWeight:800,cursor:blocked?"default":"pointer",boxShadow:blocked?"none":`0 6px 18px ${C.grn}33`}}>{t("Continuar")}</button>
+            {blocked&&!bfOpen&&<div style={{textAlign:"center",fontSize:10,color:C.tm,marginTop:8}}>{t("Completa tus datos fiscales o elige Sin factura")}</div>}
+            <button onClick={()=>setStep("plans")} style={{width:"100%",padding:10,marginTop:6,borderRadius:10,background:"transparent",border:"none",color:C.tm,fontSize:12,fontWeight:600,cursor:"pointer"}}>← {t("Volver")}</button>
+          </React.Fragment>;
         })()}
 
         {/* ===== STEP 2: PAYMENT METHOD ===== */}
@@ -13895,7 +13966,7 @@ function AdminPayoutsSetup({course,onRefresh}){
   </div>
 }
 
-function AdminPayoutsHistory({course}){const[payouts,setPayouts]=useState([]);const[revCat,setRevCat]=useState(null);const[ld,setLd]=useState(true);const[filter,setFilter]=useState("all");const[exp,setExp]=useState(null);
+function AdminPayoutsHistory({course,onNav}){const[payouts,setPayouts]=useState([]);const[revCat,setRevCat]=useState(null);const[ld,setLd]=useState(true);const[filter,setFilter]=useState("all");const[exp,setExp]=useState(null);
   useEffect(()=>{sb.rpc("get_revenue_by_category",{p_course_id:course.id,p_days:30}).then(({data})=>{if(data?.ok)setRevCat(data)})},[course.id]);
   useEffect(()=>{load()},[course?.id]);
   async function load(){setLd(true);const{data}=await sb.from("course_payouts").select("*,booking:bookings(booking_code,booking_date,booking_time,course_name)").eq("course_id",course.id).order("created_at",{ascending:false});setPayouts(data||[]);setLd(false)}
@@ -13909,49 +13980,73 @@ function AdminPayoutsHistory({course}){const[payouts,setPayouts]=useState([]);co
   const filtered=payouts.filter(FILT[filter]||FILT.all);
   const ST={awaiting_claim_window:{l:"Ventana 48h",c:C.gld,desc:"Esperando ventana de cancelación"},pending_settlement:{l:"Pendiente",c:C.gld,desc:"Listo para liquidar"},awaiting_course_connect:{l:"Connect pendiente",c:C.acc,desc:"Configura Stripe Connect en Ajustes para liquidar"},transferring:{l:"Transfiriendo",c:C.gld,desc:"En proceso"},settled_auto:{l:"Pagado",c:C.grn,desc:"Liquidado vía Stripe"},settled_manual:{l:"Pagado SPEI",c:C.grn,desc:"Liquidado vía SPEI manual"},refunded:{l:"Reembolsado",c:C.tm,desc:"Booking cancelado"},failed:{l:"Falló",c:C.acc,desc:"Error - revisar"}};
   return<div className="fi">
-    {/* Hero stats */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
-        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>RECIBIDO ESTE MES</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.grn,marginTop:6}}>${fm(monthTotal)}</div>
-        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{settledThisMonth.length} {settledThisMonth.length===1?"pago":"pagos"}</div>
+    {payouts.some(p=>p.status==="awaiting_course_connect")&&<div style={{background:(C.accSoft||C.acc+"10"),border:"1px solid "+C.acc+"35",borderRadius:14,padding:"12px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span style={{display:"flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("alert",15,C.accTx||C.acc)}}/>
+      <span style={{flex:1,minWidth:180,fontSize:12,color:C.txt}}>{t("Tienes pagos esperando tu cuenta de depósito.")}</span>
+      <span onClick={()=>{if(window.__openAcctSection){window.__openAcctSection("cobros")}else if(window.__adminGoConfig){window.__adminGoConfig("cobros")}}} style={{fontSize:12,fontWeight:700,color:C.accTx||C.acc,cursor:"pointer"}}>{t("Configurar Stripe Connect")} →</span>
+    </div>}
+    <div className="pv-2col">
+    <div style={{minWidth:0}}>
+    <div className="pv-kpis" style={{marginBottom:14}}>
+      <div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd}}>
+        <div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:".07em"}}>{t("RECIBIDO ESTE MES")}</div>
+        <div style={{fontSize:20,fontWeight:800,color:C.grnTxt||C.grn,marginTop:6,fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"}}>${fm(monthTotal)}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{settledThisMonth.length} {settledThisMonth.length===1?t("pago"):t("pagos")}</div>
       </div>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
-        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>POR LIQUIDAR</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.gld,marginTop:6}}>${fm(pendingTotal)}</div>
-        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{pending.length} {pending.length===1?"pago":"pagos"}{(()=>{const rel=pending.map(p=>p.release_at).filter(Boolean).map(x=>new Date(x).getTime());if(!rel.length)return null;const mx=Math.max(...rel);if(mx<=Date.now())return <span style={{color:C.grnTxt||C.grn,fontWeight:700}}> · {t("listo para liquidar")}</span>;return <span> · {t("disponible desde el")} {new Date(mx).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span>})()}</div>
+      <div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd}}>
+        <div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:".07em"}}>{t("POR LIQUIDAR")}</div>
+        <div style={{fontSize:20,fontWeight:800,color:C.gld,marginTop:6,fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"}}>${fm(pendingTotal)}</div>
+        <div style={{fontSize:11,color:C.ts,marginTop:2}}>{pending.length} {pending.length===1?t("pago"):t("pagos")}{(()=>{const rel=pending.map(p=>p.release_at).filter(Boolean).map(x=>new Date(x).getTime());if(!rel.length)return null;const mx=Math.max(...rel);if(mx<=Date.now())return <span style={{color:C.grnTxt||C.grn,fontWeight:700}}> · {t("listo para liquidar")}</span>;return <span> · {t("disponible desde el")} {new Date(mx).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span>})()}</div>
+      </div>
+      <div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd}}>
+        <div style={{fontSize:9,color:C.tm,fontWeight:700,letterSpacing:".07em"}}>{t("PRÓXIMO DEPÓSITO")}</div>
+        {(()=>{const nx=pending.filter(p=>p.release_at).sort((a,b)=>new Date(a.release_at)-new Date(b.release_at))[0];
+          if(!nx)return<React.Fragment><div style={{fontSize:20,fontWeight:800,color:C.txt,marginTop:6}}>—</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>{t("sin pagos en cola")}</div></React.Fragment>;
+          return<React.Fragment><div style={{fontSize:20,fontWeight:800,color:C.txt,marginTop:6,fontFamily:"ui-monospace,Menlo,monospace"}}>{new Date(nx.release_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>${fm(nx.amount_to_course)} · {nx.payout_method==="auto_via_connect"?"Stripe Connect":"SPEI"}</div></React.Fragment>})()}
       </div>
     </div>
-    {revCat&&revCat.total>0&&(()=>{
-      const cats=Object.entries(revCat.categories||{}).sort((a,b)=>b[1]-a[1]);
-      const CL={paquetes:t("Paquetes"),carrito:t("Carritos"),equipo:t("Equipo de renta"),proshop:t("Pro shop"),caddie:t("Caddies"),servicios:t("Servicios"),alimentos:t("Alimentos y bebidas"),otros:t("Otros")};const rows=[["__green",t("Reservas"),Number(revCat.green_fee||0)],...cats.map(([k,v])=>[k,(CL[k]||k),Number(v)])].filter(r=>r[2]>0);
-      const mx=Math.max(...rows.map(r=>r[2]),1);
-      const palette={__green:C.grn,alimentos:"#e17055",proshop:"#6c5ce7",equipo:"#0984e3",carrito:"#00b894",caddie:"#fdcb6e",servicios:"#a29bfe",paquetes:C.gld,otros:C.tm};
-      return<div style={{background:C.cd,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:14,marginBottom:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-          <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>{t("DE DÓNDE VIENE TU INGRESO")+" · 30d"}</div>
-          <div style={{fontSize:12,fontWeight:800,color:C.txt}}>{"$"+fm(revCat.total)}</div>
-        </div>
-        {rows.map(([k,lb,v])=><div key={k} style={{marginBottom:7}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
-            <span style={{color:C.ts,fontWeight:600}}>{lb}</span>
-            <span style={{color:C.txt,fontWeight:800}}>{"$"+fm(v)}<span style={{color:C.tm,fontWeight:500,fontSize:10}}>{" · "+Math.round(v/revCat.total*100)+"%"}</span></span>
-          </div>
-          <div style={{height:7,borderRadius:5,background:(C.glass||C.w04),overflow:"hidden"}}>
-            <div style={{width:Math.max(3,Math.round(v/mx*100))+"%",height:"100%",borderRadius:5,background:palette[k]||C.grn}}/>
-          </div>
-        </div>)}
-      </div>})()}
-    {/* Filtros */}
-    <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto"}}>
-      {[{k:"all",l:"Todos"},{k:"pending",l:"Pendientes"},{k:"settled",l:"Pagados"},{k:"other",l:"Otros"}].map(f=>
-        <button key={f.k} onClick={()=>setFilter(f.k)} style={{padding:"7px 12px",borderRadius:10,border:"1px solid "+(filter===f.k?C.grn:C.bd),background:filter===f.k?C.grn+"15":"transparent",color:filter===f.k?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{f.l}</button>
-      )}
+    <div style={{display:"inline-flex",background:C.w07,borderRadius:10,padding:2,marginBottom:12,maxWidth:"100%",overflowX:"auto"}}>
+      {[{k:"all",l:t("Todos")},{k:"pending",l:t("Pendientes")},{k:"settled",l:t("Pagados")},{k:"other",l:t("Otros")}].map(f=>{const n=payouts.filter(FILT[f.k]||FILT.all).length;return <button key={f.k} onClick={()=>setFilter(f.k)} style={{padding:"6px 13px",borderRadius:8,border:"none",background:filter===f.k?C.grn:"transparent",color:filter===f.k?"#fff":C.ts,fontSize:11.5,fontWeight:filter===f.k?700:600,cursor:"pointer",whiteSpace:"nowrap",boxShadow:filter===f.k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{f.l} <span style={{opacity:.75,fontFamily:"ui-monospace,Menlo,monospace",fontSize:10}}>{n}</span></button>})}
     </div>
-    {/* Lista */}
     {ld?<Skeleton w="100%" h={70}/>:filtered.length===0?
       <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>{t("Sin pagos en esta categoría")}</div>
-      :filtered.map(po=>{const st=ST[po.status]||{l:po.status,c:C.tm,desc:""};const bk=po.booking;const isExp=exp===po.id;return(
+      :<React.Fragment>
+      <div className="pv-tbl" style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"2px 14px 6px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"78px minmax(0,1fr) 92px 92px 104px 118px 18px",gap:10,padding:"10px 0 6px",fontSize:9,fontWeight:800,letterSpacing:".07em",color:C.tm}}>
+          <span>{t("FECHA")}</span><span>{t("RESERVA")}</span><span style={{textAlign:"right"}}>{t("COBRADO")}</span><span style={{textAlign:"right"}}>{t("COMISIÓN")}</span><span style={{textAlign:"right"}}>{t("NETO")}</span><span>{t("ESTADO")}</span><span/>
+        </div>
+        {filtered.map((po,_pi)=>{const st=ST[po.status]||{l:po.status,c:C.tm,desc:""};const bk=po.booking;const isExp=exp===po.id;const ref=po.status==="refunded";const mono={fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"};return<div key={po.id} style={{borderTop:"1px solid "+C.bd,opacity:ref?.55:1}}>
+          <div onClick={()=>setExp(isExp?null:po.id)} style={{display:"grid",gridTemplateColumns:"78px minmax(0,1fr) 92px 92px 104px 118px 18px",gap:10,alignItems:"center",padding:"10px 0",cursor:"pointer"}}>
+            <span style={{fontSize:11.5,color:C.ts,...mono}}>{po.created_at?new Date(po.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"}):"—"}</span>
+            <span style={{minWidth:0}}>
+              <span style={{display:"block",fontSize:12,fontWeight:700,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",...mono}}>{bk?.booking_code||"—"}</span>
+              <span style={{display:"block",fontSize:10.5,color:C.tm,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bk?.booking_date?new Date(bk.booking_date+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"}):""}{bk?.booking_time?" · "+bk.booking_time.slice(0,5):""}</span>
+            </span>
+            <span style={{fontSize:12,color:C.ts2||C.ts,textAlign:"right",...mono}}>${fm(po.total_collected)}</span>
+            <span style={{fontSize:12,color:C.tm,textAlign:"right",...mono}}>−${fm(po.platform_fee_amount)}</span>
+            <span style={{fontSize:13,fontWeight:800,color:ref?C.tm:C.txt,textAlign:"right",textDecoration:ref?"line-through":"none",...mono}}>${fm(po.amount_to_course)}</span>
+            <span><span style={{padding:"2px 8px",borderRadius:6,background:st.c+"15",color:st.c,fontSize:8.5,fontWeight:800,letterSpacing:".04em",whiteSpace:"nowrap"}}>{st.l.toUpperCase()}</span></span>
+            <span style={{display:"flex",transform:isExp?"rotate(180deg)":"none",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",14,C.tm)}}/>
+          </div>
+          {isExp&&<div style={{padding:"0 0 12px"}}>
+            <div style={{fontSize:11,color:C.ts,marginBottom:8,lineHeight:1.5}}>{st.desc}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,fontSize:11}}>
+              {po.release_at&&<div><span style={{color:C.tm}}>{t("Disponible desde")}: </span><span style={{color:C.txt,fontWeight:600,...mono}}>{new Date(po.release_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
+              <div><span style={{color:C.tm}}>{t("Método")}: </span><span style={{color:C.txt,fontWeight:600}}>{po.payout_method==="auto_via_connect"?"Stripe Connect":"SPEI"}</span></div>
+              {po.transferred_at&&<div><span style={{color:C.tm}}>{t("Transferido")}: </span><span style={{color:C.txt,fontWeight:600,...mono}}>{new Date(po.transferred_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
+              {po.manual_spei_paid_at&&<div><span style={{color:C.tm}}>SPEI: </span><span style={{color:C.txt,fontWeight:600,...mono}}>{new Date(po.manual_spei_paid_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
+              {po.manual_spei_reference&&<div style={{gridColumn:"span 2"}}><span style={{color:C.tm}}>Ref: </span><span style={{color:C.txt,fontWeight:600,...mono}}>{po.manual_spei_reference}</span></div>}
+            </div>
+            {Number(po.consumption_collected)>0&&<div style={{marginTop:8,padding:"6px 8px",background:C.grn+"0a",border:"1px dashed "+C.grn+"35",borderRadius:7,display:"flex",justifyContent:"space-between",fontSize:11}}>
+              <span style={{color:C.ts}}>{t("Incluye consumo del carrito")}: <b style={{color:C.txt}}>${fm(po.consumption_collected)}</b></span>
+              <span style={{color:C.grnTxt||C.grn,fontWeight:700,...mono}}>+${fm(po.consumption_to_course)} {t("netos")}</span>
+            </div>}
+            {po.last_error&&<div style={{marginTop:8,padding:8,background:(C.accSoft||C.acc+"10"),borderRadius:8,fontSize:10,color:C.accTx||C.acc}}>{po.last_error}</div>}
+          </div>}
+        </div>})}
+        <div style={{borderTop:"1px solid "+C.bd,padding:"8px 0 6px",fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>{t("Mostrando")} {filtered.length} {t("de")} {payouts.length}</div>
+      </div>
+      <div className="pv-cards">{filtered.map(po=>{const st=ST[po.status]||{l:po.status,c:C.tm,desc:""};const bk=po.booking;const isExp=exp===po.id;return(
         <div key={po.id} onClick={()=>setExp(isExp?null:po.id)} style={{padding:12,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,marginBottom:8,cursor:"pointer"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
             <div style={{flex:1,minWidth:0}}>
@@ -13981,7 +14076,33 @@ function AdminPayoutsHistory({course}){const[payouts,setPayouts]=useState([]);co
             {po.last_error&&<div style={{marginTop:8,padding:8,background:C.acc+"10",borderRadius:8,fontSize:10,color:C.acc}}>{po.last_error}</div>}
           </div>}
         </div>
-      )})}
+      )})}}</div>
+      </React.Fragment>}
+    </div>
+    <div style={{minWidth:0}}>
+    {revCat&&revCat.total>0&&(()=>{
+      const cats=Object.entries(revCat.categories||{}).sort((a,b)=>b[1]-a[1]);
+      const CL={paquetes:t("Paquetes"),carrito:t("Carritos"),equipo:t("Equipo de renta"),proshop:t("Pro shop"),caddie:t("Caddies"),servicios:t("Servicios"),alimentos:t("Alimentos y bebidas"),otros:t("Otros")};const rows=[["__green",t("Reservas"),Number(revCat.green_fee||0)],...cats.map(([k,v])=>[k,(CL[k]||k),Number(v)])].filter(r=>r[2]>0);
+      const mx=Math.max(...rows.map(r=>r[2]),1);
+      const palette={__green:C.grn,alimentos:"#e17055",proshop:"#6c5ce7",equipo:"#0984e3",carrito:"#00b894",caddie:"#fdcb6e",servicios:"#a29bfe",paquetes:C.gld,otros:C.tm};
+      return<div style={{background:C.cd,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,padding:14,marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+          <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:".05em"}}>{t("DE DÓNDE VIENE TU INGRESO")+" · 30d"}</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.txt}}>{"$"+fm(revCat.total)}</div>
+        </div>
+        {rows.map(([k,lb,v])=><div key={k} style={{marginBottom:7}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
+            <span style={{color:C.ts,fontWeight:600}}>{lb}</span>
+            <span style={{color:C.txt,fontWeight:800}}>{"$"+fm(v)}<span style={{color:C.tm,fontWeight:500,fontSize:10}}>{" · "+Math.round(v/revCat.total*100)+"%"}</span></span>
+          </div>
+          <div style={{height:7,borderRadius:5,background:(C.glass||C.w04),overflow:"hidden"}}>
+            <div style={{width:Math.max(3,Math.round(v/mx*100))+"%",height:"100%",borderRadius:5,background:palette[k]||C.grn}}/>
+          </div>
+        </div>)}
+        {onNav&&<div onClick={()=>onNav("campaigns")} style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd,fontSize:11.5,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Impulsa una categoría · Campañas")} →</div>}
+      </div>})()}
+    </div>
+    </div>
   </div>}
 
 // v20.2: AdminInventory — gestión del inventario de extras del campo (F&B/caddies/equipo).
@@ -14571,45 +14692,77 @@ function AdminSalesHistory({course}){
   }
   return<div className="fi">
     {/* Hero stats 2x2 */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
-        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>VENTAS TOTALES</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.grn,marginTop:6}}>${fm(totalSales)}</div>
+    <div className="pv-kpis4" style={{marginBottom:14}}>
+      <div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd}}>
+        <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".07em",fontWeight:700,fontSize:9}}>VENTAS TOTALES</div>
+        <div style={{fontSize:20,fontWeight:800,color:C.grnTxt||C.grn,marginTop:6,fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"}}>${fm(totalSales)}</div>
         <div style={{fontSize:11,color:C.ts,marginTop:2}}>{conf.length} {conf.length===1?"reserva":"reservas"}</div>
       </div>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+      <div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd}}>
         <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>TICKET PROMEDIO</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.txt,marginTop:6}}>${fm(Math.round(avgTicket))}</div>
+        <div style={{fontSize:20,fontWeight:800,color:C.txt,marginTop:6,fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"}}>${fm(Math.round(avgTicket))}</div>
         <div style={{fontSize:11,color:C.ts,marginTop:2}}>por reserva confirmada</div>
       </div>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+      <div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd}}>
         <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>CANCELACIONES</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.acc,marginTop:6}}>{canc.length}</div>
+        <div style={{fontSize:20,fontWeight:800,color:C.accTx||C.acc,marginTop:6,fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"}}>{canc.length}</div>
         <div style={{fontSize:11,color:C.ts,marginTop:2}}>${fm(totalCancFee)} retenido por fee</div>
       </div>
-      <div style={{padding:14,borderRadius:14,background:C.glass||C.cd,border:"1px solid "+(C.glassBd||C.bd)}}>
+      <div style={{padding:14,borderRadius:14,background:C.cd,border:"1px solid "+C.bd}}>
         <div style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>TOTAL TRANSACC.</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.txt,marginTop:6}}>{bookings.length}</div>
+        <div style={{fontSize:20,fontWeight:800,color:C.txt,marginTop:6,fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"}}>{bookings.length}</div>
         <div style={{fontSize:11,color:C.ts,marginTop:2}}>{rangeLabel}</div>
       </div>
     </div>
-    {/* Rango */}
-    <div style={{display:"flex",gap:6,marginBottom:8,overflowX:"auto"}}>
-      {[{k:"30d",l:"30 días"},{k:"90d",l:"90 días"},{k:"12m",l:"1 año"},{k:"all",l:"Todo"}].map(r=>
-        <button key={r.k} onClick={()=>setRange(r.k)} style={{padding:"7px 12px",borderRadius:10,border:"1px solid "+(range===r.k?C.grn:C.bd),background:range===r.k?C.grn+"15":"transparent",color:range===r.k?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{r.l}</button>
-      )}
-      <button onClick={exportCSV} disabled={filtered.length===0} style={{marginLeft:"auto",padding:"7px 12px",borderRadius:10,border:"1px solid "+C.bd,background:"transparent",color:filtered.length===0?C.tm:C.ts,fontSize:11,fontWeight:700,cursor:filtered.length===0?"not-allowed":"pointer",whiteSpace:"nowrap",opacity:filtered.length===0?.5:1}}>↓ CSV</button>
+    {/* Toolbar 9b: rango + estado + CSV en una fila */}
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+      <div style={{display:"inline-flex",background:C.w07,borderRadius:10,padding:2}}>
+        {[{k:"30d",l:"30d"},{k:"90d",l:"90d"},{k:"12m",l:t("1 año")},{k:"all",l:t("Todo")}].map(r=><button key={r.k} onClick={()=>setRange(r.k)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:range===r.k?C.grn:"transparent",color:range===r.k?"#fff":C.ts,fontSize:11.5,fontWeight:range===r.k?700:600,cursor:"pointer",whiteSpace:"nowrap",boxShadow:range===r.k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{r.l}</button>)}
+      </div>
+      <div style={{display:"inline-flex",background:C.w07,borderRadius:10,padding:2}}>
+        {[{k:"all",l:t("Todas")},{k:"confirmed",l:t("Confirmadas")},{k:"completed",l:t("Completadas")},{k:"cancelled",l:t("Canceladas")}].map(f=><button key={f.k} onClick={()=>setStFilter(f.k)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:stFilter===f.k?C.grn:"transparent",color:stFilter===f.k?"#fff":C.ts,fontSize:11.5,fontWeight:stFilter===f.k?700:600,cursor:"pointer",whiteSpace:"nowrap",boxShadow:stFilter===f.k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{f.l}</button>)}
+      </div>
+      <button onClick={exportCSV} disabled={filtered.length===0} style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,padding:"7px 13px",borderRadius:9,border:"1px solid "+C.bd,background:C.cd,color:filtered.length?(C.ts2||C.ts):C.tm,fontSize:11.5,fontWeight:700,cursor:filtered.length?"pointer":"default",opacity:filtered.length?1:.5}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("download",13,C.tm)}}/>{t("Exportar CSV")}</button>
     </div>
-    {/* Filtros status */}
-    <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto"}}>
-      {[{k:"all",l:"Todas"},{k:"confirmed",l:"Confirmadas"},{k:"completed",l:"Completadas"},{k:"cancelled",l:"Canceladas"}].map(f=>
-        <button key={f.k} onClick={()=>setStFilter(f.k)} style={{padding:"7px 12px",borderRadius:10,border:"1px solid "+(stFilter===f.k?C.grn:C.bd),background:stFilter===f.k?C.grn+"15":"transparent",color:stFilter===f.k?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{f.l}</button>
-      )}
-    </div>
-    {/* Lista */}
     {ld?<Skeleton w="100%" h={70}/>:filtered.length===0?
-      <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>Sin transacciones en este rango/filtro</div>
-      :filtered.map(b=>{const st=ST[b.status]||{l:b.status||"?",c:C.tm};const isExp=exp===b.id;return(
+      <div style={{textAlign:"center",padding:40,color:C.tm,fontSize:13}}>{t("Sin transacciones en este rango/filtro")}</div>
+      :<React.Fragment>
+      <div className="pv-tbl" style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"2px 14px 6px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"76px 92px minmax(0,1fr) 108px 44px 100px 118px 18px",gap:10,padding:"10px 0 6px",fontSize:9,fontWeight:800,letterSpacing:".07em",color:C.tm}}>
+          <span>{t("CREADA")}</span><span>{t("CÓDIGO")}</span><span>{t("JUGADOR")}</span><span>{t("SALIDA")}</span><span style={{textAlign:"right"}}>PAX</span><span style={{textAlign:"right"}}>{t("TOTAL")}</span><span>{t("ESTADO")}</span><span/>
+        </div>
+        {filtered.map(b=>{const st=ST[b.status]||{l:b.status||"?",c:C.tm};const isExp=exp===b.id;const off=b.status==="cancelled";const mono={fontFamily:"ui-monospace,Menlo,monospace",fontVariantNumeric:"tabular-nums"};const nm=b.user?.full_name||t("Jugador");const ini=(((nm||"J").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join(""))||"J").toUpperCase();return<div key={b.id} style={{borderTop:"1px solid "+C.bd,opacity:off?.55:1}}>
+          <div onClick={()=>setExp(isExp?null:b.id)} style={{display:"grid",gridTemplateColumns:"76px 92px minmax(0,1fr) 108px 44px 100px 118px 18px",gap:10,alignItems:"center",padding:"10px 0",cursor:"pointer"}}>
+            <span style={{fontSize:11.5,color:C.ts,...mono}}>{new Date(b.created_at).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>
+            <span style={{fontSize:11.5,fontWeight:700,color:C.gld,...mono,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.booking_code||"—"}</span>
+            <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+              <span style={{width:24,height:24,borderRadius:"50%",background:(C.secBlu||"#5b86e5")+"26",color:C.secBlu||"#5b86e5",fontSize:8.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{ini}</span>
+              <span style={{fontSize:12,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nm}{b.promo_code&&<span style={{marginLeft:6,fontSize:8.5,fontWeight:800,color:C.secVio||"#a78bfa",background:(C.secVio||"#a78bfa")+"1f",padding:"1px 6px",borderRadius:4}}>PROMO</span>}</span>
+            </span>
+            <span style={{fontSize:11.5,color:C.ts2||C.ts,...mono}}>{b.booking_date?new Date(b.booking_date+"T12:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short"}):"—"}{b.booking_time?" "+b.booking_time.slice(0,5):""}</span>
+            <span style={{fontSize:11.5,color:C.ts,textAlign:"right",...mono}}>{b.party_size||1}</span>
+            <span style={{fontSize:13,fontWeight:800,color:off?C.tm:C.txt,textAlign:"right",textDecoration:off?"line-through":"none",...mono}}>${fm(b.total_cost)}</span>
+            <span><span style={{padding:"2px 8px",borderRadius:6,background:st.c+"15",color:st.c,fontSize:8.5,fontWeight:800,letterSpacing:".04em",whiteSpace:"nowrap"}}>{st.l.toUpperCase()}</span></span>
+            <span style={{display:"flex",transform:isExp?"rotate(180deg)":"none",transition:"transform .2s"}} dangerouslySetInnerHTML={{__html:ic("down",14,C.tm)}}/>
+          </div>
+          {isExp&&<div style={{padding:"0 0 12px"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,fontSize:11}}>
+              <div><span style={{color:C.tm}}>Email: </span><span style={{color:C.txt,fontWeight:600}}>{b.user?.email||"—"}</span></div>
+              <div><span style={{color:C.tm}}>{t("Modo pago")}: </span><span style={{color:C.txt,fontWeight:600}}>{b.payment_mode||"—"}</span></div>
+              {b.promo_code&&<div><span style={{color:C.tm}}>Promo: </span><span style={{color:C.gld,fontWeight:700,...mono}}>{b.promo_code}</span></div>}
+              {b.extras_total>0&&<div><span style={{color:C.tm}}>Extras: </span><span style={{color:C.txt,fontWeight:600,...mono}}>${fm(b.extras_total)}</span></div>}
+              {b.discount_amount>0&&<div><span style={{color:C.tm}}>{t("Descuento")}: </span><span style={{color:C.txt,fontWeight:600,...mono}}>-${fm(b.discount_amount)}</span></div>}
+              {b.membership_discount_amount>0&&<div><span style={{color:C.tm}}>{t("Desc. membresía")}: </span><span style={{color:C.txt,fontWeight:600,...mono}}>-${fm(b.membership_discount_amount)}</span></div>}
+              {b.platform_fee_pct!=null&&<div><span style={{color:C.tm}}>{t("Comisión")}: </span><span style={{color:C.txt,fontWeight:600,...mono}}>{b.platform_fee_pct}%</span></div>}
+              {b.cancellation_fee>0&&<div><span style={{color:C.tm}}>No-show fee: </span><span style={{color:C.accTx||C.acc,fontWeight:600,...mono}}>${fm(b.cancellation_fee)}</span></div>}
+              {b.checked_in_at&&<div><span style={{color:C.tm}}>Check-in: </span><span style={{color:C.grnTxt||C.grn,fontWeight:600,...mono}}>{new Date(b.checked_in_at).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span></div>}
+              {b.stripe_payment_intent&&<div style={{gridColumn:"span 3",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><span style={{color:C.tm}}>Stripe PI: </span><span style={{color:C.txt,fontWeight:600,...mono}}>{b.stripe_payment_intent}</span></div>}
+            </div>
+          </div>}
+        </div>})}
+        <div style={{borderTop:"1px solid "+C.bd,padding:"8px 0 6px",fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>{t("Mostrando")} {filtered.length} {t("de")} {bookings.length}</div>
+      </div>
+      <div className="pv-cards">{filtered.map(b=>{const st=ST[b.status]||{l:b.status||"?",c:C.tm};const isExp=exp===b.id;return(
         <div key={b.id} onClick={()=>setExp(isExp?null:b.id)} style={{padding:12,borderRadius:12,background:C.cd,border:"1px solid "+C.bd,marginBottom:8,cursor:"pointer"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
             <div style={{flex:1,minWidth:0}}>
@@ -14642,7 +14795,8 @@ function AdminSalesHistory({course}){
             </div>
           </div>}
         </div>
-      )})}
+      )})}}</div>
+      </React.Fragment>}
   </div>
 }
 
@@ -14662,7 +14816,7 @@ function AdminVentas({course}){
     <AdminPageHeader title={"VENTAS · "+t("GENERA MÁS INGRESO")} question={t("¿Cómo gano más esta semana?")}/>
     <AdminSubNav items={items} active={sub} onChange={setSub}/>
     <div key={sub} className="fi">
-    {sub==="cobros"&&!isTeam&&<AdminPayoutsHistory course={course}/>}
+    {sub==="cobros"&&!isTeam&&<AdminPayoutsHistory course={course} onNav={setSub}/>}
     {sub==="historico"&&<AdminSalesHistory course={course}/>}
     {sub==="promos"&&<AdminPromos course={course}/>}
     {sub==="memberships"&&!isTeam&&<AdminMembershipTiers course={course}/>}
@@ -14756,8 +14910,9 @@ function AdminCampo({course,onOut,onRefresh,autoEdit,focusField,onAutoEditConsum
   // (Ajustes); el historial de cobros vive en AdminVentas. Deep-links legacy a "finanzas"
   // redirigen a "cuenta" (donde esta lo mas probable que el usuario buscaba: el setup).
   const normSub=(s)=>(s==="identidad"||s==="operacion")?"info":s==="finanzas"?"cuenta":s;
-  const[sub,setSub]=useState(normSub(initialSub||"info"));
-  useEffect(()=>{if(initialSub)setSub(normSub(initialSub))},[initialSub]);
+  const[sub,setSub]=useState(normSub(window.__pendingAcctSection?"cuenta":(initialSub||"info")));
+  useEffect(()=>{if(initialSub&&!window.__pendingAcctSection)setSub(normSub(initialSub))},[initialSub]);
+  useEffect(()=>{if(window.__pendingAcctSection)setSub("cuenta")},[]);
   const ft=course.facility_type||"campo";
   const layoutsLabel=ft==="campo"?t("Layouts"):ft==="plataforma"?t("Bahías"):t("Cabinas");
   const items=[
@@ -15540,7 +15695,8 @@ function LiveMap({course}){
   </div>;
 }
 
-function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[concierge,setConcierge]=useState(false);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);const isTeam=p?.user_role==="course_team";const[teamPerms,setTeamPerms]=useState(null);const[adminSupportOpen,setAdminSupportOpen]=useState(false);const[wx,setWx]=useState(null);
+function AdminApp(){const{p,out}=useA();const{theme}=useTheme();const[course,setCourse]=useState(null);
+  useEffect(()=>{window.__adminGoConfig=(sec)=>{window.__pendingAcctSection=sec;setTab(4)};return()=>{try{delete window.__adminGoConfig}catch(x){}}},[]);const[ld,setLd]=useState(true);const[tab,setTab]=useState(0);const[concierge,setConcierge]=useState(false);const[autoEdit,setAutoEdit]=useState(false);const[focusField,setFocusField]=useState(null);const isTeam=p?.user_role==="course_team";const[teamPerms,setTeamPerms]=useState(null);const[adminSupportOpen,setAdminSupportOpen]=useState(false);const[wx,setWx]=useState(null);
   const loadC=()=>{if(p?.managed_course_id)sb.from("golf_courses").select("*").eq("id",p.managed_course_id).maybeSingle().then(({data})=>{setCourse(data);setLd(false)}).catch(()=>setLd(false));else setLd(false)};
   useEffect(()=>{loadC()},[p]);
   useEffect(()=>{const la=course?.latitude,lo=course?.longitude;if(la==null||lo==null||(course?.facility_type==="simulador")){setWx(null);return}let stop=false;fetch("https://api.open-meteo.com/v1/forecast?latitude="+la+"&longitude="+lo+"&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m&forecast_days=2&timezone=auto",{cache:"no-store"}).then(r=>r.json()).then(j=>{if(!stop&&j)setWx(j)}).catch(()=>{});return()=>{stop=true}},[course?.latitude,course?.longitude]);
