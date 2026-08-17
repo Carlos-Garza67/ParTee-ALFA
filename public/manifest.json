@@ -3,7 +3,7 @@
   "name": "Partee Golf",
   "short_name": "Partee",
   "description": "Reserva tee times, juega torneos y conecta con otros golfistas",
-  "start_url": "/",
+  "start_url": "/?app=1",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a0a1a",
@@ -82,7 +82,7 @@
     {
       "name": "Reservar Tee Time",
       "short_name": "Reservar",
-      "url": "/?action=book",
+      "url": "/?action=book&app=1",
       "icons": [
         {
           "src": "/icon-192.png",
@@ -93,7 +93,7 @@
     {
       "name": "Mis Reservas",
       "short_name": "Reservas",
-      "url": "/?tab=bookings"
+      "url": "/?tab=bookings&app=1"
     }
   ],
   "related_applications": [],
