@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.18 (Iconos profesionales en Notificaciones, patron Linear/Wise/Revolut Business: los iconos multicolor sueltos (palomita verde, X roja, lapiz dorado) pasan a MONOCROMO dentro de contenedor cuadrado 28x28 con fondo sutil y borde fino — el color semantico por fila es el delator #1 de UI generica. Nueva reserva cambia de check (estado) a calendar (tipo de evento). Y Notificaciones avanzadas se EMPAREJA con las regulares: cards gigantes con borde acento -> filas compactas con separador fino, mismo contenedor de icono 28x28 mono, mismo toggle verde 32x18. Los dos paneles ahora son visualmente un solo sistema)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.19 (Overview de Plataforma rediseñado — propuesta final fusionada aprobada por Carlos, tema Partee nativo. Estructura: saludo por hora + veredicto en una linea generado por reglas; selector 7/30/90d conservado gobernando todo; hero GMV con sparkline+delta+ticket intacto de v30.36; fila nueva MRR Pro (venues Pro x USD1500, query aparte, no toca la RPC) vs Motor de comision MXN con monedas explicitas (sin grafica mixta de monedas); metricas Reservas/Compradores/Nuevos; salud del marketplace 3 barras intactas; grid 2 col auto-fit: QUE HACER AHORA (los 5 detectores de accion de v30.36 con misma navegacion setFilter/setTab, ahora con nombre del venue pendiente y dias esperando, + item permanente Stripe a produccion 0/4 con barra) y tabla CAMPOS (chips de estado Activos/Pendientes/Borrador/Susp filtrando como las pildoras viejas, top venues clickables a setSel, fila +N sin venta colapsada); RADAR con hallazgos por severidad Critico/Alerta/Bien calculados client-side desde ov3 (conversion, liquidez, caida GMV, revision pendiente, reembolsos, recompra, ocupacion); DINERO EN TRANSITO (cobrado historico de stats.platformRev, debes a campos, reembolsado, comision); cierre positivo por reglas. Backend sin cambios: get_platform_overview_v3 + 2 queries nuevas client-side (count Pro con or null-status, venue pending_review mas antiguo). Cobertura de criterios v30.36: 100 por ciento)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -18914,8 +18914,15 @@ function PlatformSettlements(){
   </div>;
 }
 
-function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);const[ld,setLd]=useState(true);const[stats,setStats]=useState(null);const[ov3,setOv3]=useState(null);const[ovDays,setOvDays]=useState(30);const[courses,setCourses]=useState([]);const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");const[sel,setSel]=useState(null);
+function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);const[ld,setLd]=useState(true);const[stats,setStats]=useState(null);const[ov3,setOv3]=useState(null);const[ovDays,setOvDays]=useState(30);const[courses,setCourses]=useState([]);const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");const[sel,setSel]=useState(null);const[mrrN,setMrrN]=useState(null);const[pendV,setPendV]=useState(null);
   useEffect(()=>{let al=true;(async()=>{try{const{data:o}=await sb.rpc("get_platform_overview_v3",{p_days:ovDays});if(al&&o?.ok)setOv3(o)}catch(e){console.warn("[overview]",e)}})();return()=>{al=false}},[ovDays]);
+  useEffect(()=>{let al=true;(async()=>{try{
+    const[{count:pro},{data:pv}]=await Promise.all([
+      sb.from("golf_courses").select("id",{count:"exact",head:true}).in("subscription_plan",["pro","pro_plus","enterprise"]).or("subscription_status.is.null,subscription_status.eq.active"),
+      sb.from("golf_courses").select("course_name,updated_at").eq("listing_status","pending_review").order("updated_at",{ascending:true}).limit(1)
+    ]);
+    if(al){setMrrN(pro||0);if(pv&&pv[0])setPendV({n:pv[0].course_name,d:Math.max(0,Math.floor((Date.now()-new Date(pv[0].updated_at).getTime())/86400000))})}
+  }catch(e){console.warn("[mrr]",e)}})();return()=>{al=false}},[]);
   const loadAll=async()=>{setLd(true);const today=new Date().toISOString().slice(0,10);const d30=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
     const[{data:cs},{data:bks},{data:us},{data:sl}]=await Promise.all([
       sb.from("golf_courses").select("*").order("created_at",{ascending:false}),
@@ -18957,6 +18964,8 @@ function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);co
         const ocup=sp.slots_periodo>0?(sp.slots_vendidos/sp.slots_periodo*100):0;
         const liquidez=sp.venues_activos>0?(ov3.selling_venues/sp.venues_activos*100):0;
         const recompra=dm.jugadores_con_reserva>0?(dm.jugadores_recurrentes/dm.jugadores_con_reserva*100):0;
+        const conv=dm.jugadores_total>0?(ov3.buyers/dm.jugadores_total*100):0;
+        const zombis=Math.max(0,(sp.venues_activos||0)-(ov3.selling_venues||0));
         const days=ov3.daily||[];const vals=days.map(x=>Number(x.v));const mx=Math.max(1,...vals);
         const W=320,H=64;
         const pts=days.map((x,i)=>[(i/(days.length-1||1))*W, H-(Number(x.v)/mx)*(H-6)-3]);
@@ -18978,17 +18987,36 @@ function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);co
             {hint&&<div style={{fontSize:9.5,color:C.tm,marginTop:4}}>{hint}</div>}
           </div>};
         const acciones=[
-          {n:ac.venues_por_revisar,l:t("Campos esperando revisión"),c:C.gld,go:()=>{setFilter("pending_review");setTab(1)}},
-          {n:ac.fiscales_por_verificar,l:t("Datos fiscales por verificar"),c:C.acc,go:()=>{setFilter("pending_review");setTab(1)}},
-          {n:ac.aclaraciones_abiertas,l:t("Aclaraciones sin resolver"),c:C.gld,go:()=>setTab(2)},
-          {n:ac.venues_por_liquidar,l:t("Campos por liquidar"),c:C.grn,go:()=>setTab(3),sub:Number(ac.monto_por_liquidar)>0?"$"+fm(ac.monto_por_liquidar):null},
-          {n:ac.venues_sin_slots,l:t("Campos activos sin horarios publicados"),c:C.acc,go:()=>{setFilter("active");setTab(1)}}
+          {n:ac.venues_por_revisar,l:pendV?t("Aprobar")+" \u201C"+pendV.n+"\u201D":t("Campos esperando revisión"),sub:pendV&&pendV.d>0?t("hace")+" "+pendV.d+"d":null,ico:"flag",c:C.gld,go:()=>{setFilter("pending_review");setTab(1)}},
+          {n:ac.fiscales_por_verificar,l:t("Datos fiscales por verificar"),ico:"clipboard",c:C.acc,go:()=>{setFilter("pending_review");setTab(1)}},
+          {n:ac.aclaraciones_abiertas,l:t("Aclaraciones sin resolver"),ico:"info",c:C.gld,go:()=>setTab(2)},
+          {n:ac.venues_por_liquidar,l:t("Liquidar")+(Number(ac.monto_por_liquidar)>0?" $"+fm(ac.monto_por_liquidar):""),sub:ac.venues_por_liquidar+" "+(Number(ac.venues_por_liquidar)===1?t("campo"):t("campos")),ico:"dollar",c:C.grn,go:()=>setTab(3)},
+          {n:zombis,l:zombis+" "+t("campos sin venta en el periodo"),sub:t("lanza una campaña o llámalos"),ico:"flame",c:C.acc,go:()=>{setFilter("active");setTab(1)}},
+          {n:ac.venues_sin_slots,l:t("Campos activos sin horarios publicados"),ico:"calendar",c:C.acc,go:()=>{setFilter("active");setTab(1)}}
         ].filter(x=>Number(x.n)>0);
+        const hr=new Date().getHours();const saludo=hr<12?t("Buenos días"):hr<19?t("Buenas tardes"):t("Buenas noches");
+        const nombre=(p?.full_name||"").trim().split(/\s+/)[0]||"";
+        const veredicto=ov3.bookings+" "+(ov3.bookings===1?t("reserva"):t("reservas"))+" "+t("por")+" $"+fm(ov3.gmv)+" "+t("en")+" "+ovDays+"d."+(pendV?" \u201C"+pendV.n+"\u201D "+t("espera tu revisión")+".":"")+" "+t("Stripe sigue en modo prueba")+".";
+        const radar=[];
+        if(dm.jugadores_total>=5&&conv<10)radar.push({s:0,t:t("Conversión")+" "+conv.toFixed(0)+"%",d:ov3.buyers+" "+t("de")+" "+dm.jugadores_total+" "+t("jugadores compró")});
+        if(liquidez<25&&sp.venues_activos>0)radar.push({s:0,t:t("Liquidez")+" "+liquidez.toFixed(0)+"%",d:zombis+" "+t("campos en cero")});
+        if(gmvD<=-30)radar.push({s:1,t:"GMV ▼"+Math.abs(gmvD)+"%",d:t("vs periodo anterior")});
+        if(Number(ac.venues_por_revisar)>0)radar.push({s:1,t:(pendV?"\u201C"+pendV.n+"\u201D":ac.venues_por_revisar+" "+t("campos")),d:t("esperando revisión")+(pendV&&pendV.d>0?" "+t("hace")+" "+pendV.d+"d":"")});
+        if(Number(rg.reembolsado)>0)radar.push({s:1,t:"$"+fm(rg.reembolsado)+" "+t("reembolsado"),d:rg.cancelaciones+" "+t("cancelaciones en el periodo")});
+        else if(Number(rg.cancelaciones)===0)radar.push({s:2,t:"0 "+t("cancelaciones"),d:"$0 "+t("reembolsado en el periodo")});
+        if(recompra>=40&&dm.jugadores_recurrentes>0)radar.push({s:2,t:t("Recompra")+" "+recompra.toFixed(0)+"%",d:t("quien reserva, vuelve")});
+        if(ocup>=25)radar.push({s:2,t:t("Ocupación")+" "+ocup.toFixed(0)+"%",d:t("oferta sana")});
+        radar.sort((a,b)=>a.s-b.s);
+        const sev=[{l:t("Crítico"),c:C.acc},{l:t("Alerta"),c:C.gld},{l:t("Bien"),c:C.grnTxt||C.grn}];
         const byS=stats?.byStatus||{};
+        const cierre=recompra>=40&&dm.jugadores_recurrentes>0?t("Lo que funciona: quien reserva, repite. El producto retiene — el reto es traer más jugadores."):ov3.selling_venues>0?t("Lo que funciona:")+" "+(ov3.top_venues?.[0]?.nombre||t("un campo"))+" "+t("está vendiendo — replica lo que hace."):t("Sin ventas en el periodo — la cola de arriba es el plan.");
         return<div className="fi">
-          <div style={{..._s.flexB,marginBottom:14,flexWrap:"wrap",gap:8}}>
-            <h3 style={{fontSize:17,fontWeight:800,color:C.txt,margin:0,letterSpacing:"-0.02em"}}>{t("Overview de Plataforma")}</h3>
-            <div style={{display:"flex",gap:4,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:3}}>
+          <div style={{..._s.flexB,marginBottom:12,flexWrap:"wrap",gap:8,alignItems:"flex-start"}}>
+            <div style={{minWidth:0}}>
+              <h3 style={{fontSize:17,fontWeight:800,color:C.txt,margin:0,letterSpacing:"-0.02em"}}>{saludo}{nombre?", "+nombre:""}</h3>
+              <div style={{fontSize:11.5,color:C.ts,marginTop:4,lineHeight:1.5,maxWidth:460}}>{veredicto}</div>
+            </div>
+            <div style={{display:"flex",gap:4,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:3,flexShrink:0}}>
               {[7,30,90].map(dd=><button key={dd} onClick={()=>setOvDays(dd)} style={{padding:"5px 11px",borderRadius:7,border:"none",background:ovDays===dd?C.grn:"transparent",color:ovDays===dd?"#fff":C.ts,fontSize:11,fontWeight:800,cursor:"pointer"}}>{dd}d</button>)}
             </div>
           </div>
@@ -18998,12 +19026,12 @@ function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);co
               <div>
                 <div style={{fontSize:10.5,color:C.tm,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{t("GMV")} · {ovDays}d</div>
                 <div style={{fontSize:28,fontWeight:900,color:C.txt,..._s.mono,lineHeight:1.15,marginTop:3}}>${fm(ov3.gmv)}<Delta d={gmvD}/></div>
-                <div style={{fontSize:10.5,color:C.tm,marginTop:2}}>{t("vs")} ${fm(ov3.gmv_prev)} {t("periodo anterior")}</div>
+                <div style={{fontSize:10.5,color:C.tm,marginTop:2}}>{t("vs")} ${fm(ov3.gmv_prev)} {t("periodo anterior")} · {t("Ticket")} ${fm(ticket)}</div>
               </div>
               <div style={{textAlign:"right"}}>
                 <div style={{fontSize:10.5,color:C.tm,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{t("Tu comisión")}</div>
                 <div style={{fontSize:20,fontWeight:900,color:C.gld,..._s.mono,marginTop:3}}>${fm(ov3.fee)}</div>
-                <div style={{fontSize:10.5,color:C.tm,marginTop:2}}>{t("Ticket")} ${fm(ticket)}</div>
+                <div style={{fontSize:10.5,color:C.tm,marginTop:2}}>MXN · {ovDays}d</div>
               </div>
             </div>
             <svg viewBox={"0 0 "+W+" "+H} preserveAspectRatio="none" style={{width:"100%",height:64,display:"block"}}>
@@ -19013,6 +19041,10 @@ function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);co
             <div style={{..._s.flexB,fontSize:9,color:C.tm}}><span>{days[0]?.d}</span><span>{days[days.length-1]?.d}</span></div>
           </div>
 
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <Metric label={t("MRR Pro")} val={mrrN===null?"—":"$"+fm(mrrN*1500)} hint={"USD · "+(mrrN||0)+" venues Pro"} col={C.secVio||"#8b6fd4"}/>
+            <Metric label={t("Motor de comisión")} val={"$"+fm(ov3.fee)} hint={"MXN · "+ovDays+"d"} col={C.gld}/>
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
             <Metric label={t("Reservas")} val={ov3.bookings} d={bksD}/>
             <Metric label={t("Compradores")} val={ov3.buyers} d={buyD} hint={t("jugadores que reservaron")}/>
@@ -19026,37 +19058,80 @@ function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);co
             <Health label={t("Recompra")} pctv={recompra} good={recompra>=40} hint={dm.jugadores_recurrentes+"/"+dm.jugadores_con_reserva+" "+t("con 2+ rondas")}/>
           </div>
 
-          {acciones.length>0&&<><h4 style={{fontSize:12,fontWeight:800,color:C.txt,marginBottom:8,letterSpacing:.2}}>{t("REQUIERE TU ACCIÓN")}</h4>
-          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
-            {acciones.map((a,i)=><div key={i} onClick={a.go} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.cd,border:"1px solid "+a.c+"38",borderRadius:11,cursor:"pointer"}}>
-              <span style={{minWidth:26,height:26,borderRadius:8,background:a.c+"1a",color:a.c,fontSize:12,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{a.n}</span>
-              <span style={{flex:1,fontSize:12.5,color:C.txt,fontWeight:600}}>{a.l}{a.sub&&<span style={{color:C.tm,fontWeight:500}}> · {a.sub}</span>}</span>
-              <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("right",15,a.c)}}/>
-            </div>)}
-          </div></>}
-
-          {(ov3.top_venues||[]).length>0&&<><h4 style={{fontSize:12,fontWeight:800,color:C.txt,marginBottom:8,letterSpacing:.2}}>{t("CAMPOS CON MÁS VENTA")} · {ovDays}d</h4>
-          <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,overflow:"hidden",marginBottom:16}}>
-            {(ov3.top_venues||[]).map((v,i)=><div key={v.id} onClick={()=>{const c=courses.find(x=>x.id===v.id);if(c)setSel(c)}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderBottom:i<(ov3.top_venues.length-1)?"1px solid "+C.bd:"none",cursor:"pointer"}}>
-              <span style={{minWidth:20,fontSize:11,fontWeight:800,color:C.tm,..._s.mono}}>{i+1}</span>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12.5,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v.nombre}</div>
-                <div style={{fontSize:10,color:C.tm}}>{v.ciudad} · {v.bks} {v.bks===1?t("reserva"):t("reservas")}</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:12,marginBottom:12,alignItems:"start"}}>
+            <div>
+              <h4 style={{fontSize:12,fontWeight:800,color:C.txt,marginBottom:8,letterSpacing:.2}}>{t("QUÉ HACER AHORA")}</h4>
+              <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,overflow:"hidden",marginBottom:12}}>
+                {acciones.map((a,i)=><div key={i} onClick={a.go} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderTop:i>0?"1px solid "+C.bd:"none",cursor:"pointer"}}>
+                  <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(a.ico,15,a.c)}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,color:C.txt,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.l}</div>
+                    {a.sub&&<div style={{fontSize:10,color:C.tm,marginTop:1}}>{a.sub}</div>}
+                  </div>
+                  <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("right",13,C.tm)}}/>
+                </div>)}
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderTop:acciones.length>0?"1px solid "+C.bd:"none"}}>
+                  <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("credit",15,C.secBlu||"#5b86e5")}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,color:C.txt,fontWeight:600}}>{t("Stripe a producción")} <span style={{color:C.tm,fontWeight:500,fontSize:10.5}}>· 0 {t("de")} 4</span></div>
+                    <div style={{fontSize:10,color:C.tm,marginTop:1}}>{t("Llaves live · webhooks · alta fiscal · cuenta SPEI")}</div>
+                  </div>
+                  <div style={{width:46,height:4,background:C.bg,borderRadius:2,overflow:"hidden",flexShrink:0}}><div style={{width:"3%",height:"100%",background:C.secBlu||"#5b86e5"}}/></div>
+                </div>
               </div>
-              <div style={{fontSize:12.5,fontWeight:800,color:C.grn,..._s.mono,flexShrink:0}}>${fm(v.gmv)}</div>
-            </div>)}
-          </div></>}
 
-          <h4 style={{fontSize:12,fontWeight:800,color:C.txt,marginBottom:8,letterSpacing:.2}}>{t("RED Y RIESGO")}</h4>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-            <Metric label={t("Campos activos")} val={sp.venues_activos} hint={fm(sp.slots_futuros)+" "+t("slots futuros")} col={C.grn}/>
-            <Metric label={t("Jugadores")} val={dm.jugadores_total} hint={dm.jugadores_con_reserva+" "+t("han reservado")}/>
-            <Metric label={t("Cancelaciones")} val={rg.cancelaciones} hint={t("en el periodo")} col={Number(rg.cancelaciones)>0?C.gld:C.txt}/>
-            <Metric label={t("Reembolsado")} val={"$"+fm(rg.reembolsado)} hint={t("en el periodo")} col={Number(rg.reembolsado)>0?C.acc:C.txt}/>
+              <div style={{..._s.flexB,marginBottom:8,flexWrap:"wrap",gap:6}}>
+                <h4 style={{fontSize:12,fontWeight:800,color:C.txt,margin:0,letterSpacing:.2}}>{t("CAMPOS")} · {ovDays}d</h4>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                  {[["active",t("Activos"),C.grn],["pending_review",t("Pendientes"),C.gld],["draft",t("Borrador"),C.tm],["suspended",t("Susp."),C.acc]].map(([k,l,c])=>
+                    <button key={k} onClick={()=>{setFilter(k);setTab(1)}} style={{padding:"3px 9px",borderRadius:10,border:"1px solid "+c+"35",background:c+"10",color:c,fontSize:9.5,fontWeight:700,cursor:"pointer"}}>{l}: {byS[k]||0}</button>)}
+                </div>
+              </div>
+              <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,overflow:"hidden"}}>
+                {(ov3.top_venues||[]).map((v,i)=><div key={v.id} onClick={()=>{const c=courses.find(x=>x.id===v.id);if(c)setSel(c)}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderTop:i>0?"1px solid "+C.bd:"none",cursor:"pointer"}}>
+                  <span style={{minWidth:18,fontSize:11,fontWeight:800,color:C.tm,..._s.mono}}>{i+1}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12.5,fontWeight:700,color:C.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v.nombre}</div>
+                    <div style={{fontSize:10,color:C.tm}}>{v.ciudad} · {v.bks} {v.bks===1?t("reserva"):t("reservas")}</div>
+                  </div>
+                  <div style={{fontSize:12.5,fontWeight:800,color:C.grn,..._s.mono,flexShrink:0}}>${fm(v.gmv)}</div>
+                </div>)}
+                {zombis>0&&<div onClick={()=>{setFilter("active");setTab(1)}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderTop:(ov3.top_venues||[]).length>0?"1px solid "+C.bd:"none",cursor:"pointer"}}>
+                  <span style={{flex:1,fontSize:11,color:C.tm}}>+ {zombis} {t("sin venta en el periodo")}</span>
+                  <span style={{fontSize:10.5,color:C.grnTxt||C.grn,fontWeight:700}}>{t("Ver todos")}</span>
+                </div>}
+                {(ov3.top_venues||[]).length===0&&zombis===0&&<div style={{padding:"14px 12px",fontSize:11,color:C.tm,textAlign:"center"}}>{t("Sin campos activos todavía")}</div>}
+              </div>
+            </div>
+
+            <div>
+              <h4 style={{fontSize:12,fontWeight:800,color:C.txt,marginBottom:8,letterSpacing:.2}}>{t("RADAR")}</h4>
+              <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:"11px 12px",marginBottom:12}}>
+                {radar.length===0&&<div style={{fontSize:11,color:C.tm,textAlign:"center",padding:"6px 0"}}>{t("Sin hallazgos en el periodo")}</div>}
+                {radar.map((r,i)=><div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginTop:i>0?9:0}}>
+                  <span style={{fontSize:8.5,padding:"2px 7px",borderRadius:5,background:sev[r.s].c+"18",color:sev[r.s].c,fontWeight:800,flexShrink:0,marginTop:1,letterSpacing:.3}}>{sev[r.s].l}</span>
+                  <div style={{flex:1,minWidth:0,fontSize:10.5,color:C.ts,lineHeight:1.45}}><span style={{color:C.txt,fontWeight:700}}>{r.t}</span> — {r.d}</div>
+                </div>)}
+              </div>
+
+              <h4 style={{fontSize:12,fontWeight:800,color:C.txt,marginBottom:8,letterSpacing:.2}}>{t("DINERO EN TRÁNSITO")}</h4>
+              <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:12,padding:"11px 12px",marginBottom:12}}>
+                {[[t("Cobrado histórico"),"$"+fm(stats?.platformRev||0),C.txt],[t("Debes a campos"),"$"+fm(ac.monto_por_liquidar||0),Number(ac.monto_por_liquidar)>0?C.gld:C.txt],[t("Reembolsado")+" · "+ovDays+"d","$"+fm(rg.reembolsado||0),Number(rg.reembolsado)>0?C.acc:C.txt],[t("Comisión")+" · "+ovDays+"d","$"+fm(ov3.fee),C.grnTxt||C.grn]].map(([l,v,c],i)=>
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"3px 0",borderTop:i>0?"1px solid "+C.bd+"55":"none"}}>
+                    <span style={{color:C.ts}}>{l}</span><span style={{color:c,fontWeight:700,..._s.mono}}>{v}</span>
+                  </div>)}
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <Metric label={t("Campos activos")} val={sp.venues_activos} hint={fm(sp.slots_futuros)+" "+t("slots futuros")} col={C.grn}/>
+                <Metric label={t("Jugadores")} val={dm.jugadores_total} hint={dm.jugadores_con_reserva+" "+t("han reservado")}/>
+              </div>
+            </div>
           </div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
-            {[["active",t("Activos"),C.grn],["pending_review",t("Pendientes"),C.gld],["draft",t("Borrador"),C.tm],["suspended",t("Suspendidos"),C.acc]].map(([k,l,c])=>
-              <button key={k} onClick={()=>{setFilter(k);setTab(1)}} style={{padding:"5px 10px",borderRadius:8,border:"1px solid "+c+"35",background:c+"10",color:c,fontSize:10.5,fontWeight:700,cursor:"pointer"}}>{l}: {byS[k]||0}</button>)}
+
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:(C.grn)+"12",border:"1px solid "+C.grn+"30",borderRadius:11,marginBottom:6}}>
+            <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("heart",14,C.grnTxt||C.grn)}}/>
+            <span style={{fontSize:11,color:C.grnTxt||C.grn,lineHeight:1.4}}>{cierre}</span>
           </div>
         </div>})()}
       {tab===1&&<div className="fi">
