@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.partee.golf",
+    "sha256_cert_fingerprints": ["42:D2:D6:3E:8A:10:92:E8:E4:A9:E7:B7:1B:FF:1E:7D:15:E3:F8:0B:19:04:99:73:46:30:23:2D:EB:FA:76:C4"]
+  }
+}]
