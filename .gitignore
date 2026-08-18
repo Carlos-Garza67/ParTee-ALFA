@@ -1,0 +1,13 @@
+# Dependencias de las herramientas de validacion (tools/)
+# Se regeneran con: npm install
+node_modules/
+package-lock.json
+
+# Artefactos de sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*

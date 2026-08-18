@@ -1,0 +1,17 @@
+{
+  "name": "partee-tools",
+  "private": true,
+  "description": "Herramientas de validacion de Partee Golf: validate2.js (Babel estricto + baseline) y smoke.js (render jsdom). Instalar una vez con: npm install",
+  "scripts": {
+    "validate": "node tools/validate2.js public/index.html",
+    "smoke": "node tools/smoke.js public/index.html",
+    "check": "node tools/validate2.js public/index.html && node tools/smoke.js public/index.html"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-react": "^7.24.0",
+    "jsdom": "^24.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
