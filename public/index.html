@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.42 (Homologacion de material de tarjetas: la segunda comparacion lado a lado de Carlos revelo la diferencia de fondo real — las tarjetas del jugador no son solidas, son GlassCard (blanco al 4 por ciento con borde blanco al 10 sobre el fondo de la app, mas sombra de card), mientras la del Insight semanal era opaca con gradiente. La tarjeta del insight ahora usa exactamente el material del jugador: C.glass con C.glassBd y C.shCard, radius 14 — se funde con el fondo igual que las tarjetas del Versus. Era el unico gradiente de card en el admin. Nota de contexto que queda para el futuro: los halos radiales ambientales del body en tablet y desktop se posicionan por porcentaje del viewport, asi que dos ventanas de distinto ancho lado a lado nunca mostraran el fondo identico — es geometria, no tokens; y ese halo usa todavia el rojo viejo e94560 al 10 por ciento, candidato a actualizarse a FF5470 si se quiere pureza de paleta. Baseline 278. Base: v33.41)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.43 (Pureza de paleta: los ultimos rastros del rojo viejo e94560 fuera de logo y landing migrados al acc actual FF5470 con las mismas alphas. Cuatro sitios: los dos halos radiales ambientales del body en tablet y desktop, el fondo del toast de error, la animacion pulse de box-shadow, y la sombra del boton Guardar-Editar del perfil de campo. El SVG del landing conserva e94560 a proposito — ahi es identidad de marca permitida. Con esto rgba de 233-69-96 solo existe en el landing. Sin cambios de diccionario ni de layout. Baseline 278. Base: v33.42)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -204,7 +204,7 @@ window.__al=function(){};
 *:focus-visible{outline:2px solid var(--acc,#FF5470);outline-offset:2px;border-radius:4px}
 .toast-wrap{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:90%;max-width:380px}
 .toast{pointer-events:auto;padding:14px 20px;border-radius:14px;color:#fff;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.15);display:flex;align-items:center;gap:10px;animation:toast-in .35s cubic-bezier(.34,1.56,.64,1);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-.toast.success{background:rgba(0,184,148,.92)}.toast.error{background:rgba(233,69,96,.92)}.toast.info{background:var(--card-bg,rgba(26,26,46,.92));border:1px solid var(--bd,rgba(255,255,255,.1));color:var(--txt,#fff)}.toast.warn{background:rgba(253,203,110,.92);color:#1a1a2e}
+.toast.success{background:rgba(0,184,148,.92)}.toast.error{background:rgba(255,84,112,.92)}.toast.info{background:var(--card-bg,rgba(26,26,46,.92));border:1px solid var(--bd,rgba(255,255,255,.1));color:var(--txt,#fff)}.toast.warn{background:rgba(253,203,110,.92);color:#1a1a2e}
 .toast-out{animation:toast-out .3s ease-in forwards}
 @keyframes toast-in{from{opacity:0;transform:translateY(-20px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-20px) scale(.9)}}
@@ -219,7 +219,7 @@ window.__al=function(){};
 @keyframes fade-in{from{opacity:0}to{opacity:1}}
 .skeleton{background:linear-gradient(90deg,var(--bd) 25%,var(--txt-m) 50%,var(--bd) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;opacity:.25}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.btn-pulse{animation:pulse 2s infinite}@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(233,69,96,.4)}70%{box-shadow:0 0 0 12px rgba(233,69,96,0)}}
+.btn-pulse{animation:pulse 2s infinite}@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,84,112,.4)}70%{box-shadow:0 0 0 12px rgba(255,84,112,0)}}
 @keyframes parteePulseGrn{0%,100%{box-shadow:0 0 0 0 rgba(0,184,148,.5)}50%{box-shadow:0 0 0 6px rgba(0,184,148,0)}}
 @keyframes parteePulseGld{0%,100%{box-shadow:0 0 0 0 rgba(253,203,110,.5)}50%{box-shadow:0 0 0 6px rgba(253,203,110,0)}}
 @keyframes hintBounce{0%,100%{transform:translateY(-50%) translateX(0)}50%{transform:translateY(-50%) translateX(-4px)}}
@@ -272,7 +272,7 @@ window.__al=function(){};
 /* Tablet: 768px+ */
 @media (min-width:768px){
   :root{--app-max:600px;--app-pad:20px}
-  body{background:radial-gradient(circle at 30% 20%,rgba(0,184,148,.08),transparent 50%),radial-gradient(circle at 70% 80%,rgba(233,69,96,.08),transparent 50%),var(--app-bg,#0A0B10) !important}
+  body{background:radial-gradient(circle at 30% 20%,rgba(0,184,148,.08),transparent 50%),radial-gradient(circle at 70% 80%,rgba(255,84,112,.08),transparent 50%),var(--app-bg,#0A0B10) !important}
   .app-container{box-shadow:0 0 80px rgba(0,0,0,.5);border-left:1px solid rgba(255,255,255,.05);border-right:1px solid rgba(255,255,255,.05)}
   .bnav{max-width:600px !important;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
   .modal-box{max-width:560px !important;border-radius:24px !important;margin-bottom:20px;max-height:calc(100vh - 80px) !important}
@@ -288,7 +288,7 @@ window.__al=function(){};
 /* Desktop: 1024px+ */
 @media (min-width:1024px){
   :root{--app-max:520px;--app-pad:20px}
-  body{background:radial-gradient(circle at 25% 20%,rgba(0,184,148,.10),transparent 45%),radial-gradient(circle at 75% 80%,rgba(233,69,96,.10),transparent 45%),radial-gradient(circle at 50% 50%,rgba(15,52,96,.08),transparent 70%),var(--app-bg,#0A0B10) !important;min-height:100vh}
+  body{background:radial-gradient(circle at 25% 20%,rgba(0,184,148,.10),transparent 45%),radial-gradient(circle at 75% 80%,rgba(255,84,112,.10),transparent 45%),radial-gradient(circle at 50% 50%,rgba(15,52,96,.08),transparent 70%),var(--app-bg,#0A0B10) !important;min-height:100vh}
   .app-container{box-shadow:0 0 100px rgba(0,0,0,.6),0 30px 80px rgba(0,0,0,.4);border-left:1px solid rgba(255,255,255,.08);border-right:1px solid rgba(255,255,255,.08)}
   .bnav{max-width:520px !important;box-shadow:0 -4px 24px rgba(0,0,0,.4)}
   .modal-box{max-width:520px !important;max-height:calc(100vh - 100px) !important}
@@ -10928,7 +10928,7 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
   const AMENITIES=[{k:"caddies",l:"Caddies",i:ic("user",13)},{k:"alquiler_palos",l:t("Alquiler de palos"),i:ic("golf",13)},{k:"carrito_electrico",l:t("Carritos eléctricos"),i:ic("car",13)},{k:"driving_range",l:"Driving Range",i:ic("target",13)},{k:"putting_green",l:"Putting Green",i:ic("disc",13)},{k:"chipping_green",l:"Chipping Green",i:ic("flag",13)},{k:"clases_pro",l:t("Clases con pro"),i:ic("trophy",13)},{k:"vestidores",l:t("Vestidores"),i:ic("home",13)},{k:"lockers",l:"Lockers",i:ic("lock",13)},{k:"regaderas",l:t("Regaderas"),i:ic("droplet",13)},{k:"wifi",l:"WiFi",i:ic("wifi",13)},{k:"estacionamiento",l:t("Estacionamiento"),i:ic("parking",13)},{k:"valet_parking",l:"Valet parking",i:ic("parking",13)},{k:"transporte",l:t("Transporte / shuttle"),i:ic("car",13)}];
   const toggleAmenity=(k)=>{if(!ed)return;setAmenities(prev=>prev.includes(k)?prev.filter(x=>x!==k):[...prev,k])};
   return<div className="fi">
-    {section!=="cuenta"&&<div style={{..._s.flexB,justifyContent:"flex-end",marginBottom:14}}><button onClick={()=>ed?saveCourse():setEd(true)} style={{background:C.acc,border:"none",color:"#fff",fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:10,cursor:"pointer",boxShadow:"0 4px 12px rgba(233,69,96,.25)"}}>{sv?"...":ed?t("Guardar"):t("Editar")}</button></div>}
+    {section!=="cuenta"&&<div style={{..._s.flexB,justifyContent:"flex-end",marginBottom:14}}><button onClick={()=>ed?saveCourse():setEd(true)} style={{background:C.acc,border:"none",color:"#fff",fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:10,cursor:"pointer",boxShadow:"0 4px 12px rgba(255,84,112,.25)"}}>{sv?"...":ed?t("Guardar"):t("Editar")}</button></div>}
     {S("identidad")&&<div className="ar" style={{marginBottom:14}}><div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:C.txt}}>{course.course_name}</div><div style={{fontSize:12,color:C.ts,marginTop:2}}>{course.city}, {course.state}</div></div></div>}
     {S("operacion")&&<><div style={{..._s.grid2lg,marginBottom:14}}>{[{l:t("TELÉFONO"),v:phone,set:setPhone,k:"phone"},{l:t("PRECIO MÍN"),v:feeMin,set:setFeeMin,k:"fees"},{l:t("PRECIO MÁX"),v:feeMax,set:setFeeMax,k:null}].map((f,i)=><div key={i} id={f.k?"field-"+f.k:undefined} style={{transition:"box-shadow .3s",boxShadow:f.k&&highlight===f.k?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{f.l}</label><input value={f.v} onChange={x=>f.set(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd}}/></div>)}
     {ft==="plataforma"&&<div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("BAHÍAS")}</label><input value={stCount} onChange={x=>setStCount(x.target.value)} disabled={!ed} type="number" style={{...inp0,marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd}}/></div>}
