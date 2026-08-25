@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.28 (Fechas homologadas: los 19 input type=date nativos de la app (15 de admin + 4 del propio jugador en ProSection, PerformanceScreen y MatchScreen) desaparecen. DatePick19 ahora acepta min/max opcionales — sin props conserva exacto el comportamiento de fecha de nacimiento del onboarding — y el nuevo componente global DateField (baseline 274 a 275) lo envuelve con el lenguaje del design system: boton card C.cd con icono calendar, valor formateado es-MX y chevron, mismo patron del dropdown fiscal v33.07; variante compact para headers densos (AdminBookings, AdminSlots) y clearable con x para fechas opcionales (Vence de AdminMembers). El chip de fecha de Unete a un grupo pierde el input invisible encima y abre el picker directo, con x para quitar el filtro. Los min/max de cada sitio se conservan identicos; donde no habia restriccion no se agrego. Cero selects tocados aun — siguiente fase. Base: v33.27)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.29 (Selects homologados, fase final del inventario: los 31 select nativos visibles desaparecen — admin (Roster equipo y status, filtros de AdminBookings, StaffManager, fiscal x2, zona horaria del campo, hoyos AdminProfile, SAT regimen y CFDI, LiveMap asignar, campanias segmento, AdminMembers x7, AdminTournaments x3, TourneoTab, GuestBooking horario, BayBlocks) y player (hoyo de FnB, zona horaria del Perfil, campo y filtro de lugar en MatchScreen, club en MembershipsScreen, campo manual en Performance). Pick19 ahora acepta opciones v-l ademas de strings, y el nuevo SelectField global (baseline 275 a 276) es el trigger homologado: card C.cd con valor y chevron que abre el bottom sheet del jugador; soporta disabled (form fiscal bloqueado) y placeholder. Los chips de Unete a un grupo (fecha y lugar) abren Pick19 directo sin selects invisibles encima. Queda 1 select en un div display none legacy del Perfil (invisible, no es UI). Con esto el inventario visual queda completo: pagos, botones, colores, fechas y selects hablan el mismo idioma. Base: v33.28)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -1305,13 +1305,29 @@ function DatePick19({onClose,val,onPick,title,min,max}){
       <button onClick={ok} style={{width:"100%",marginTop:14,padding:15,background:C.acc,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",letterSpacing:"0.01em"}}>{t("Confirmar")}</button>
     </div>
   </div>}
-const Pick19=({open,onClose,title,opts,val,onPick})=>!open?null:<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,.62)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+const Pick19=({open,onClose,title,opts,val,onPick})=>{/* v33.29: acepta opciones string (historico) o {v,l} para SelectField */
+  if(!open)return null;const ov=o=>(o&&typeof o==="object")?o.v:o;const ol=o=>(o&&typeof o==="object")?o.l:o;
+  return<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,.62)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
   <div onClick={ev=>ev.stopPropagation()} className="fi" style={{width:"100%",maxWidth:480,maxHeight:"72vh",background:"#12141A",borderRadius:"20px 20px 0 0",padding:"12px 0 max(10px,env(safe-area-inset-bottom))",display:"flex",flexDirection:"column",boxShadow:"0 -12px 40px rgba(0,0,0,.5)"}}>
     <div style={{width:40,height:4,borderRadius:99,background:"rgba(255,255,255,.18)",margin:"0 auto 12px",flexShrink:0}}/>
     <div style={{fontSize:15,fontWeight:800,color:C.txt,padding:"0 18px 10px",flexShrink:0}}>{title}</div>
-    <div style={{overflowY:"auto",padding:"0 10px 8px"}}>{opts.map(o=><div key={o} onClick={()=>{onPick(o);onClose()}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 12px",borderRadius:12,background:val===o?"rgba(255,84,112,.1)":"transparent",cursor:"pointer"}}><span style={{fontSize:14.5,fontWeight:val===o?800:600,color:val===o?C.txt:C.ts}}>{o}</span>{val===o&&<span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("check",15,C.acc)}}/>}</div>)}</div>
+    <div style={{overflowY:"auto",padding:"0 10px 8px"}}>{opts.map(o=><div key={ov(o)} onClick={()=>{onPick(ov(o));onClose()}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"13px 12px",borderRadius:12,background:val===ov(o)?"rgba(255,84,112,.1)":"transparent",cursor:"pointer"}}><span style={{fontSize:14.5,fontWeight:val===ov(o)?800:600,color:val===ov(o)?C.txt:C.ts,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{ol(o)}</span>{val===ov(o)&&<span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("check",15,C.acc)}}/>}</div>)}</div>
   </div>
-</div>;
+</div>}
+/* v33.29: SelectField — reemplazo homologado de TODO select nativo de la app. Boton con el
+   lenguaje del design system que abre Pick19 (bottom sheet del jugador). opts: strings o {v,l}. */
+function SelectField({val,onChange,opts,title,ph,style:stF,disabled,ariaLabel}){
+  const[open,setOpen]=useState(false);
+  const ov=o=>(o&&typeof o==="object")?o.v:o;const ol=o=>(o&&typeof o==="object")?o.l:o;
+  const cur=(opts||[]).find(o=>ov(o)===val);
+  const lbl=cur!==undefined?ol(cur):(ph||t("Selecciona…"));
+  return<React.Fragment>
+    <button type="button" disabled={disabled} onClick={()=>!disabled&&setOpen(true)} aria-label={ariaLabel||title||t("Opciones")} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:cur!==undefined?C.txt:C.tm,fontSize:13,display:"flex",alignItems:"center",gap:8,cursor:disabled?"default":"pointer",textAlign:"left",boxSizing:"border-box",opacity:disabled?.55:1,...stF}}>
+      <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lbl}</span>
+      <span style={{display:"flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("down",13,C.tm)}}/>
+    </button>
+    <Pick19 open={open} onClose={()=>setOpen(false)} title={title||t("Selecciona")} opts={opts||[]} val={val} onPick={onChange}/>
+  </React.Fragment>}
 /* v33.28: DateField — reemplazo homologado de TODO input type=date de la app (admin y player).
    Boton con el lenguaje del design system (card C.cd, borde, icono calendar, chevron — mismo
    patron del dropdown fiscal v33.07) que abre DatePick19. compact: variante texto-plano para
@@ -4639,10 +4655,7 @@ function FnbOrderSheet({booking,onClose}){
             <label style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.3}}>{t("¿En qué hoyo estás?")}</label>
             {gpsHole&&<span style={{fontSize:9,fontWeight:800,color:C.grn,background:C.grn+"15",padding:"1px 7px",borderRadius:6}}>{t("GPS: hoyo ")+gpsHole}</span>}
           </div>
-          <select value={hole} onChange={e=>setHole(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:13,appearance:"auto"}}>
-            <option value="">{t("Selecciona tu hoyo")}</option>
-            {Array.from({length:holeCount},(_,i)=>i+1).map(n=><option key={n} value={String(n)}>{t("Hoyo ")+n}</option>)}
-          </select>
+          <SelectField val={hole} onChange={setHole} title={t("Selecciona tu hoyo")} opts={[{v:"",l:t("Selecciona tu hoyo")},...Array.from({length:holeCount},(_,i)=>({v:String(i+1),l:t("Hoyo ")+(i+1)}))]}/>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div>
@@ -6357,7 +6370,7 @@ function TourneoTab(props){
         {myBookings.length>2&&<div data-hint="r" style={{position:"absolute",top:"50%",right:4,transform:"translateY(-50%)",width:26,height:26,borderRadius:13,background:C.cd,border:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",opacity:1,transition:"opacity .25s",animation:"hintBounce 1.8s ease-in-out infinite",boxShadow:"0 2px 8px rgba(0,0,0,.3)"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.ts)}}/>}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0 10px"}}><div style={{flex:1,height:1,background:C.bd}}/><span style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>O ELIGE OTRO CAMPO</span><div style={{flex:1,height:1,background:C.bd}}/></div></>}
-      <label style={{fontSize:11,color:C.tm,fontWeight:600}}>{t("CAMPO")}</label><select value={selCourse||""} onChange={x=>{setSelCourse(x.target.value);setSelBkId(null);setBkRef(null);const c=courses.find(cc=>cc.id===x.target.value);if(c&&(!tName||autoFilledName)){setTName(c.course_name);setAutoFilledName(true)}}} style={{...inp0,marginTop:4,marginBottom:4,appearance:"auto"}}><option value="">-- Selecciona campo --</option>{courses.map(c=><option key={c.id} value={c.id}>{c.course_name} - {c.city}</option>)}</select></>}</>}
+      <label style={{fontSize:11,color:C.tm,fontWeight:600}}>{t("CAMPO")}</label><SelectField val={selCourse||""} onChange={v=>{setSelCourse(v);setSelBkId(null);setBkRef(null);const c=courses.find(cc=>cc.id===v);if(c&&(!tName||autoFilledName)){setTName(c.course_name);setAutoFilledName(true)}}} title={t("Campo")} opts={[{v:"",l:"-- Selecciona campo --"},...courses.map(c=>({v:c.id,l:c.course_name+" - "+c.city}))]} style={{marginTop:4,marginBottom:4}}/></>}</>}
     {step===4&&<><div style={{marginBottom:10,padding:"10px 12px",background:gMode==="teams"?(selFr.length===3?C.grn+"15":C.gld+"10"):C.grn+"10",border:"1px solid "+(gMode==="teams"?(selFr.length===3?C.grn+"40":C.gld+"30"):C.grn+"30"),borderRadius:10,fontSize:12,color:C.txt,fontWeight:600,display:"flex",alignItems:"center",gap:8}}><span dangerouslySetInnerHTML={{__html:ic(gMode==="teams"&&selFr.length===3?"check":"users",13,gMode==="teams"?(selFr.length===3?C.grn:C.gld):C.grn)}}/><span>{gMode==="teams"?`Equipos: selecciona exactamente 3 amigos (${selFr.length}/3)`:gFmt==="match_play"?`Match Play: selecciona exactamente 1 oponente (${selFr.length}/1)`:`Selecciona los amigos a invitar (${selFr.length} seleccionado${selFr.length===1?"":"s"})`}</span></div>{friends.length===0?<p style={{color:C.tm,fontSize:13}}>{t("Sin amigos. Agrega desde la tab Amigos.")}</p>:friends.map(f=>{const sel=selFr.includes(f.friend?.id);const dis=selFr.length>=maxP&&!sel;return<div key={f.friend?.id} onClick={()=>{if(dis)return;setSelFr(pr=>sel?pr.filter(x=>x!==f.friend?.id):[...pr,f.friend?.id])}} style={{display:"flex",alignItems:"center",gap:10,background:sel?C.grn+"12":C.bg,border:"1px solid "+(sel?C.grn:C.bd),borderRadius:10,padding:12,marginBottom:6,cursor:dis?"not-allowed":"pointer",opacity:dis?.4:1}}><div style={{width:32,height:32,borderRadius:14,background:sel?C.grn+"30":C.pri,display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:sel?ic("check",14,C.grn):ic("user",14,C.tm)}}/><div style={{flex:1}}><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{f.friend?.nickname||f.friend?.full_name}</div><div style={{color:C.gld,fontSize:10,..._s.mono}}>{f.friend?.player_id}</div></div></div>})}</>}
     {step===5&&<>{(()=>{
       // v18.3.17: incluir al organizador en la lista para que pueda elegir su team
@@ -7645,7 +7658,7 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
   const nextLvl=levelThresholds[Math.max(0,curLvlIdx>=0?curLvlIdx:0)];
   const nextLevelXp=nextLvl?.xp||200;const nextLevelName=nextLvl?.n||"Amateur";const[openSec,setOpenSec]=useState(null);const[termsView,setTermsView]=useState(null);
   // v32.13 (13a): sheets de Cuenta (adios acordeones), fotos de campos y duelos para actividad
-  const[cfgSheet,setCfgSheet]=useState(null);
+  const[cfgSheet,setCfgSheet]=useState(null);const[tzOpen,setTzOpen]=useState(false);/* v33.29: Pick19 para zona horaria (antes select nativo invisible) */
   const[cPhotosP,setCPhotosP]=useState({});const[recentDuels,setRecentDuels]=useState([]);
   const[hcDelta,setHcDelta]=useState(null);
   useEffect(()=>{if(!s?.user?.id)return;sb.from("handicap_history").select("handicap,recorded_at").eq("user_id",s.user.id).order("recorded_at",{ascending:false}).limit(2).then(({data})=>{if(data&&data.length===2&&data[0].handicap!=null&&data[1].handicap!=null){const d9=Number(data[0].handicap)-Number(data[1].handicap);if(Math.abs(d9)>=0.05)setHcDelta(d9)}})},[s?.user?.id]);
@@ -7872,11 +7885,11 @@ function Profile({onRanking,onPerformance}){const{p:pr,out,ref,s,setP}=useA();co
         <div style={{height:1,background:C.bd,marginLeft:14}}/>
         <ThemeSegRow/>
         <div style={{height:1,background:"rgba(255,255,255,.06)",marginLeft:14}}/>
-        <div style={{position:"relative",display:"flex",alignItems:"center",gap:10,padding:"13px 14px",cursor:"pointer"}}>
+        <div onClick={()=>setTzOpen(true)} style={{position:"relative",display:"flex",alignItems:"center",gap:10,padding:"13px 14px",cursor:"pointer"}}>
           <span style={{flex:1,fontSize:13.5,fontWeight:600,color:C.txt}}>{t("Zona horaria")}</span>
           <span style={{fontSize:13,color:C.tm,maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userTz?userTz.split("/").pop().replace("_"," "):t("Automática")+" ("+detectTz().split("/").pop().replace("_"," ")+")"}</span>
           <span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("right",12,C.mut||"#5B6270")}}/>
-          <select value={userTz} onChange={e=>{setUserTz(e.target.value);sb.from("user_profiles").update({timezone:e.target.value||null}).eq("id",s.user.id).then(()=>ref())}} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer"}}><option value="">{t("Detectar automático")} ({detectTz().split("/").pop()})</option>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select>
+          <Pick19 open={tzOpen} onClose={()=>setTzOpen(false)} title={t("Zona horaria")} opts={[{v:"",l:t("Detectar automático")+" ("+detectTz().split("/").pop()+")"},...MX_TZ]} val={userTz} onPick={v=>{setUserTz(v);sb.from("user_profiles").update({timezone:v||null}).eq("id",s.user.id).then(()=>ref())}}/>
         </div>
       </div>
       <ChangePassword/><div style={{marginTop:4,display:"none"}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6,display:"block"}}>{t("ZONA HORARIA")}</label><select value={userTz} onChange={e=>{setUserTz(e.target.value);if(ed){}else{sb.from("user_profiles").update({timezone:e.target.value}).eq("id",s.user.id).then(()=>ref())}}} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.txt,outline:"none",boxSizing:"border-box",appearance:"auto"}}><option value="">{t("Detectar automático")} ({detectTz().split("/").pop()})</option>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select></div><div style={{marginTop:8}}><MyGPSSection/></div></div>},{k:"payments",icon:ic("credit",18,C.gld),label:t("Método de pago y movimientos"),color:C.gld,content:<PaymentAndMovementsSection/>},{k:"notifs",icon:ic("bell",18,C.secBlu||"#5b86e5"),label:t("Notificaciones"),color:C.secBlu||"#5b86e5",content:<NotificationPrefs/>},{k:"referral",icon:ic("handshake",18,C.gld),label:t("Invita y gana"),color:C.gld,content:<ReferralSection/>}];const cur=secs.find(x9=>x9.k===cfgSheet);return cur?cur.content:null})()}
@@ -9063,7 +9076,7 @@ function GuestBookingModal({course,onClose,onDone}){
           <div><label style={{fontSize:9.5,color:C.tm,fontWeight:700}}>{t("HORARIO")}</label>
             {times===null?<div style={{fontSize:11,color:C.tm,padding:"12px 0"}}>{t("Cargando...")}</div>
             :times.length===0?<div style={{fontSize:11,color:C.acc,padding:"12px 0"}}>{t("Sin horarios disponibles")}</div>
-            :<select value={fTime} onChange={e=>setFTime(e.target.value)} style={{...inp,appearance:"auto"}}>{times.map(s=><option key={s.slot_time} value={s.slot_time}>{s.slot_time.slice(0,5)+" · $"+fm(s.price)+" · "+((s.max_bookings||0)-(s.booking_count||0))+" "+t("libres")}</option>)}</select>}
+            :<SelectField val={fTime} onChange={setFTime} title={t("Horario")} opts={times.map(s=>({v:s.slot_time,l:s.slot_time.slice(0,5)+" · $"+fm(s.price)+" · "+((s.max_bookings||0)-(s.booking_count||0))+" "+t("libres")}))}/>}
           </div>
         </div>}
         {mode==="ahora"&&<div style={{fontSize:10.5,color:C.tm,background:C.cd,border:"1px dashed "+C.bd,borderRadius:9,padding:"8px 10px"}}>{t("Se usara el proximo horario disponible de hoy y se asignara")+" "+unitB.toLowerCase()+" "+t("automaticamente.")}</div>}
@@ -9683,9 +9696,7 @@ function AdminRoster({course, onExit}){const{p}=useA();const isTeam=p?.user_role
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <div>
             <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>TIPO</div>
-            <select value={editingEq.equipment_type||"golf_cart_electric"} onChange={e=>setEditingEq({...editingEq,equipment_type:e.target.value})} style={inpSm}>
-              {Object.entries(eqLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}
-            </select>
+            <SelectField val={editingEq.equipment_type||"golf_cart_electric"} onChange={v=>setEditingEq({...editingEq,equipment_type:v})} title={t("Tipo de equipo")} opts={Object.entries(eqLabels).map(([k,v])=>({v:k,l:v}))}/>
           </div>
           <div>
             <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>IDENTIFICADOR</div>
@@ -9695,11 +9706,7 @@ function AdminRoster({course, onExit}){const{p}=useA();const isTeam=p?.user_role
             <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>STATUS</div>
             {editingEq.status==="in_use"?
               <div style={{fontSize:11,color:C.gld,background:C.gld+"12",border:"1px solid "+C.gld+"30",borderRadius:8,padding:"8px 10px",lineHeight:1.4}}>En uso (asignado) · libera el equipo en Asignaciones para cambiar su estado</div>
-            :<select value={editingEq.status||"available"} onChange={e=>setEditingEq({...editingEq,status:e.target.value})} style={inpSm}>
-              <option value="available">Disponible</option>
-              <option value="maintenance">Mantenimiento</option>
-              <option value="retired">Retirado</option>
-            </select>}
+            :<SelectField val={editingEq.status||"available"} onChange={v=>setEditingEq({...editingEq,status:v})} title="Status" opts={[{v:"available",l:"Disponible"},{v:"maintenance",l:"Mantenimiento"},{v:"retired",l:"Retirado"}]}/>}
           </div>
           <div>
             <div style={{fontSize:10,color:C.tm,fontWeight:700,marginBottom:4,letterSpacing:1}}>NOTAS</div>
@@ -10100,20 +10107,8 @@ function AdminBookings({course}){
       <button onClick={exportCSV} disabled={filtered.length===0} title="Export CSV" aria-label="Export CSV" style={{border:"none",background:"none",cursor:filtered.length?"pointer":"default",opacity:filtered.length?1:.4,padding:4,display:"flex"}} dangerouslySetInnerHTML={{__html:ic("download",14,C.tm)}}/>
     </div>
     {fOpen&&<div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
-      <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{...inpSm,flex:"0 1 150px",minWidth:120}}>
-        <option value="all">Todos status</option>
-        <option value="confirmed">{t("Confirmada")}</option>
-        <option value="cancelled">{t("Cancelada")}</option>
-        <option value="no_show">No-show</option>
-        <option value="pending">{t("Pendiente")}</option>
-      </select>
-      <select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} style={{...inpSm,flex:"0 1 150px",minWidth:120}}>
-        <option value="all">Todo pago</option>
-        <option value="paid">{t("Cobrado")}</option>
-        <option value="refunded">{t("Reembolsado")}</option>
-        <option value="no_show_fee">No-show Fee</option>
-        <option value="free">{t("Gratis")}</option>
-      </select>
+      <SelectField val={statusFilter} onChange={setStatusFilter} title="Status" opts={[{v:"all",l:"Todos status"},{v:"confirmed",l:t("Confirmada")},{v:"cancelled",l:t("Cancelada")},{v:"no_show",l:"No-show"},{v:"pending",l:t("Pendiente")}]} style={{width:"auto",flex:"0 1 150px",minWidth:120}}/>
+      <SelectField val={paymentFilter} onChange={setPaymentFilter} title={t("Pago")} opts={[{v:"all",l:"Todo pago"},{v:"paid",l:t("Cobrado")},{v:"refunded",l:t("Reembolsado")},{v:"no_show_fee",l:"No-show Fee"},{v:"free",l:t("Gratis")}]} style={{width:"auto",flex:"0 1 150px",minWidth:120}}/>
       {(statusFilter!=="all"||paymentFilter!=="all"||bkSearch)&&<button onClick={()=>{setStatusFilter("all");setPaymentFilter("all");setBkSearch("")}} style={{border:"none",background:"none",color:C.accTx2||C.acc,fontSize:11,fontWeight:700,cursor:"pointer"}}>{t("Borrar todo")}</button>}
     </div>}
     {/* linea de contexto: resumen del rango + acciones */}
@@ -10517,7 +10512,7 @@ function StaffManager({course, onChange, showIntro}){
         <div style={{fontSize:11,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:9,textTransform:"uppercase"}}>{editing.id?"Editar usuario":"Nuevo usuario"}</div>
         <input value={editing.full_name||""} onChange={e=>setEditing({...editing,full_name:e.target.value})} placeholder="Nombre" style={{...inp,marginBottom:8}}/>
         <input value={editing.phone||""} onChange={e=>setEditing({...editing,phone:e.target.value})} placeholder="Celular (opcional)" inputMode="tel" style={{...inp,marginBottom:8}}/>
-        <select value={editing.role||"caddie"} onChange={e=>setEditing({...editing,role:e.target.value})} style={{...inp,marginBottom:8}}>{ROLES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
+        <SelectField val={editing.role||"caddie"} onChange={v=>setEditing({...editing,role:v})} title={t("Rol")} opts={ROLES.map(([k,l])=>({v:k,l:l}))} style={{marginBottom:8}}/>
         <input value={editing.notes||""} onChange={e=>setEditing({...editing,notes:e.target.value})} placeholder="Notas (opcional)" style={{...inp,marginBottom:8}}/>
         <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.txt,padding:"4px 0 10px"}}><input type="checkbox" checked={editing.active!==false} onChange={e=>setEditing({...editing,active:e.target.checked})}/>Activo</label>
         <div style={{display:"flex",gap:8}}>
@@ -10781,19 +10776,12 @@ function FiscalDetailsCard({course}){
       {fld("tax_id",t("RFC"),"XAXX010101000",{maxLength:13,style:{}})}
       <div style={{marginBottom:10}}>
         <label style={{fontSize:9.5,fontWeight:800,color:C.tm,letterSpacing:.4,textTransform:"uppercase"}}>{t("Tipo")}<span style={{color:C.acc}}> *</span></label>
-        <select value={f.entity_type||""} onChange={e=>set("entity_type",e.target.value)} disabled={!ed||locked} style={{...inp0,marginTop:3,padding:"10px 12px",fontSize:13,background:(ed&&!locked)?"var(--app-bg)":"var(--card-bg)"}}>
-          <option value="">{t("Selecciona")}</option>
-          <option value="persona_moral">{t("Persona moral")}</option>
-          <option value="persona_fisica">{t("Persona física")}</option>
-        </select>
+        <SelectField val={f.entity_type||""} onChange={v=>set("entity_type",v)} disabled={!ed||locked} title={t("Tipo de persona")} opts={[{v:"",l:t("Selecciona")},{v:"persona_moral",l:t("Persona moral")},{v:"persona_fisica",l:t("Persona física")}]} style={{marginTop:3,background:(ed&&!locked)?"var(--app-bg)":"var(--card-bg)"}}/>
       </div>
     </div>
     <div style={{marginBottom:10}}>
       <label style={{fontSize:9.5,fontWeight:800,color:C.tm,letterSpacing:.4,textTransform:"uppercase"}}>{t("Régimen fiscal")}</label>
-      <select value={f.fiscal_regime||""} onChange={e=>set("fiscal_regime",e.target.value)} disabled={!ed||locked} style={{...inp0,marginTop:3,padding:"10px 12px",fontSize:13,background:(ed&&!locked)?"var(--app-bg)":"var(--card-bg)"}}>
-        <option value="">{t("Selecciona")}</option>
-        {REGIMES.map(r=><option key={r} value={r}>{r}</option>)}
-      </select>
+      <SelectField val={f.fiscal_regime||""} onChange={v=>set("fiscal_regime",v)} disabled={!ed||locked} title={t("Régimen fiscal")} opts={[{v:"",l:t("Selecciona")},...REGIMES]} style={{marginTop:3,background:(ed&&!locked)?"var(--app-bg)":"var(--card-bg)"}}/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
       {fld("fiscal_address",t("Domicilio fiscal"),t("Calle, número, colonia, ciudad"))}
@@ -10946,7 +10934,7 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
     <div id="field-desc" style={{marginBottom:14,transition:"box-shadow .3s",boxShadow:highlight==="desc"?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("DESCRIPCIÓN")}</label><textarea value={desc} onChange={x=>setDesc(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,minHeight:60,resize:"vertical",fontFamily:"inherit",background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd}}/></div></>}
     {S("operacion")&&<><div style={{..._s.grid2lg,marginBottom:14}}><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("CANCEL. HORAS ANTES")}</label><input value={cancelHrs} onChange={x=>setCancelHrs(x.target.value)} disabled={!ed} type="number" style={{...inp0,marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd}}/></div><div><label style={{fontSize:10,color:C.tm,fontWeight:600}}>REEMBOLSO %</label><input value={cancelPct} onChange={x=>setCancelPct(x.target.value)} disabled={!ed} type="number" style={{...inp0,marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd}}/></div></div>
     <div style={{..._s.grid2lg,marginBottom:14}}><div id="field-hours" style={{transition:"box-shadow .3s",boxShadow:highlight==="hours"?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>HORARIO</label><input value={opHours} onChange={x=>setOpHours(x.target.value)} disabled={!ed} placeholder="7:00-18:00" style={{...inp0,marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd}}/></div><div id="field-days" style={{transition:"box-shadow .3s",boxShadow:highlight==="days"?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("DÍAS")}</label><input value={opDays} onChange={x=>setOpDays(x.target.value)} disabled={!ed} placeholder={t("Lun-Dom")} style={{...inp0,marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd}}/></div></div>
-    <div style={{marginBottom:14}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("ZONA HORARIA")}</label><select value={courseTz} onChange={x=>setCourseTz(x.target.value)} disabled={!ed} style={{...inp0,marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd,appearance:"auto",width:"100%"}}>{MX_TZ.map(z=><option key={z.v} value={z.v}>{z.l}</option>)}</select></div>
+    <div style={{marginBottom:14}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("ZONA HORARIA")}</label><SelectField val={courseTz} onChange={setCourseTz} disabled={!ed} title={t("Zona horaria")} opts={MX_TZ} style={{marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)"}}/></div>
     <div id="field-addr" style={{marginBottom:14,transition:"box-shadow .3s",boxShadow:highlight==="addr"?"0 0 0 2px "+C.acc:"none",borderRadius:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("DIRECCIÓN")}</label><input value={addr} onChange={x=>setAddr(x.target.value)} disabled={!ed} placeholder={t("Dirección completa")} style={{...inp0,marginTop:4,background:ed?"var(--app-bg)":"var(--card-bg)",color:"var(--txt)",border:"1px solid "+C.bd}}/></div>
     {/* v19.70: editor de coordenadas (latitude/longitude). Persist en golf_courses. */}
     <h4 style={{fontSize:12,fontWeight:700,color:C.tm,marginTop:6,marginBottom:8,letterSpacing:.5,textTransform:"uppercase"}}>{ft==="campo"?t("Coordenadas"):t("Ubicación en el mapa")}</h4>
@@ -11048,7 +11036,7 @@ function AdminProfile({course,onOut,onRefresh,autoEdit,focusField,onAutoEditCons
         <button onClick={()=>setN(nC+1)} style={{width:32,height:32,borderRadius:9,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:16,fontWeight:800,cursor:"pointer"}}>+</button>
       </div>:<span style={{fontSize:10,color:C.tm}}>{t("Toca Editar para cambiar el numero de cabinas")}</span>}
     </div>})()}<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{Array.from({length:Math.min(parseInt(cbCount||course.cabins_count)||0,20)},(_,i)=>i+1).map(n=>{const blk=bayBlk.some(b=>b.bay_number===n&&b.start_date<=ymdLocal()&&b.end_date>=ymdLocal());return<div key={n} title={blk?t("Fuera de servicio"):""} style={{width:56,height:56,borderRadius:14,background:blk?C.acc+"10":"#6c5ce710",border:"1px solid "+(blk?C.acc+"40":"#6c5ce730"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:blk?C.acc:"#6c5ce7",textDecoration:blk?"line-through":"none"}}>{n}</div>})}</div><BayBlocksManager course={course} unitB={t("Cabina")} maxN={parseInt(cbCount||course.cabins_count)||20} onBlocksChange={setBayBlk}/></>}
-    {editHole&&<div className="modal-bg" onClick={()=>setEditHole(null)}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:14}}>Hoyo {editHole}</h3><div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>PAR</label><select value={hPar} onChange={x=>setHPar(x.target.value)} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="3">Par 3</option><option value="4">Par 4</option><option value="5">Par 5</option></select></div><div><label style={{fontSize:10,color:C.tm}}>DISTANCIA</label><input value={hDist} onChange={x=>setHDist(x.target.value)} type="number" placeholder="yds" style={{...inp0,marginTop:4}}/></div></div><textarea value={hDesc} onChange={x=>setHDesc(x.target.value)} placeholder={t("Descripción...")} style={{...inp0,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/><div style={{display:"flex",gap:8,marginTop:14}}><button onClick={saveHole} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button><button onClick={()=>setEditHole(null)} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
+    {editHole&&<div className="modal-bg" onClick={()=>setEditHole(null)}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:14}}>Hoyo {editHole}</h3><div style={{..._s.grid2lg,marginBottom:12}}><div><label style={{fontSize:10,color:C.tm}}>PAR</label><SelectField val={hPar} onChange={setHPar} title="Par" opts={[{v:"3",l:"Par 3"},{v:"4",l:"Par 4"},{v:"5",l:"Par 5"}]} style={{marginTop:4}}/></div><div><label style={{fontSize:10,color:C.tm}}>DISTANCIA</label><input value={hDist} onChange={x=>setHDist(x.target.value)} type="number" placeholder="yds" style={{...inp0,marginTop:4}}/></div></div><textarea value={hDesc} onChange={x=>setHDesc(x.target.value)} placeholder={t("Descripción...")} style={{...inp0,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/><div style={{display:"flex",gap:8,marginTop:14}}><button onClick={saveHole} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button><button onClick={()=>setEditHole(null)} style={{padding:"12px 18px",background:"transparent",border:"1px solid "+C.bd,borderRadius:10,color:C.ts,cursor:"pointer"}}>{t("Cancelar")}</button></div></div></div>}
     {/* v19.71: modal editor de layout — create/edit con name, holes_count, par, rating, slope, is_default */}
     {editLayout&&<div className="modal-bg" onClick={closeLayoutEditor}><div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:C.cd,border:"1px solid "+C.bd,maxWidth:420}}><h3 style={{color:C.txt,fontSize:18,fontWeight:700,marginBottom:4}}>{editLayout.id?t("Editar layout"):t("Nuevo layout")}</h3><div style={{fontSize:11,color:C.ts,marginBottom:14}}>{t("Define un layout del campo (ej. Mountain, Ocean, 9 hoyos, Combo). Los ratings USGA se usan para calcular handicap.")}</div>
     <div style={{marginBottom:10}}><label style={{fontSize:10,color:C.tm,fontWeight:600}}>{t("NOMBRE")} *</label><input value={lyName} onChange={x=>setLyName(x.target.value)} placeholder={t("ej. Mountain Course, 18 hoyos, Combo Mountain+Ocean")} style={{...inp0,marginTop:4}} maxLength={80}/></div>
@@ -11821,7 +11809,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
     <button onClick={saveCard} disabled={saving||Object.keys(scores).length===0} style={{width:"100%",padding:14,marginTop:14,background:Object.keys(scores).length?`linear-gradient(135deg,${C.grn},#00cec9)`:C.cd,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer"}}>{saving?"Guardando...":t("Guardar")}</button></div>;
   if(create&&createMode==="manual")return<div className="fi" style={{padding:16}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}><button onClick={()=>setCreateMode(null)} style={{background:"none",border:"none",cursor:"pointer",color:C.txt,display:"flex",alignItems:"center"}} dangerouslySetInnerHTML={{__html:ic("left",22,C.txt)}}/><h2 style={{margin:0,fontSize:18,fontWeight:700,color:C.txt}}>{t("Entrada manual")}</h2></div>
     <label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Campo")}</label>
-    <select value={manualCourse?.id||""} onChange={e=>{const c=allCampos.find(x=>x.id===e.target.value);setManualCourse(c||null)}} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12,appearance:"auto"}}><option value="">-- {t("Seleccionar existente")} --</option>{allCampos.map(c=><option key={c.id} value={c.id}>{c.course_name} — {c.city}</option>)}</select>
+    <SelectField val={manualCourse?.id||""} onChange={v=>{const c=allCampos.find(x=>x.id===v);setManualCourse(c||null)}} title={t("Campo")} opts={[{v:"",l:"-- "+t("Seleccionar existente")+" --"},...allCampos.map(c=>({v:c.id,l:c.course_name+" — "+c.city}))]} style={{marginBottom:12}}/>
     {manualCourse&&<div style={{background:C.grn+"08",border:"1px solid "+C.grn+"20",borderRadius:10,padding:10,marginBottom:12,fontSize:12,color:C.grn}}>{manualCourse.course_name} · {manualCourse.hole_count||18} {t("Hoyos")} · Par {manualCourse.total_par||72}</div>}
     <label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Fecha")}</label>
     <DateField val={manualDate} onChange={setManualDate} max={ymdLocal()} title={t("Fecha de la ronda")} style={{marginBottom:12}}/>
@@ -12015,7 +12003,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
   </div>}
 
 function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=useState("browse");
-const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);const[myMemberships,setMyMemberships]=useState({});const[pendingCounts,setPendingCounts]=useState({});const[ld,setLd]=useState(true);const[courses,setCourses]=useState([]);const[selCourse,setSelCourse]=useState("");const[playDate,setPlayDate]=useState("");const[playTime,setPlayTime]=useState("");const[flexTime,setFlexTime]=useState(true);const[maxP,setMaxP]=useState(2);const[gameMode,setGameMode]=useState("");const[gameFmt,setGameFmt]=useState("");const[fDate,setFDate]=useState("");const[fDateOpen,setFDateOpen]=useState(false);const[fCourse,setFCourse]=useState("");const[detail,setDetail]=useState(null);const[dPhoto,setDPhoto]=useState(null);const[members,setMembers]=useState([]);const[pending,setPending]=useState([]);const[bookingParts,setBookingParts]=useState([]);// v19.39: booking_participants del booking asociado, para mostrar invitados manuales que NO están en match_members (joined_via='friend_invite')
+const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);const[myMemberships,setMyMemberships]=useState({});const[pendingCounts,setPendingCounts]=useState({});const[ld,setLd]=useState(true);const[courses,setCourses]=useState([]);const[selCourse,setSelCourse]=useState("");const[playDate,setPlayDate]=useState("");const[playTime,setPlayTime]=useState("");const[flexTime,setFlexTime]=useState(true);const[maxP,setMaxP]=useState(2);const[gameMode,setGameMode]=useState("");const[gameFmt,setGameFmt]=useState("");const[fDate,setFDate]=useState("");const[fDateOpen,setFDateOpen]=useState(false);const[fCourse,setFCourse]=useState("");const[fCourseOpen,setFCourseOpen]=useState(false);const[detail,setDetail]=useState(null);const[dPhoto,setDPhoto]=useState(null);const[members,setMembers]=useState([]);const[pending,setPending]=useState([]);const[bookingParts,setBookingParts]=useState([]);// v19.39: booking_participants del booking asociado, para mostrar invitados manuales que NO están en match_members (joined_via='friend_invite')
   // v32.3 (10d): avatares del grupo destacado + conversion de reserva propia
   const[featMembers,setFeatMembers]=useState({});const[convertBk9,setConvertBk9]=useState(null);
   const pickConvertible=async()=>{const td9=ymdLocal();
@@ -12423,7 +12411,7 @@ const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);co
         {myBookings.length>2&&<div data-hint="r" style={{position:"absolute",top:"50%",right:4,transform:"translateY(-50%)",width:26,height:26,borderRadius:13,background:C.cd,border:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",opacity:1,transition:"opacity .25s",animation:"hintBounce 1.8s ease-in-out infinite",boxShadow:"0 2px 8px rgba(0,0,0,.3)"}} dangerouslySetInnerHTML={{__html:ic("right",14,C.ts)}}/>}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0 10px"}}><div style={{flex:1,height:1,background:C.bd}}/><span style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>O ELIGE OTRO CAMPO</span><div style={{flex:1,height:1,background:C.bd}}/></div></>}
-      <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>CAMPO</label><select value={selCourse} onChange={e=>{setSelCourse(e.target.value);setSelBkId(null);const c2=courses.find(cc=>cc.id===e.target.value);if(c2&&(!gName||autoFilledName)){setGName(c2.course_name);setAutoFilledName(true)}}} style={{width:"100%",padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:13,marginTop:4,outline:"none"}}><option value="">-- Selecciona campo --</option>{courses.map(c2=><option key={c2.id} value={c2.id}>{c2.course_name} — {c2.city}</option>)}</select></div>
+      <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>CAMPO</label><SelectField val={selCourse} onChange={v=>{setSelCourse(v);setSelBkId(null);const c2=courses.find(cc=>cc.id===v);if(c2&&(!gName||autoFilledName)){setGName(c2.course_name);setAutoFilledName(true)}}} title={t("Campo")} opts={[{v:"",l:"-- Selecciona campo --"},...courses.map(c2=>({v:c2.id,l:c2.course_name+" — "+c2.city}))]} style={{marginTop:4,borderRadius:12,padding:"12px 14px"}}/></div>
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Fecha").toUpperCase()}</label><DateField val={playDate} onChange={v=>{setPlayDate(v);setSelBkId(null)}} min={ymdLocal()} title={t("Fecha")} style={{marginTop:4,borderRadius:12,padding:"12px 14px"}}/></div>
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Hora").toUpperCase()}</label><div style={{display:"flex",gap:8,marginTop:4}}><button onClick={()=>{setFlexTime(!flexTime);if(!flexTime)setPlayTime("")}} style={{flex:"0 0 auto",padding:"12px 14px",borderRadius:12,border:"1px solid "+(flexTime?C.grn:C.bd),background:flexTime?C.grn+"12":C.bg,color:flexTime?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{flexTime?"✓ "+t("Flexible"):t("Flexible")}</button><input type="time" value={playTime} disabled={flexTime} onChange={e=>setPlayTime(e.target.value)} style={{flex:1,padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:flexTime?C.tm:C.txt,fontSize:13,outline:"none",boxSizing:"border-box",opacity:flexTime?.5:1}}/></div></div>
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("JUGADORES ADICIONALES")}</label><div style={{display:"flex",gap:8,marginTop:6}}>{[1,2,3].map(n=><button key={n} onClick={()=>{setMaxP(n);setGameFmt("");if(n===1&&gameMode==="teams")setGameMode("individual")}} style={{flex:1,padding:12,borderRadius:12,border:"2px solid "+(maxP===n?C.grn:C.bd),background:maxP===n?C.grn+"12":C.bg,color:maxP===n?C.grn:C.ts,fontSize:16,fontWeight:800,cursor:"pointer"}}>{"+"+n}</button>)}</div></div>
@@ -12478,8 +12466,8 @@ const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);co
           {fDateOpen&&<DatePick19 onClose={()=>setFDateOpen(false)} val={fDate} onPick={setFDate} title={t("Fecha")} min={today9}/>}
         </div>
         <div style={{position:"relative",display:"inline-flex"}}>
-          <span style={{display:"inline-flex",alignItems:"center",gap:6,background:fCourse?"rgba(255,84,112,.12)":C.w06,borderRadius:99,padding:"8px 13px",fontSize:12.5,fontWeight:600,color:fCourse?(C.accTx2||"#FF7A90"):(C.ts2||C.ts),maxWidth:180}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("pin",12,fCourse?(C.accTx2||"#FF7A90"):C.ts)}}/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fCourse?(courses.find(c9=>c9.id===fCourse)?.course_name||t("Lugar")):t("Todos")}</span><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("down",10,C.tm)}}/></span>
-          <select value={fCourse} onChange={e=>setFCourse(e.target.value)} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer"}}><option value="">{t("Todos")}</option>{courses.map(c2=><option key={c2.id} value={c2.id}>{c2.course_name}</option>)}</select>
+          <span onClick={()=>setFCourseOpen(true)} style={{display:"inline-flex",alignItems:"center",gap:6,background:fCourse?"rgba(255,84,112,.12)":C.w06,borderRadius:99,padding:"8px 13px",fontSize:12.5,fontWeight:600,color:fCourse?(C.accTx2||"#FF7A90"):(C.ts2||C.ts),maxWidth:180,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("pin",12,fCourse?(C.accTx2||"#FF7A90"):C.ts)}}/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fCourse?(courses.find(c9=>c9.id===fCourse)?.course_name||t("Lugar")):t("Todos")}</span><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("down",10,C.tm)}}/></span>
+          <Pick19 open={fCourseOpen} onClose={()=>setFCourseOpen(false)} title={t("Lugar")} opts={[{v:"",l:t("Todos")},...courses.map(c2=>({v:c2.id,l:c2.course_name}))]} val={fCourse} onPick={setFCourse}/>
         </div>
         <span onClick={()=>{hap();setView("mine")}} style={{display:"inline-flex",alignItems:"center",gap:6,background:C.w06,borderRadius:99,padding:"8px 13px",fontSize:12.5,fontWeight:600,color:C.ts2||C.ts,cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("group",12,C.ts)}}/>{t("Mis grupos")}{pendTotal>0&&<span style={{minWidth:16,height:16,borderRadius:99,background:C.gld,color:"#0A0B10",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 4px",..._s.mono}}>{pendTotal}</span>}</span>
         {(fDate||fCourse)&&<button onClick={()=>{setFDate("");setFCourse("")}} style={{background:"transparent",border:"none",fontSize:12.5,fontWeight:700,color:C.tm,cursor:"pointer",padding:"8px 4px"}}>{t("Limpiar")}</button>}
@@ -13455,8 +13443,8 @@ function BillingDataCard({course,onRefresh}){
       <div><label style={lblS}>{t("Código Postal")}</label><input value={zip} onChange={e=>setZip(e.target.value.replace(/\D/g,""))} maxLength={5} inputMode="numeric" placeholder="44100" style={inpS}/></div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-      <div><label style={lblS}>{t("Régimen Fiscal")}</label><select value={regime} onChange={e=>setRegime(e.target.value)} style={{...inpS,appearance:"auto"}}><option value="">Selecciona…</option>{SAT_REGIMEN.map(x=><option key={x.c} value={x.c}>{x.c} — {x.l}</option>)}</select></div>
-      <div><label style={lblS}>Uso del CFDI</label><select value={cfdiUse} onChange={e=>setCfdiUse(e.target.value)} style={{...inpS,appearance:"auto"}}><option value="">Selecciona…</option>{SAT_USO_CFDI.map(x=><option key={x.c} value={x.c}>{x.c} — {x.l}</option>)}</select></div>
+      <div><label style={lblS}>{t("Régimen Fiscal")}</label><SelectField val={regime} onChange={setRegime} title={t("Régimen Fiscal")} opts={[{v:"",l:"Selecciona…"},...SAT_REGIMEN.map(x=>({v:x.c,l:x.c+" — "+x.l}))]}/></div>
+      <div><label style={lblS}>Uso del CFDI</label><SelectField val={cfdiUse} onChange={setCfdiUse} title="Uso del CFDI" opts={[{v:"",l:"Selecciona…"},...SAT_USO_CFDI.map(x=>({v:x.c,l:x.c+" — "+x.l}))]}/></div>
     </div>
     <div style={{marginBottom:14}}><label style={lblS}>{t("Correo de facturación")}</label><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="facturas@tucampo.com" style={inpS}/></div>
     <button onClick={save} disabled={sv} style={{width:"100%",padding:12,background:sv?C.cd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:800,cursor:sv?"not-allowed":"pointer"}}>{sv?"Guardando…":"Guardar datos fiscales"}</button>
@@ -15702,10 +15690,7 @@ function LiveMap({course}){
           <input value={tForm.hole} onChange={e=>setTForm(f=>({...f,hole:e.target.value.replace(/\D/g,"")}))} placeholder={t("Hoyo")} inputMode="numeric" style={{...inp0,flex:"0 0 90px"}}/>
           <input value={tForm.zone} onChange={e=>setTForm(f=>({...f,zone:e.target.value}))} placeholder={t("Zona (opcional)")} style={{...inp0,flex:1}}/>
         </div>
-        <select value={tForm.assign} onChange={e=>setTForm(f=>({...f,assign:e.target.value}))} style={{...inp0,marginBottom:10,appearance:"auto",WebkitAppearance:"auto"}}>
-          <option value="">{t("Sin asignar (la asignas después)")}</option>
-          {board.free_staff.map(s=><option key={s.id} value={s.id}>{s.full_name+" · "+(RSTAFF_LBL[s.role]||s.role)}</option>)}
-        </select>
+        <SelectField val={tForm.assign} onChange={v=>setTForm(f=>({...f,assign:v}))} title={t("Asignar a")} opts={[{v:"",l:t("Sin asignar (la asignas después)")},...board.free_staff.map(s=>({v:s.id,l:s.full_name+" · "+(RSTAFF_LBL[s.role]||s.role)}))]} style={{marginBottom:10}}/>
         <button onClick={doCreateTask} style={{width:"100%",height:40,borderRadius:10,border:"none",background:C.grn,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer"}}>{t("Crear tarea")}</button>
       </div>}
     <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"4px 16px 6px",marginBottom:16}}>
@@ -16088,10 +16073,7 @@ function MembershipsScreen({onBack}){const{s,p}=useA();
       </div>
       <p style={{fontSize:12,color:C.ts,lineHeight:1.5,margin:"0 0 16px"}}>Si ya eres socio de un club, liga tu membresía a tu cuenta para usar tus beneficios en Partee.</p>
       <div style={{marginBottom:12}}><label style={lbl}>TU CLUB</label>
-        <select value={claimCourse} onChange={e=>setClaimCourse(e.target.value)} style={{...inp0,marginTop:4,appearance:"auto"}}>
-          <option value="">Elige tu club…</option>
-          {coursesWithTiers.map(c=><option key={c.id} value={c.id}>{c.course_name}</option>)}
-        </select>
+        <SelectField val={claimCourse} onChange={setClaimCourse} title={t("Elige tu club")} opts={[{v:"",l:"Elige tu club…"},...coursesWithTiers.map(c=>({v:c.id,l:c.course_name}))]} style={{marginTop:4}}/>
       </div>
       <div style={{marginBottom:12}}><label style={lbl}>{t("NÚMERO DE SOCIO")}</label>
         <input value={claimNum} onChange={e=>setClaimNum(e.target.value)} placeholder="El que te dio tu club" style={{...inp0,marginTop:4}}/>
@@ -16765,9 +16747,7 @@ function CampaignCreateModal({course,onClose,onCreated,prefill}){
 
         <div style={{marginBottom:12}}>
           <div style={{fontSize:10,fontWeight:700,color:C.tm,letterSpacing:.5,marginBottom:5}}>SEGMENTO OBJETIVO</div>
-          <select value={segment} onChange={e=>setSegment(e.target.value)} style={{width:"100%",padding:9,background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.txt,fontSize:12,outline:"none"}}>
-            {SEGMENT_OPTIONS.map(s=><option key={s.v} value={s.v}>{s.lbl} — {s.desc}</option>)}
-          </select>
+          <SelectField val={segment} onChange={setSegment} title={t("Segmento")} opts={SEGMENT_OPTIONS.map(s=>({v:s.v,l:s.lbl+" — "+s.desc}))} style={{fontSize:12,borderRadius:8}}/>
         </div>
 
         {type==="email"&&<div style={{marginBottom:12}}>
@@ -17700,7 +17680,7 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("CATEGORÍA")}</label><select value={edit.category} onChange={e=>setEdit({...edit,category:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="golf">Golf</option><option value="social">Social (sin golf)</option><option value="junior">Junior</option><option value="corporativa">Corporativa</option></select></div>
+        <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("CATEGORÍA")}</label><SelectField val={edit.category} onChange={v=>setEdit({...edit,category:v})} title={t("Categoría")} opts={[{v:"golf",l:"Golf"},{v:"social",l:"Social (sin golf)"},{v:"junior",l:"Junior"},{v:"corporativa",l:"Corporativa"}]} style={{marginTop:4}}/></div>
         <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>ORDEN</label><input type="number" value={edit.sort_order} onChange={e=>setEdit({...edit,sort_order:e.target.value})} style={{...inp0,marginTop:4}}/></div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:8}}>
@@ -17742,7 +17722,7 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
       {!isExt?
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
           <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>PRECIO MXN*</label><input type="number" value={edit.price_mxn} onChange={e=>setEdit({...edit,price_mxn:e.target.value})} placeholder="2500" style={{...inp0,marginTop:4}}/></div>
-          <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("DURACIÓN*")}</label><select value={edit.period_days} onChange={e=>setEdit({...edit,period_days:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="30">{t("30 días")}</option><option value="90">{t("90 días")}</option><option value="180">{t("180 días")}</option><option value="365">{t("365 días")}</option></select></div>
+          <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("DURACIÓN*")}</label><SelectField val={edit.period_days} onChange={v=>setEdit({...edit,period_days:v})} title={t("Duración")} opts={[{v:"30",l:t("30 días")},{v:"90",l:t("90 días")},{v:"180",l:t("180 días")},{v:"365",l:t("365 días")}]} style={{marginTop:4}}/></div>
         </div>
       :
         <div style={{padding:10,background:C.bd+"30",border:"1px solid "+C.bd,borderRadius:10,marginBottom:8}}>
@@ -17750,9 +17730,9 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
             <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>{t("INSCRIPCIÓN")}</label><input type="number" value={edit.join_fee} onChange={e=>setEdit({...edit,join_fee:e.target.value})} placeholder="opcional" style={{...inp0,marginTop:4}}/></div>
             <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>CUOTA</label><input type="number" value={edit.dues} onChange={e=>setEdit({...edit,dues:e.target.value})} placeholder="opcional" style={{...inp0,marginTop:4}}/></div>
-            <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>PERIODO</label><select value={edit.dues_period} onChange={e=>setEdit({...edit,dues_period:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="month">Mensual</option><option value="year">Anual</option></select></div>
+            <div><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>PERIODO</label><SelectField val={edit.dues_period} onChange={v=>setEdit({...edit,dues_period:v})} title="Periodo" opts={[{v:"month",l:"Mensual"},{v:"year",l:"Anual"}]} style={{marginTop:4}}/></div>
           </div>
-          <div style={{marginTop:8,width:"52%"}}><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>VIGENCIA*</label><select value={edit.period_days} onChange={e=>setEdit({...edit,period_days:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="30">{t("30 días")}</option><option value="90">{t("90 días")}</option><option value="180">{t("180 días")}</option><option value="365">{t("365 días")}</option></select></div>
+          <div style={{marginTop:8,width:"52%"}}><label style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4}}>VIGENCIA*</label><SelectField val={edit.period_days} onChange={v=>setEdit({...edit,period_days:v})} title={t("Vigencia")} opts={[{v:"30",l:t("30 días")},{v:"90",l:t("90 días")},{v:"180",l:t("180 días")},{v:"365",l:t("365 días")}]} style={{marginTop:4}}/></div>
         </div>
       }
       <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:10}}>
@@ -17781,7 +17761,7 @@ function AdminMembershipTiers({course}){const[tiers,setTiers]=useState([]);const
       </>}
       {isExt&&<div style={{padding:10,background:C.acc+"08",border:"1px solid "+C.acc+"25",borderRadius:10,marginBottom:12}}>
         <div style={{fontSize:10,color:C.tm,fontWeight:700,letterSpacing:.4,marginBottom:6}}>{t("VALIDACIÓN AL LIGAR")}</div>
-        <select value={edit.link_second_factor} onChange={e=>setEdit({...edit,link_second_factor:e.target.value})} style={{...inp0,appearance:"auto"}}><option value="none">{t("Solo número de socio")}</option><option value="last_name">{t("Número + apellido")}</option><option value="birth_date">{t("Número + fecha de nacimiento")}</option></select>
+        <SelectField val={edit.link_second_factor} onChange={v=>setEdit({...edit,link_second_factor:v})} title={t("Verificación")} opts={[{v:"none",l:t("Solo número de socio")},{v:"last_name",l:t("Número + apellido")},{v:"birth_date",l:t("Número + fecha de nacimiento")}]}/>
         <div style={{fontSize:9,color:C.tm,marginTop:4,lineHeight:1.3}}>{t("El socio ingresa esto para ligar; tú apruebas la solicitud.")}</div>
       </div>}
       <button onClick={saveTier} disabled={saving} style={{width:"100%",padding:12,background:saving?C.bd:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:saving?C.tm:"#fff",fontSize:13,fontWeight:800,cursor:saving?"default":"pointer"}}>{saving?"Guardando…":(edit.id?"Guardar cambios":(isExt?"Crear membresía":"Crear y publicar"))}</button>
@@ -17916,10 +17896,10 @@ function AdminMembers({course,extTiers}){
         <h4 style={{margin:0,fontSize:14,fontWeight:800,color:C.txt}}>{form.id?"Editar socio":"Cargar socio"}</h4>
         <button onClick={()=>!saving&&setForm(null)} style={{background:"none",border:"none",color:C.ts,fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>×</button>
       </div>
-      <div style={{marginBottom:8}}><label style={L}>{t("MEMBRESÍA")}</label><select value={form.tier_id} onChange={e=>setForm({...form,tier_id:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}>{extTiers.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+      <div style={{marginBottom:8}}><label style={L}>{t("MEMBRESÍA")}</label><SelectField val={form.tier_id} onChange={v=>setForm({...form,tier_id:v})} title={t("Membresía")} opts={extTiers.map(t9=>({v:t9.id,l:t9.name}))} style={{marginTop:4}}/></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
         <div><label style={L}>N° DE SOCIO*</label><input value={form.member_number} onChange={e=>setForm({...form,member_number:e.target.value})} placeholder="Ej. 1024" style={{...inp0,marginTop:4}}/></div>
-        <div><label style={L}>ESTADO</label><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})} style={{...inp0,marginTop:4,appearance:"auto"}}><option value="active">Activo</option><option value="expired">Vencido</option><option value="cancelled">Cancelado</option></select></div>
+        <div><label style={L}>ESTADO</label><SelectField val={form.status} onChange={v=>setForm({...form,status:v})} title="Estado" opts={[{v:"active",l:"Activo"},{v:"expired",l:"Vencido"},{v:"cancelled",l:"Cancelado"}]} style={{marginTop:4}}/></div>
       </div>
       <div style={{marginBottom:8}}><label style={L}>NOMBRE DEL SOCIO*</label><input value={form.member_name} onChange={e=>setForm({...form,member_name:e.target.value})} placeholder="Nombre completo" style={{...inp0,marginTop:4}}/></div>
       <div style={{marginBottom:8}}><label style={L}>CORREO (opcional)</label><input value={form.member_email} onChange={e=>setForm({...form,member_email:e.target.value})} placeholder="correo@ejemplo.com" style={{...inp0,marginTop:4}}/></div>
@@ -18872,7 +18852,7 @@ function AdminTournaments({course}){const{p}=useA();const isTeam=p?.user_role===
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
         <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>MAX PLAYERS*</label><input type="number" value={edit.max_players} onChange={e=>setEdit({...edit,max_players:e.target.value})} style={{...inpT,marginTop:4}}/></div>
         <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>ENTRY FEE</label><input type="number" value={edit.entry_fee_mxn} onChange={e=>setEdit({...edit,entry_fee_mxn:e.target.value})} placeholder="0=gratis" style={{...inpT,marginTop:4}}/></div>
-        <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>HOYOS</label><select value={edit.holes_count} onChange={e=>setEdit({...edit,holes_count:e.target.value})} style={{...inpT,marginTop:4,appearance:"auto"}}><option value="9">9</option><option value="18">18</option></select></div>
+        <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>HOYOS</label><SelectField val={edit.holes_count} onChange={v=>setEdit({...edit,holes_count:v})} title={t("Hoyos")} opts={[{v:"9",l:"9"},{v:"18",l:"18"}]} style={{marginTop:4}}/></div>
       </div>
       <div style={{marginBottom:8}}>
         <label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>MODALIDAD</label>
@@ -18881,8 +18861,8 @@ function AdminTournaments({course}){const{p}=useA();const isTeam=p?.user_role===
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-        <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>FORMATO</label><select value={edit.game_format} onChange={e=>setEdit({...edit,game_format:e.target.value})} style={{...inpT,marginTop:4,appearance:"auto"}}>{((edit.game_mode||"individual")==="teams"?[["scramble","Scramble"],["four_ball","Four-Ball"]]:[["stroke_play","Stroke play"],["match_play","Match play"],["stableford","Stableford"]]).map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select></div>
-        <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>RAMA</label><select value={edit.gender_category} onChange={e=>setEdit({...edit,gender_category:e.target.value})} style={{...inpT,marginTop:4,appearance:"auto"}}><option value="open">Abierta</option><option value="men">Masculino</option><option value="women">Femenino</option></select></div>
+        <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>FORMATO</label><SelectField val={edit.game_format} onChange={v=>setEdit({...edit,game_format:v})} title={t("Formato")} opts={((edit.game_mode||"individual")==="teams"?[["scramble","Scramble"],["four_ball","Four-Ball"]]:[["stroke_play","Stroke play"],["match_play","Match play"],["stableford","Stableford"]]).map(o=>({v:o[0],l:o[1]}))} style={{marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>RAMA</label><SelectField val={edit.gender_category} onChange={v=>setEdit({...edit,gender_category:v})} title={t("Rama")} opts={[{v:"open",l:"Abierta"},{v:"men",l:"Masculino"},{v:"women",l:"Femenino"}]} style={{marginTop:4}}/></div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
         <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>{t("HÁNDICAP MÍN")}</label><input type="number" value={edit.min_handicap} onChange={e=>setEdit({...edit,min_handicap:e.target.value})} placeholder={t("sin límite")} style={{...inpT,marginTop:4}}/></div>
