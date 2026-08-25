@@ -20,7 +20,7 @@ const path = require('path');
 const babel = require('@babel/core');
 
 const filePath = process.argv[2];
-const BASELINE = parseInt(process.argv[3] || '276', 10);
+const BASELINE = parseInt(process.argv[3] || '277', 10);
 
 if (!filePath) {
   console.error('Uso: node tools/validate2.js <archivo.html> [baseline]');

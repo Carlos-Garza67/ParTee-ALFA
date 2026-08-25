@@ -29,11 +29,12 @@ sin discutirlo explicitamente conmigo primero.
 - Validar SIEMPRE con tools/validate2.js antes de dar por bueno
   cualquier cambio (Babel parse + conteo de statements contra baseline).
 - Correr tools/smoke.js despues de validate2.js (render jsdom).
-- Baseline actual de statements: 276 (desde build v33.29, 24-ago-2026:
-  +1 por SelectField, el dropdown homologado que reemplazo los 31 select
-  nativos visibles. Historial: 275 en v33.28 (+DateField), 274 en v33.26
-  (eliminado ThemeToggle duplicado), 275 confirmado 18-ago-2026 sobre
-  v33.21 commit dd2121b tras limpieza — ver "Historial de limpieza").
+- Baseline actual de statements: 277 (desde build v33.33, 25-ago-2026:
+  +1 por el Object.assign(_EN,{...}) con las 739 traducciones que
+  faltaban — claves t() que caian al espanol en modo EN. Historial: 276
+  en v33.29 (+SelectField), 275 en v33.28 (+DateField), 274 en v33.26
+  (eliminado ThemeToggle), 275 confirmado 18-ago-2026 sobre v33.21
+  commit dd2121b tras limpieza — ver "Historial de limpieza").
   Sube con cada feature nueva — no es un valor fijo, es el conteo
   esperado DESPUES del ultimo cambio aceptado. Si un cambio tuyo hace
   que el conteo baje sin que hayas borrado codigo a proposito, sospecha
