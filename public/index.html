@@ -666,7 +666,7 @@ function applyCSS(t){const v=t==="dark"?DARK:LIGHT;const r=document.documentElem
   r.style.setProperty("--el-card",v.elCard||(t==="dark"?"rgba(255,255,255,.04)":"#f6f7f9"));r.style.setProperty("--el-card-bd",v.elCardBd||(t==="dark"?"rgba(255,255,255,.08)":"rgba(0,0,0,.05)"));
   try{const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.content=t==="dark"?"#0A0B10":"#f0f1f4"}catch(e){}}
 const TL={public:t("Publico"),private:t("Privado"),"semi-private":t("Semi")};const TC={public:C.grn,private:C.acc,"semi-private":C.gld};
-const DN=["Dom","Lun","Mar","Mie","Jue","Vie","Sab"];const ymdLocal=(dd)=>{const d=dd?new Date(dd):new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")},fm=n=>Number(n).toLocaleString(L10N);
+const DN=_lang==="en"?["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]:["Dom","Lun","Mar","Mie","Jue","Vie","Sab"];const ymdLocal=(dd)=>{const d=dd?new Date(dd):new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")},fm=n=>Number(n).toLocaleString(L10N);
 const MX_TZ=[{v:"America/Mexico_City",l:t("Centro (CDMX, GDL, MTY)"),s:"CST"},{v:"America/Mazatlan",l:t("Pacífico (Mazatlán, BCS, Sinaloa)"),s:"MST"},{v:"America/Tijuana",l:t("Noroeste (Tijuana, BC)"),s:"PST"},{v:"America/Cancun",l:t("Sureste (Cancún, QRoo)"),s:"EST"}];
 const MX_STATES=["Aguascalientes","Baja California","Baja California Sur","Campeche","Chiapas","Chihuahua","Ciudad de México","Coahuila","Colima","Durango","Estado de México","Guanajuato","Guerrero","Hidalgo","Jalisco","Michoacán","Morelos","Nayarit","Nuevo León","Oaxaca","Puebla","Querétaro","Quintana Roo","San Luis Potosí","Sinaloa","Sonora","Tabasco","Tamaulipas","Tlaxcala","Veracruz","Yucatán","Zacatecas"];
 const MEMBERSHIP_PERKS=[{k:"range_ilimitado",icon:"target",label:t("Práctica ilimitada en range"),vt:"none"},{k:"carrito_incluido",icon:"cart",label:t("Carrito de golf incluido"),vt:"none"},{k:"caddie_incluido",icon:"user",label:t("Caddie incluido"),vt:"none"},{k:"desc_proshop",icon:"tag",label:t("Descuento en pro shop"),vt:"pct"},{k:"desc_alimentos",icon:"utensils",label:t("Descuento en alimentos y bebidas"),vt:"pct"},{k:"locker",icon:"lock",label:t("Locker personal"),vt:"none"},{k:"guarda_palos",icon:"golf",label:t("Guarda-palos (bag storage)"),vt:"none"},{k:"clases_pro",icon:"lightbulb",label:t("Clases con el pro incluidas"),vt:"num",vlabel:"clases"},{k:"eventos_exclusivos",icon:"trophy",label:t("Eventos y torneos exclusivos"),vt:"none"},{k:"invitados_preferente",icon:"users",label:t("Invitados con tarifa preferente"),vt:"pct"},{k:"casa_club",icon:"building",label:t("Acceso a casa club"),vt:"none"},{k:"estacionamiento_vip",icon:"pin",label:t("Estacionamiento preferente / valet"),vt:"none"},{k:"reciprocidad",icon:"handshake",label:t("Reciprocidad con otros clubes"),vt:"text",vlabel:"¿con qué clubes?"},{k:"renta_equipo",icon:"disc",label:t("Descuento en renta de equipo"),vt:"pct"}];
@@ -12685,7 +12685,7 @@ function AdminBlockManager({course}){
     else if(b.start_time)parts.push("desde "+b.start_time.slice(0,5)+"h");
     else if(b.end_time)parts.push("hasta "+b.end_time.slice(0,5)+"h");
     if(b.days_of_week&&b.days_of_week.length){
-      const DN_=["D","L","M","X","J","V","S"];
+      const DN_=_lang==="en"?["S","M","T","W","T","F","S"]:["D","L","M","X","J","V","S"];
       parts.push(b.days_of_week.map(d=>DN_[d]).join(""));
     }
     return parts.join(" · ");
@@ -12959,7 +12959,7 @@ function TeeSheetPro({course}){
     if(occ>0)return{bg:C.gld+"10",bd:C.gld+"30",dot:C.gld,label:t("Parcial")};
     return{bg:C.grn+"08",bd:C.grn+"25",dot:C.grn,label:t("Libre")};
   }
-  function dowName(dow){return["D","L","M","X","J","V","S"][dow]||"?"}
+  function dowName(dow){return(_lang==="en"?["S","M","T","W","T","F","S"]:["D","L","M","X","J","V","S"])[dow]||"?"}
   function dayShort(dt){const d=new Date(dt+"T12:00:00");return d.getDate()}
   function dpTrend(s){if(!s.dynamic_pricing_rule_id||s.base_price==null)return null;
     if(s.price>s.base_price)return"up";if(s.price<s.base_price)return"down";return null
