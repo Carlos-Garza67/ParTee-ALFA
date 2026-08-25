@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.25 (Homologacion de elementos de pago entre interfases, fuente de verdad: el checkout de reservas del jugador (StripePayment). Los checkouts de MEMBRESIA y TORNEO adoptan los mismos elementos que ya usa reservas para la misma funcion: header Pago seguro con icono de tarjeta y monto en verde en lugar del label DATOS DE TARJETA; skeleton de Preparando pago seguro mientras carga el card element en lugar del boton diciendo Cargando; contenedor glass del card element; boton de pagar VERDE con candado en idle y spinner ptr-spin en Procesando (el de torneo era rojo — pagar es verde en toda la app); footer Cifrado SSL Powered by Stripe con candado; el fallo de COBRO post-confirm sale en el sheet dedicado Tu banco rechazo el cargo con Reintentar y Usar otra tarjeta (regla 22d.4: el dinero nunca inline) — los errores de setup/activacion siguen inline; y el exito usa el mismo lenguaje que la pantalla Ok de reservas: confeti cf16 + ring de check. Cero cambios de logica de cobro. Extra admin: boton Abrir bandeja pierde el gradiente legacy acc-ff6b6b y pasa a solido C.acc como los CTA del jugador. Base: v33.24)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.26 (Homologacion fase 2 — Split + botones, fuente de verdad: interfaz de jugador. 1) El modal de invitacion Split adopta el sheet dedicado Tu banco rechazo el cargo para todo fallo de COBRO (saved card, 3DS y tarjeta nueva): Reintentar repite el flujo activo — accept con guardada o payWithNewCard en captura — y Usar otra tarjeta limpia el element y lleva a card_entry; los errores de setup y registro siguen inline. Regla 22d.4 completa: los 4 flujos de pago comunican rechazos igual. 2) Selector de tema UNICO: ThemeToggle (switch luna/sol verde/naranja de admin y Plataforma) se elimina y ambos usan ThemeSegRow, el segmented Oscuro-Claro del Perfil del jugador, con prop px para el padding del contenedor (default 14 intacto en player, 0 en admin/plataforma). Al borrar ThemeToggle el baseline de statements baja de 275 a 274 — actualizado en validate2.js y CLAUDE.md. 3) Cerrar Sesion del admin en Ajustes era outline VERDE — semantica invertida; pasa a outline C.acc radius 14 como Plataforma y el color de salida del jugador. Base: v33.25)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -855,17 +855,15 @@ function CourseHoleMap({courseId,positions}){
 }
 function HoleLayout({courseId}){const[holes,setHoles]=useState([]);const[ld,setLd]=useState(true);useEffect(()=>{sb.from("course_holes").select("*").eq("course_id",courseId).is("layout_id",null).order("hole_number").then(({data})=>{setHoles(data||[]);setLd(false)}).catch(()=>setLd(false))},[courseId]);if(ld||holes.length===0)return null;const tp=holes.reduce((s,h)=>s+h.par,0);const isGeneric=holes.length>0&&holes.every(h=>h.data_source==="generic_usga");return<div style={{marginTop:16}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><h3 style={{fontSize:15,fontWeight:700,color:C.txt,margin:0}}>Layout</h3>{isGeneric&&<span title="Yardages y handicaps por hoyo aproximados. Par y rating del campo son oficiales." style={{fontSize:9,color:C.tm,background:C.cd,border:"1px solid "+C.bd,borderRadius:6,padding:"2px 6px",fontWeight:600,letterSpacing:".02em"}}>ⓘ Datos preliminares</span>}</div><div style={{display:"flex",gap:8,marginBottom:12}}><div style={{flex:1,background:C.cd,borderRadius:10,padding:8,textAlign:"center",border:"1px solid "+C.bd}}><div style={{fontSize:15,fontWeight:800,color:C.grn}}>{holes.length}</div><div style={{fontSize:10,color:C.tm}}>{t("Hoyos")}</div></div><div style={{flex:1,background:C.cd,borderRadius:10,padding:8,textAlign:"center",border:"1px solid "+C.bd}}><div style={{fontSize:15,fontWeight:800,color:C.txt}}>{tp}</div><div style={{fontSize:10,color:C.tm}}>Par</div></div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>{holes.map(h=><div key={h.id} className="hole-row"><div className="hole-num" style={{background:h.hole_number<=9?C.pri:C.acc+"60"}}>{h.hole_number}</div><div style={{flex:1,minWidth:0}}><span style={{fontSize:12,fontWeight:600,color:C.txt}}>Par {h.par}</span> <span style={{fontSize:11,color:C.ts}}>{h.distance_yards}yds</span>{h.hole_description&&<p style={{fontSize:10,color:C.tm,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h.hole_description}</p>}</div></div>)}</div></div>}
 
-function ThemeSegRow(){const{theme,toggle}=useTheme();return<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px"}}>
+function ThemeSegRow({px=14}={}){const{theme,toggle}=useTheme();return<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px "+px+"px"}}>
   <span style={{flex:1,fontSize:13.5,fontWeight:600,color:C.txt}}>{t("Tema")}</span>
   <div style={{display:"flex",background:C.w07,borderRadius:9,padding:2}}>
     {[{k:"dark",l:t("Oscuro")},{k:"light",l:t("Claro")}].map(m9=><button key={m9.k} onClick={()=>{if(theme!==m9.k)toggle()}} style={{padding:"5px 12px",borderRadius:7,border:"none",background:theme===m9.k?C.acc:"transparent",color:theme===m9.k?"#fff":C.ts,fontSize:11.5,fontWeight:theme===m9.k?700:600,cursor:"pointer"}}>{m9.l}</button>)}
   </div>
 </div>}
-function ThemeToggle(){const{theme,toggle}=useTheme();return<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",marginBottom:14}}>
-<div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Tema")}</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>{theme==="dark"?t("Modo oscuro"):t("Modo claro")}</div></div>
-<div onClick={toggle} style={{width:52,height:28,borderRadius:14,background:theme==="dark"?"rgba(0,184,148,.3)":"rgba(255,165,0,.3)",position:"relative",cursor:"pointer",transition:"all .3s",border:"1px solid "+C.bd}}>
-<div style={{width:22,height:22,borderRadius:10,background:theme==="dark"?C.grn:"#f59e0b",position:"absolute",top:2,left:theme==="dark"?2:26,transition:"all .3s",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>{theme==="dark"?"\u263E":"\u2600"}</div>
-</div></div>}
+/* v33.26: ThemeToggle (switch luna/sol) eliminado \u2014 el selector de tema es UNO solo en toda
+   la app: ThemeSegRow, el segmented del Perfil del jugador (fuente de verdad). Admin y
+   Plataforma lo usan con px={0}. Al borrarlo el baseline de statements baja 275 -> 274. */
 
 function LangToggle(){const[lang,setL]=useState(getLang());const sw=()=>{const nxt=lang==="es"?"en":"es";setLang(nxt);setL(nxt);location.reload()};return<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",marginBottom:14}}><div><div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t("Idioma")}</div><div style={{fontSize:11,color:C.ts,marginTop:2}}>{lang==="es"?t("Español"):t("English")}</div></div><button onClick={sw} style={{padding:"6px 14px",borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:C.txt,fontSize:12,fontWeight:700,cursor:"pointer"}}>{lang==="es"?"EN":"ES"}</button></div>}
 function gcalUrl(title,date,time,location,desc){const dt=date.replace(/-/g,"");const tm=(time||"08:00").replace(/:/g,"").slice(0,4);const start=dt+"T"+tm+"00";const h=parseInt(tm.slice(0,2))+2;const end=dt+"T"+(h<10?"0":"")+h+tm.slice(2)+"00";return"https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(title)+"&dates="+start+"/"+end+"&ctz=America/Mexico_City&location="+encodeURIComponent(location||"")+"&details="+encodeURIComponent(desc||"")}
@@ -3198,6 +3196,7 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
   const{s,p}=useA();
   const[processing,setProcessing]=useState(false);
   const[error,setError]=useState("");
+  const[payErrS,setPayErrS]=useState(null);/* v33.26: 22d.4 — fallo de COBRO en sheet dedicado, homologado con StripePayment */
   const[booking,setBooking]=useState(invitation.booking||null);
   const[phase,setPhase]=useState("choose"); // choose | card_entry
   const[cardPhase,setCardPhase]=useState("idle"); // idle | ready
@@ -3295,19 +3294,19 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
               onResponded?.();onClose?.();return
             }
           }catch(checkErr){console.warn("[split-3ds] PI verification failed:",checkErr)}
-          setError(stripeErr.message);setProcessing(false);processingRef.current=false;return
+          setPayErrS(stripeErr.message||"");setProcessing(false);processingRef.current=false;return
         }
         if(paymentIntent?.status==="succeeded"){
           await completeRpc({paymentIntentId:paymentIntent.id,last4:p?.card_last4,brand:p?.card_brand,customerId:p?.stripe_customer_id||data.customer_id});
           window.__toast?.(t("¡Pagado! Tu lugar está asegurado"),"success");
           processingRef.current=false;
           onResponded?.();onClose?.();
-        }else{setError("Pago en estado: "+(paymentIntent?.status||"desconocido"));setProcessing(false);processingRef.current=false}
+        }else{setPayErrS("Estado: "+(paymentIntent?.status||"desconocido"));setProcessing(false);processingRef.current=false}
       }else if(data.needs_card){
         // Backend reporta falta de tarjeta aunque el perfil la tuviera → abrir captura.
         setPhase("card_entry");setProcessing(false);processingRef.current=false;
       }else{
-        setError(data.message||data.error||"Error al procesar pago");setProcessing(false);processingRef.current=false;
+        setPayErrS(data.message||data.error||"Error al procesar pago");setProcessing(false);processingRef.current=false;
       }
     }catch(e){setError(e.message||"Error inesperado");setProcessing(false);processingRef.current=false;}
   };
@@ -3335,17 +3334,20 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
         const{error:cErr,paymentIntent}=await stripeRef.current.confirmCardPayment(data.client_secret,{payment_method:paymentMethod.id});
         if(cErr){
           // v19.22 — Fallback: verificar status real antes de fallar
+          let rescued=false;
           try{
             const{paymentIntent:piCheck}=await stripeRef.current.retrievePaymentIntent(data.client_secret);
-            if(piCheck?.status==="succeeded"){piId=piCheck.id}
-            else throw new Error(cErr.message);
-          }catch(checkErr){throw new Error(cErr.message)}
+            if(piCheck?.status==="succeeded"){piId=piCheck.id;rescued=true}
+          }catch(checkErr){console.warn("[split-newcard] PI verification failed:",checkErr)}
+          // v33.26: fallo de COBRO → sheet dedicado (22d.4), no banner inline
+          if(!rescued){setPayErrS(cErr.message||"");setProcessing(false);processingRef.current=false;return}
         }else{
-          if(paymentIntent?.status!=="succeeded")throw new Error("Estado: "+(paymentIntent?.status||"desconocido"));
+          if(paymentIntent?.status!=="succeeded"){setPayErrS("Estado: "+(paymentIntent?.status||"desconocido"));setProcessing(false);processingRef.current=false;return}
           piId=paymentIntent.id;
         }
       }else{
-        throw new Error(data.message||data.error||"Error al procesar pago");
+        // v33.26: respuesta de cobro sin exito → sheet dedicado
+        setPayErrS(data.message||data.error||"Error al procesar pago");setProcessing(false);processingRef.current=false;return;
       }
       // 3) Registrar todo vía RPC (status, paid_at, user_profiles.card_* y stripe_customer_id, trigger de notif al creator)
       const{error:rpcErr}=await completeRpc({paymentIntentId:piId,last4,brand,customerId});
@@ -3418,6 +3420,18 @@ function AcceptInvitationModal({invitation,onClose,onResponded}){
         <span style={{fontSize:10,color:C.tm}} dangerouslySetInnerHTML={{__html:ic("lock",10,C.tm)+" Cifrado SSL · Powered by Stripe"}}/>
       </div>
     </>}
+    {/* v33.26: sheet de fallo de cobro — mismo elemento que StripePayment (booking/membresia/torneo). Reintentar repite el flujo activo; Usar otra tarjeta lleva a captura. */}
+    {payErrS!=null&&<div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.62)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPayErrS(null)}>
+      <div onClick={e=>e.stopPropagation()} className="fi" style={{background:"#12141A",borderRadius:"20px 20px 0 0",padding:"12px 20px max(20px,env(safe-area-inset-bottom))",width:"100%",maxWidth:480,boxShadow:"0 -12px 40px rgba(0,0,0,.5)",textAlign:"center"}}>
+        <div style={{width:40,height:4,borderRadius:99,background:"rgba(255,255,255,.18)",margin:"0 auto 16px"}}/>
+        <div style={{width:56,height:56,borderRadius:28,background:"rgba(255,84,112,.12)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}} dangerouslySetInnerHTML={{__html:ic("creditcard",24,C.acc)}}/>
+        <div style={{fontSize:18,fontWeight:800,color:C.txt,letterSpacing:"-0.01em"}}>Tu banco rechazó el cargo</div>
+        {payErrS&&<div style={{fontSize:12,color:C.tm,marginTop:6,lineHeight:1.5}}>{payErrS}</div>}
+        <div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:10,background:"rgba(30,232,165,.08)",borderRadius:99,padding:"6px 14px"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("check",12,C.grn)}}/><span style={{fontSize:11.5,fontWeight:700,color:C.grn}}>No se cobró nada a tu tarjeta</span></div>
+        <button onClick={()=>{setPayErrS(null);setTimeout(()=>{phase==="card_entry"?payWithNewCard():accept()},80)}} style={{width:"100%",marginTop:18,padding:15,background:C.acc,border:"none",borderRadius:14,color:"#fff",fontSize:14.5,fontWeight:800,cursor:"pointer"}}>Reintentar pago</button>
+        <p onClick={()=>{setPayErrS(null);try{cardRef.current&&cardRef.current.clear()}catch(e){}if(phase!=="card_entry")setPhase("card_entry")}} style={{fontSize:13,fontWeight:700,color:C.ts,margin:"14px 0 0",cursor:"pointer"}}>Usar otra tarjeta</p>
+      </div>
+    </div>}
   </div></div>;
 }
 
@@ -10640,7 +10654,7 @@ function AdminAjustesAccordion({course,onOut,onRefresh,ctxOut}){
       {isPro&&<AutomationHealthCard course={course}/>}
     </>},
     {k:"apariencia",icon:ic("settings",16,C.ts2||"#C7CBD4"),label:t("Apariencia"),color:C.ts,content:<>
-      <ThemeToggle/><LangToggle/>
+      <ThemeSegRow px={0}/><LangToggle/>
     </>},
     {k:"sesion",icon:ic("logout",16,C.ts2||"#C7CBD4"),label:t("Sesión y cuenta"),color:C.acc,content:<>
       <div style={{fontSize:11,color:C.tm,marginBottom:10,lineHeight:1.4}}>{t("Cierra sesión en este dispositivo o elimina permanentemente tu cuenta de course_admin.")}</div>
@@ -10648,7 +10662,7 @@ function AdminAjustesAccordion({course,onOut,onRefresh,ctxOut}){
         const doOut=ctxOut||onOut;
         if(window.__confirm)window.__confirm(t("¿Cerrar sesión?"),()=>doOut());
         else doOut();
-      }} style={{width:"100%",padding:11,background:"transparent",border:"1px solid "+C.grn,borderRadius:12,color:C.grnTxt||C.grn,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:8}}>{t("Cerrar Sesión")}</button>
+      }} style={{width:"100%",padding:11,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:8}}>{t("Cerrar Sesión")}</button>
       <button onClick={()=>{setDelReasons([]);setDelComment("");setContactOk(false);setShowDel(true)}} style={{width:"100%",padding:11,background:"transparent",border:"1px solid #666",borderRadius:12,color:"#888",fontSize:12,cursor:"pointer"}}>{t("Eliminar cuenta")}</button>
     </>}
   ];
@@ -19276,7 +19290,7 @@ function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);co
       {tab===4&&<div className="fi">
         <h3 style={{fontSize:16,fontWeight:800,color:C.txt,marginBottom:14}}>Perfil Plataforma</h3>
         <div className="sc" style={{marginBottom:10}}><div style={{fontSize:12,color:C.ts}}>Administrador</div><div style={{fontSize:15,fontWeight:700,color:C.txt,marginTop:4}}>{p?.full_name||p?.email}</div></div>
-        <ThemeToggle/><LangToggle/>
+        <ThemeSegRow px={0}/><LangToggle/>
         <button onClick={out} style={{width:"100%",padding:12,marginTop:16,background:"transparent",border:"1px solid "+C.acc,borderRadius:14,color:C.acc,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t("Cerrar Sesión")}</button>
       </div>}
     </div>

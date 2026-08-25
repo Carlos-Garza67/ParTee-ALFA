@@ -29,12 +29,15 @@ sin discutirlo explicitamente conmigo primero.
 - Validar SIEMPRE con tools/validate2.js antes de dar por bueno
   cualquier cambio (Babel parse + conteo de statements contra baseline).
 - Correr tools/smoke.js despues de validate2.js (render jsdom).
-- Baseline actual de statements: 275 (confirmado 18-ago-2026 sobre
-  build v33.21, commit dd2121b, tras limpieza de bugs heredados —
-  ver seccion "Historial de limpieza" abajo). Sube con cada feature
-  nueva — no es un valor fijo, es el conteo esperado DESPUES del
-  ultimo cambio aceptado. Si un cambio tuyo hace que el conteo baje
-  sin que hayas borrado codigo a proposito, sospecha antes de continuar.
+- Baseline actual de statements: 274 (desde build v33.26, 24-ago-2026:
+  se elimino ThemeToggle, el switch luna/sol duplicado del selector de
+  tema — ThemeSegRow del jugador es el unico en toda la app. El baseline
+  anterior era 275, confirmado 18-ago-2026 sobre v33.21 commit dd2121b
+  tras limpieza de bugs heredados — ver "Historial de limpieza" abajo).
+  Sube con cada feature nueva — no es un valor fijo, es el conteo
+  esperado DESPUES del ultimo cambio aceptado. Si un cambio tuyo hace
+  que el conteo baje sin que hayas borrado codigo a proposito, sospecha
+  antes de continuar.
 - rep1()-style: cualquier reemplazo de texto debe tener contexto
   unico. Si un ancla de texto se repite en el archivo, un replace
   puede tocar la instancia equivocada — verificar unicidad antes
