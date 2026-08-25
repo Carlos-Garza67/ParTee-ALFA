@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.27 (Un solo rojo y un solo verde de UI en toda la app — las 3 reglas aprobadas sobre la auditoria de 75 colores fuera de paleta. R1: el rojo viejo e94560 queda SOLO en el logo; badge-off, etab.on, brand-card.active, focus-visible, skip-link, acc-pop.on, boton del ErrorBoundary y el invalid del card element de Stripe (4 flujos) pasan a C.acc FF5470 — y applyCSS ahora publica la var --acc. R2: verde unico C.grn 1ee8a5 en ptr-spin, ecard.sel, iconColor del card element x4, marcadores del mapa GPS, heatmap de ocupacion (con gld en el tramo medio), delta del canvas, paleta de categorias (carrito/caddie) y boton Responder de la bandeja admin (solido, el gradiente verde queda exclusivo de Pagar); el boton Premium naranja tailwind pasa a C.gld con texto oscuro. R3: LISTING_STATUS con paleta C (tm/gld/grn/acc) y el chip del dash admin dice Cobrado/Pendiente/Finalizada como el jugador. HALLAZGO MAYOR incluido: la paleta LIGHT seguia pre-brandbook — acc e94560 y grn 00b894 con sus glass/shadow/hero derivados; ahora FF5470/1ee8a5 tambien en modo claro (los tonos de contraste para texto accTx/grnTxt se conservan). CSS muerto removido: cta-accent, cta-green, premium-ring. Cero cambios de logica. Base: v33.26)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.28 (Fechas homologadas: los 19 input type=date nativos de la app (15 de admin + 4 del propio jugador en ProSection, PerformanceScreen y MatchScreen) desaparecen. DatePick19 ahora acepta min/max opcionales — sin props conserva exacto el comportamiento de fecha de nacimiento del onboarding — y el nuevo componente global DateField (baseline 274 a 275) lo envuelve con el lenguaje del design system: boton card C.cd con icono calendar, valor formateado es-MX y chevron, mismo patron del dropdown fiscal v33.07; variante compact para headers densos (AdminBookings, AdminSlots) y clearable con x para fechas opcionales (Vence de AdminMembers). El chip de fecha de Unete a un grupo pierde el input invisible encima y abre el picker directo, con x para quitar el filtro. Los min/max de cada sitio se conservan identicos; donde no habia restriccion no se agrego. Cero selects tocados aun — siguiente fase. Base: v33.27)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -1270,20 +1270,25 @@ function TermsModal({type,onClose}){
     </div>}
   </div></div>}
 
-function DatePick19({onClose,val,onPick,title}){
-  /* v32.27: picker de fecha propio (el calendario nativo no es estilizable). Columnas dia/mes/anio con clamp: no permite fechas futuras ni dias inexistentes del mes. Montar condicionalmente para que el estado inicie fresco. */
+function DatePick19({onClose,val,onPick,title,min,max}){
+  /* v32.27: picker de fecha propio (el calendario nativo no es estilizable). Columnas dia/mes/anio con clamp. Montar condicionalmente para que el estado inicie fresco.
+     v33.28: min/max opcionales (YYYY-MM-DD) para fechas futuras (reservas, bloqueos, torneos). SIN props conserva el comportamiento historico de fecha de nacimiento: max=hoy, min=hoy-100 anios. */
   const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-  const hoy=new Date();const YMAX=hoy.getFullYear();const YMIN=YMAX-100;
-  const ini=(()=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(val||"");return m?{y:+m[1],m:+m[2],d:+m[3]}:{y:1990,m:1,d:1}})();
-  const[yy,setYy]=useState(Math.min(Math.max(ini.y,YMIN),YMAX));const[mm,setMm]=useState(ini.m);const[dd,setDd]=useState(ini.d);
-  const mMax=yy===YMAX?hoy.getMonth()+1:12;
-  const mEff=Math.min(mm,mMax);
+  const hoy=new Date();
+  const pd=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||"");return m?{y:+m[1],m:+m[2],d:+m[3]}:null};
+  const MX=pd(max)||(min?{y:pd(min).y+5,m:12,d:31}:{y:hoy.getFullYear(),m:hoy.getMonth()+1,d:hoy.getDate()});
+  const MN=pd(min)||{y:MX.y-100,m:1,d:1};
+  const ini=pd(val)||{y:Math.min(Math.max(min?MN.y:1990,MN.y),MX.y),m:min?MN.m:1,d:min?MN.d:1};
+  const[yy,setYy]=useState(Math.min(Math.max(ini.y,MN.y),MX.y));const[mm,setMm]=useState(ini.m);const[dd,setDd]=useState(ini.d);
+  const mMax=yy===MX.y?MX.m:12;
+  const mMin=yy===MN.y?MN.m:1;
+  const mEff=Math.min(Math.max(mm,mMin),mMax);
   const dimBase=new Date(yy,mEff,0).getDate();
-  const dMax=(yy===YMAX&&mEff===hoy.getMonth()+1)?Math.min(dimBase,hoy.getDate()):dimBase;
-  const dEff=Math.min(dd,dMax);
-  const years=Array.from({length:YMAX-YMIN+1},(_,i)=>YMAX-i);
-  const days=Array.from({length:dMax},(_,i)=>i+1);
-  const meses=MESES.slice(0,mMax);
+  const dMax=(yy===MX.y&&mEff===MX.m)?Math.min(dimBase,MX.d):dimBase;
+  const dMin=(yy===MN.y&&mEff===MN.m)?MN.d:1;
+  const dEff=Math.min(Math.max(dd,dMin),dMax);
+  const years=Array.from({length:MX.y-MN.y+1},(_,i)=>MX.y-i);
+  const days=Array.from({length:dMax-dMin+1},(_,i)=>dMin+i);
   const IT=38;
   const col=(items,sel,pick,fmt,flexN)=><div ref={el=>{if(el&&!el.__init){el.__init=1;const idx=items.indexOf(sel);if(idx>=0)el.scrollTop=idx*IT-el.clientHeight/2+IT/2}}} style={{flex:flexN||1,height:224,overflowY:"auto",scrollbarWidth:"none"}}>{items.map(it=><div key={it} onClick={()=>pick(it)} style={{height:IT,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:10,margin:"0 4px",background:it===sel?"rgba(255,84,112,.14)":"transparent",color:it===sel?C.txt:C.ts,fontSize:14.5,fontWeight:it===sel?800:600,cursor:"pointer",...(fmt?{}:{fontFeatureSettings:'"tnum"'})}}>{fmt?fmt(it):it}</div>)}</div>;
   const ok=()=>{onPick(yy+"-"+String(mEff).padStart(2,"0")+"-"+String(dEff).padStart(2,"0"));onClose()};
@@ -1294,7 +1299,7 @@ function DatePick19({onClose,val,onPick,title}){
       <div style={{display:"flex",gap:4,position:"relative"}}>
         <div style={{position:"absolute",left:0,right:0,top:224/2-IT/2,height:IT,borderTop:"1px solid "+C.bd,borderBottom:"1px solid "+C.bd,pointerEvents:"none"}}/>
         {col(days,dEff,setDd,null,0.8)}
-        {col(Array.from({length:mMax},(_,i)=>i+1),mEff,setMm,x=>MESES[x-1],1.4)}
+        {col(Array.from({length:mMax-mMin+1},(_,i)=>mMin+i),mEff,setMm,x=>MESES[x-1],1.4)}
         {col(years,yy,setYy,null,1)}
       </div>
       <button onClick={ok} style={{width:"100%",marginTop:14,padding:15,background:C.acc,border:"none",borderRadius:14,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",letterSpacing:"0.01em"}}>{t("Confirmar")}</button>
@@ -1307,6 +1312,24 @@ const Pick19=({open,onClose,title,opts,val,onPick})=>!open?null:<div onClick={on
     <div style={{overflowY:"auto",padding:"0 10px 8px"}}>{opts.map(o=><div key={o} onClick={()=>{onPick(o);onClose()}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 12px",borderRadius:12,background:val===o?"rgba(255,84,112,.1)":"transparent",cursor:"pointer"}}><span style={{fontSize:14.5,fontWeight:val===o?800:600,color:val===o?C.txt:C.ts}}>{o}</span>{val===o&&<span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("check",15,C.acc)}}/>}</div>)}</div>
   </div>
 </div>;
+/* v33.28: DateField — reemplazo homologado de TODO input type=date de la app (admin y player).
+   Boton con el lenguaje del design system (card C.cd, borde, icono calendar, chevron — mismo
+   patron del dropdown fiscal v33.07) que abre DatePick19. compact: variante texto-plano para
+   headers densos (AdminBookings/AdminSlots). clearable: muestra x para limpiar (vence opcional). */
+function DateField({val,onChange,title,min,max,compact,clearable,style:stF,ariaLabel}){
+  const[open,setOpen]=useState(false);
+  const lbl=(()=>{if(!val)return t("Elegir fecha");try{const d=new Date(val+"T12:00");const s=d.toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short",year:"numeric"});return s.charAt(0).toUpperCase()+s.slice(1)}catch(e){return val}})();
+  return<React.Fragment>
+    {compact
+      ?<button type="button" onClick={()=>setOpen(true)} aria-label={ariaLabel||title||t("Fecha")} style={{background:"transparent",border:"none",color:C.tm,fontSize:10,cursor:"pointer",padding:0,...stF}}>{lbl}</button>
+      :<button type="button" onClick={()=>setOpen(true)} aria-label={ariaLabel||title||t("Fecha")} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.bd,background:C.cd,color:val?C.txt:C.tm,fontSize:13,display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",boxSizing:"border-box",...stF}}>
+        <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("calendar",14,C.tm)}}/>
+        <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lbl}</span>
+        {clearable&&val?<span onClick={ev=>{ev.stopPropagation();onChange("")}} aria-label={t("Limpiar fecha")} style={{display:"inline-flex",padding:2,cursor:"pointer"}} dangerouslySetInnerHTML={{__html:ic("x",11,C.tm)}}/>:null}
+        <span style={{display:"flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("down",13,C.tm)}}/>
+      </button>}
+    {open&&<DatePick19 onClose={()=>setOpen(false)} val={val} onPick={onChange} title={title||t("Fecha")} min={min} max={max}/>}
+  </React.Fragment>}
 /* v32.23: helpers del onboarding 19 a scope de modulo — definidos dentro del componente creaban un tipo React nuevo en cada render y el input se remontaba en cada tecla (perdida de foco al escribir). F19 recibe foc/setFoc como props. */
 const F19=({foc,setFoc,k,lbl,val,set,type,ph:ph19,mono,children,style:st19})=><div onClick={ev=>{const i9=ev.currentTarget.querySelector("input");if(i9)i9.focus()}} style={{cursor:"text",background:foc===k?"rgba(255,84,112,.1)":C.cd,border:"1.5px solid "+(foc===k?C.acc:"transparent"),borderRadius:14,padding:"10px 14px 11px",marginBottom:10,position:"relative",transition:"border-color .15s,background .15s",...st19}}><div style={{fontSize:9.5,fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:foc===k?"#FF9CAD":C.tm,marginBottom:3}}>{lbl}</div>{children||<input type={type||"text"} value={val} onChange={x=>set(x.target.value)} onFocus={()=>setFoc(k)} onBlur={()=>setFoc("")} placeholder={ph19} style={{width:"100%",background:"transparent",border:"none",outline:"none",fontSize:15,fontWeight:700,color:C.txt,caretColor:C.acc,padding:0,boxSizing:"border-box",...(mono?_s.mono:{})}}/>}</div>;
 const RC19=({on,tap,icon,ttl,sub})=><div onClick={tap} style={{display:"flex",alignItems:"center",gap:13,padding:"15px 14px",borderRadius:16,border:"1.5px solid "+(on?C.acc:"transparent"),background:on?"rgba(255,84,112,.1)":C.cd,cursor:"pointer",transition:"all .15s",marginBottom:10}}><div style={{width:40,height:40,borderRadius:12,background:on?"rgba(255,84,112,.16)":C.w06,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic(icon,18,on?C.acc:C.ts)}}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:14.5,fontWeight:800,color:C.txt,lineHeight:1.2}}>{ttl}</div><div style={{fontSize:11.5,color:C.tm,marginTop:2,lineHeight:1.35}}>{sub}</div></div><div style={{width:20,height:20,borderRadius:99,border:"1.5px solid "+(on?C.acc:"rgba(255,255,255,.25)"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<div style={{width:10,height:10,borderRadius:99,background:C.acc}}/>}</div></div>;
@@ -4140,8 +4163,8 @@ function BayBlocksManager({course,unitB,maxN,onBlocksChange}){
     {adding&&<div style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:12,padding:12,marginBottom:8}}>
       <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr",gap:8,marginBottom:8}}>
         <div><label style={{fontSize:9,color:C.tm,fontWeight:700}}>{unitB.toUpperCase()} #</label><input value={fB} onChange={e=>setFB(e.target.value)} type="number" min={1} max={maxN} style={{...inp,width:"100%"}}/></div>
-        <div><label style={{fontSize:9,color:C.tm,fontWeight:700}}>{t("DESDE")}</label><input value={fS} onChange={e=>setFS(e.target.value)} type="date" style={{...inp,width:"100%"}}/></div>
-        <div><label style={{fontSize:9,color:C.tm,fontWeight:700}}>{t("HASTA")}</label><input value={fE} onChange={e=>setFE(e.target.value)} type="date" style={{...inp,width:"100%"}}/></div>
+        <div><label style={{fontSize:9,color:C.tm,fontWeight:700}}>{t("DESDE")}</label><DateField val={fS} onChange={setFS} title={t("Desde")}/></div>
+        <div><label style={{fontSize:9,color:C.tm,fontWeight:700}}>{t("HASTA")}</label><DateField val={fE} onChange={setFE} title={t("Hasta")}/></div>
       </div>
       <input value={fR} onChange={e=>setFR(e.target.value.slice(0,120))} placeholder={t("Motivo (opcional): cambio de alfombra, dispensador...")} style={{...inp,width:"100%",marginBottom:8}}/>
       <button onClick={create} disabled={busy} style={{width:"100%",padding:10,borderRadius:9,border:"none",background:C.gld,color:"#1a1a2e",fontSize:12,fontWeight:800,cursor:"pointer"}}>{busy?"...":t("Marcar fuera de servicio")}</button>
@@ -7453,7 +7476,7 @@ function ProSection({mode}){
         <div style={{fontSize:10.5,fontWeight:800,letterSpacing:"1.2px",color:C.tm,margin:"14px 0 8px"}}>DISPONIBILIDAD</div>
         <div style={{background:C.cd,borderRadius:16,padding:"12px 13px",marginBottom:10}}>
           <div style={{display:"flex",gap:8,marginBottom:8}}>
-            <input type="date" value={sD} onChange={e=>setSD(e.target.value)} min={isoT17} style={{...tIn17,flex:1.2}}/>
+            <DateField val={sD} onChange={setSD} min={isoT17} title={t("Fecha")} style={{flex:1.2,width:"auto"}}/>
             <input type="time" value={sS} onChange={e=>setSS(e.target.value)} style={{...tIn17,flex:1}}/>
             <input type="time" value={sE} onChange={e=>setSE(e.target.value)} style={{...tIn17,flex:1}}/>
           </div>
@@ -7517,7 +7540,7 @@ function ProSection({mode}){
           {detailData.has_pending?<div style={{textAlign:"center",padding:14,background:"rgba(245,198,79,.08)",borderRadius:14,color:C.gld,fontSize:12.5,fontWeight:700}}>{t("Ya tienes una solicitud pendiente con este instructor")}</div>:<div style={{background:C.cd,borderRadius:16,padding:"13px 14px"}}>
             <div style={{fontSize:13.5,fontWeight:800,color:C.txt,marginBottom:10}}>{detailData.slots&&detailData.slots.length>0?"¿Otro horario? Solicítalo":"Solicitar una clase"}</div>
             <textarea value={reqMsg} onChange={e=>setReqMsg(e.target.value)} placeholder={t("Cuéntale qué quieres trabajar (opcional)")} style={{width:"100%",background:C.w06,border:"none",borderRadius:12,padding:"11px 13px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box",minHeight:64,resize:"vertical",caretColor:C.acc,marginBottom:8}}/>
-            <input type="date" value={reqDate} onChange={e=>setReqDate(e.target.value)} min={isoT17} style={{...tIn17,width:"100%",background:C.w06,marginBottom:10}}/>
+            <DateField val={reqDate} onChange={setReqDate} min={isoT17} title={t("Fecha")} style={{background:C.w06,marginBottom:10}}/>
             <button onClick={sendReq} disabled={reqBusy} style={{width:"100%",padding:14,borderRadius:14,border:"none",background:C.acc,color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",opacity:reqBusy?.45:1,transition:"opacity .2s"}}>{reqBusy?"Enviando...":"Enviar solicitud"}</button>
             <div style={{fontSize:11,color:"#5B6270",textAlign:"center",marginTop:9}}>{t("El pago se coordina directo con el instructor")}</div>
           </div>}
@@ -9036,7 +9059,7 @@ function GuestBookingModal({course,onClose,onDone}){
           </div>
         </div>
         {mode==="programada"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:9.5,color:C.tm,fontWeight:700}}>{t("FECHA")}</label><input type="date" value={fDate} min={ymdLocal()} onChange={e=>setFDate(e.target.value)} style={inp}/></div>
+          <div><label style={{fontSize:9.5,color:C.tm,fontWeight:700}}>{t("FECHA")}</label><DateField val={fDate} onChange={setFDate} min={ymdLocal()} title={t("Fecha")}/></div>
           <div><label style={{fontSize:9.5,color:C.tm,fontWeight:700}}>{t("HORARIO")}</label>
             {times===null?<div style={{fontSize:11,color:C.tm,padding:"12px 0"}}>{t("Cargando...")}</div>
             :times.length===0?<div style={{fontSize:11,color:C.acc,padding:"12px 0"}}>{t("Sin horarios disponibles")}</div>
@@ -9582,7 +9605,7 @@ function AdminRoster({course, onExit}){const{p}=useA();const isTeam=p?.user_role
       </>: tab==="hoy" ? <>
         {/* Asignaciones · tablero del dia */}
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
-          <input type="date" value={dayDate} onChange={e=>setDayDate(e.target.value)} style={{...inpSm,flex:1,width:"auto"}}/>
+          <DateField val={dayDate} onChange={setDayDate} title={t("Fecha")} style={{flex:1,width:"auto"}}/>
           <button onClick={loadDay} title="Actualizar" style={{padding:"8px 12px",borderRadius:8,background:C.cd,border:"1px solid "+C.bd,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,flexShrink:0}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("refresh",14,C.txt)}}/>Actualizar</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:12}}>
@@ -10051,7 +10074,7 @@ function AdminBookings({course}){
         <div style={{textAlign:"center",minWidth:130}}>
           <div style={{fontSize:14,fontWeight:800,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}</div>
           {selDate===today&&<div style={{fontSize:9,color:C.grnTxt||C.grn,fontWeight:700,letterSpacing:1}}>HOY</div>}
-          <input type="date" value={selDate} onChange={e=>{setSelDate(e.target.value);setQuickFilter("custom")}} style={{marginTop:3,background:"transparent",border:"none",color:C.tm,fontSize:10,textAlign:"center"}}/>
+          <DateField compact val={selDate} onChange={v=>{setSelDate(v);setQuickFilter("custom")}} title={t("Fecha")} style={{marginTop:3,textAlign:"center",width:"100%"}}/>
         </div>
         <button onClick={()=>navDay(1)} aria-label="Día siguiente" style={{width:30,height:30,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("right",15,C.ts2||C.ts)}}/>
       </div>
@@ -10059,12 +10082,12 @@ function AdminBookings({course}){
       <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12,padding:10,background:C.cd,borderRadius:10,border:"1px solid "+C.bd}}>
         <div style={{flex:1}}>
           <div style={{fontSize:9,color:C.tm,fontWeight:600,marginBottom:3,letterSpacing:1}}>DESDE</div>
-          <input type="date" value={rangeFrom} onChange={e=>{setRangeFrom(e.target.value);setQuickFilter("custom")}} style={{...inpSm,width:"100%"}}/>
+          <DateField val={rangeFrom} onChange={v=>{setRangeFrom(v);setQuickFilter("custom")}} title={t("Desde")}/>
         </div>
         <div style={{fontSize:14,color:C.tm,marginTop:14}}>→</div>
         <div style={{flex:1}}>
           <div style={{fontSize:9,color:C.tm,fontWeight:600,marginBottom:3,letterSpacing:1}}>HASTA</div>
-          <input type="date" value={rangeTo} onChange={e=>{setRangeTo(e.target.value);setQuickFilter("custom")}} style={{...inpSm,width:"100%"}}/>
+          <DateField val={rangeTo} onChange={v=>{setRangeTo(v);setQuickFilter("custom")}} title={t("Hasta")}/>
         </div>
       </div>
     }
@@ -11464,8 +11487,8 @@ function AdminPromos({course}){const[promos,setPromos]=useState([]);const[ld,set
         </div>
         <label style={{...lblS,display:"block",marginBottom:6}}>Vigencia *</label>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-          <div><label style={subLblS}>Desde</label><input type="date" value={pFrom} onChange={e=>setPFrom(e.target.value)} style={inpS}/></div>
-          <div><label style={subLblS}>Hasta</label><input type="date" value={pUntil} onChange={e=>setPUntil(e.target.value)} style={inpS}/></div>
+          <div><label style={subLblS}>Desde</label><DateField val={pFrom} onChange={setPFrom} title={t("Desde")}/></div>
+          <div><label style={subLblS}>Hasta</label><DateField val={pUntil} onChange={setPUntil} title={t("Hasta")}/></div>
         </div>
         <label style={{...lblS,display:"block"}}>Horario <span style={{color:C.tm,fontWeight:500}}>(opcional)</span></label>
         <div style={{fontSize:10,color:C.tm,margin:"3px 0 6px"}}>{t("Limita la promo a una franja del día. Vacío = todo el día.")}</div>
@@ -11801,7 +11824,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
     <select value={manualCourse?.id||""} onChange={e=>{const c=allCampos.find(x=>x.id===e.target.value);setManualCourse(c||null)}} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12,appearance:"auto"}}><option value="">-- {t("Seleccionar existente")} --</option>{allCampos.map(c=><option key={c.id} value={c.id}>{c.course_name} — {c.city}</option>)}</select>
     {manualCourse&&<div style={{background:C.grn+"08",border:"1px solid "+C.grn+"20",borderRadius:10,padding:10,marginBottom:12,fontSize:12,color:C.grn}}>{manualCourse.course_name} · {manualCourse.hole_count||18} {t("Hoyos")} · Par {manualCourse.total_par||72}</div>}
     <label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Fecha")}</label>
-    <input type="date" value={manualDate} onChange={e=>setManualDate(e.target.value)} max={new Date().toISOString().slice(0,10)} style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:12}}/>
+    <DateField val={manualDate} onChange={setManualDate} max={ymdLocal()} title={t("Fecha de la ronda")} style={{marginBottom:12}}/>
     <label style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4,display:"block"}}>{t("Score")} ({t("Total")} strokes)</label>
     <input type="number" min="50" max="200" value={manualScore} onChange={e=>setManualScore(e.target.value)} placeholder="ej: 82" style={{width:"100%",background:C.bg,border:"1px solid "+C.bd,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.txt,outline:"none",boxSizing:"border-box",marginBottom:14}}/>
     {manualCourse&&manualScore&&<div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:10,marginBottom:14,textAlign:"center"}}><span style={{fontSize:12,color:C.ts}}>vs Par: </span><span style={{fontSize:16,fontWeight:800,color:parseInt(manualScore)-(manualCourse.total_par||72)>0?C.acc:parseInt(manualScore)-(manualCourse.total_par||72)<0?C.grn:C.ts}}>{parseInt(manualScore)-(manualCourse.total_par||72)>0?"+":""}{parseInt(manualScore)-(manualCourse.total_par||72)}</span></div>}
@@ -11992,7 +12015,7 @@ function PerformanceScreen({onBack}){const{s,p}=useA();const[tab,setTab]=useStat
   </div>}
 
 function MatchScreen({onBack,embedded}){const{s,p}=useA();const[view,setView]=useState("browse");
-const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);const[myMemberships,setMyMemberships]=useState({});const[pendingCounts,setPendingCounts]=useState({});const[ld,setLd]=useState(true);const[courses,setCourses]=useState([]);const[selCourse,setSelCourse]=useState("");const[playDate,setPlayDate]=useState("");const[playTime,setPlayTime]=useState("");const[flexTime,setFlexTime]=useState(true);const[maxP,setMaxP]=useState(2);const[gameMode,setGameMode]=useState("");const[gameFmt,setGameFmt]=useState("");const[fDate,setFDate]=useState("");const[fCourse,setFCourse]=useState("");const[detail,setDetail]=useState(null);const[dPhoto,setDPhoto]=useState(null);const[members,setMembers]=useState([]);const[pending,setPending]=useState([]);const[bookingParts,setBookingParts]=useState([]);// v19.39: booking_participants del booking asociado, para mostrar invitados manuales que NO están en match_members (joined_via='friend_invite')
+const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);const[myMemberships,setMyMemberships]=useState({});const[pendingCounts,setPendingCounts]=useState({});const[ld,setLd]=useState(true);const[courses,setCourses]=useState([]);const[selCourse,setSelCourse]=useState("");const[playDate,setPlayDate]=useState("");const[playTime,setPlayTime]=useState("");const[flexTime,setFlexTime]=useState(true);const[maxP,setMaxP]=useState(2);const[gameMode,setGameMode]=useState("");const[gameFmt,setGameFmt]=useState("");const[fDate,setFDate]=useState("");const[fDateOpen,setFDateOpen]=useState(false);const[fCourse,setFCourse]=useState("");const[detail,setDetail]=useState(null);const[dPhoto,setDPhoto]=useState(null);const[members,setMembers]=useState([]);const[pending,setPending]=useState([]);const[bookingParts,setBookingParts]=useState([]);// v19.39: booking_participants del booking asociado, para mostrar invitados manuales que NO están en match_members (joined_via='friend_invite')
   // v32.3 (10d): avatares del grupo destacado + conversion de reserva propia
   const[featMembers,setFeatMembers]=useState({});const[convertBk9,setConvertBk9]=useState(null);
   const pickConvertible=async()=>{const td9=ymdLocal();
@@ -12374,7 +12397,7 @@ const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);co
     {editMode&&<div onClick={e=>{if(e.target===e.currentTarget)setEditMode(false)}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}}><div style={{background:C.bg,borderRadius:"18px 18px 0 0",padding:20,width:"100%",maxWidth:C.appMax||520,maxHeight:"85vh",overflowY:"auto",border:"1px solid "+C.bd}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{fontSize:16,fontWeight:800,color:C.txt,margin:0}}>{t("Editar grupo")}</h3><button onClick={()=>setEditMode(false)} style={{background:"none",border:"none",color:C.ts,cursor:"pointer",fontSize:20}}>×</button></div>
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Nombre")}</label><input value={editData.name||""} onChange={e=>setEditData({...editData,name:e.target.value})} placeholder={detail.course_name} style={{width:"100%",padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:13,marginTop:4,outline:"none",boxSizing:"border-box"}}/></div>
-      <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Fecha")}</label><input type="date" value={editData.play_date||""} onChange={e=>setEditData({...editData,play_date:e.target.value})} min={new Date().toISOString().slice(0,10)} style={{width:"100%",padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:13,marginTop:4,outline:"none",boxSizing:"border-box"}}/></div>
+      <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Fecha")}</label><DateField val={editData.play_date||""} onChange={v=>setEditData({...editData,play_date:v})} min={ymdLocal()} title={t("Fecha")} style={{marginTop:4,borderRadius:12,padding:"12px 14px"}}/></div>
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Hora")}</label><div style={{display:"flex",gap:8,marginTop:4}}><button onClick={()=>setEditData({...editData,flexTime:!editData.flexTime})} style={{flex:"0 0 auto",padding:"10px 14px",borderRadius:10,border:"1px solid "+(editData.flexTime?C.grn:C.bd),background:editData.flexTime?C.grn+"12":C.bg,color:editData.flexTime?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer"}}>{t("Flexible")}</button><input type="time" value={editData.play_time||""} disabled={editData.flexTime} onChange={e=>setEditData({...editData,play_time:e.target.value})} style={{flex:1,padding:"10px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:10,color:editData.flexTime?C.tm:C.txt,fontSize:13,outline:"none",boxSizing:"border-box",opacity:editData.flexTime?.5:1}}/></div></div>
       <div style={{marginBottom:16}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("FORMATO DE JUEGO (OPCIONAL)")}</label><div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>{(FORMATS[detail.game_mode]||[]).map(f=><button key={f.k} onClick={()=>setEditData({...editData,game_format:editData.game_format===f.k?"":f.k})} style={{padding:"8px 12px",borderRadius:10,border:"1px solid "+(editData.game_format===f.k?C.gld:C.bd),background:editData.game_format===f.k?C.gld+"12":C.bg,color:editData.game_format===f.k?C.gld:C.ts,fontSize:11,fontWeight:600,cursor:"pointer"}}>{f.l}</button>)}</div></div>
       <div style={{display:"flex",gap:8}}><button onClick={()=>setEditMode(false)} style={{flex:1,padding:12,background:"transparent",border:"1px solid "+C.bd,borderRadius:12,color:C.ts,fontSize:13,cursor:"pointer"}}>{t("Cancelar")}</button><button onClick={saveEdit} style={{flex:1,padding:12,background:`linear-gradient(135deg,${C.grn},#00cec9)`,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>{t("Guardar")}</button></div>
@@ -12401,7 +12424,7 @@ const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);co
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0 10px"}}><div style={{flex:1,height:1,background:C.bd}}/><span style={{fontSize:10,color:C.tm,fontWeight:600,letterSpacing:".05em"}}>O ELIGE OTRO CAMPO</span><div style={{flex:1,height:1,background:C.bd}}/></div></>}
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>CAMPO</label><select value={selCourse} onChange={e=>{setSelCourse(e.target.value);setSelBkId(null);const c2=courses.find(cc=>cc.id===e.target.value);if(c2&&(!gName||autoFilledName)){setGName(c2.course_name);setAutoFilledName(true)}}} style={{width:"100%",padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:13,marginTop:4,outline:"none"}}><option value="">-- Selecciona campo --</option>{courses.map(c2=><option key={c2.id} value={c2.id}>{c2.course_name} — {c2.city}</option>)}</select></div>
-      <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Fecha").toUpperCase()}</label><input type="date" value={playDate} onChange={e=>{setPlayDate(e.target.value);setSelBkId(null)}} min={new Date().toISOString().slice(0,10)} style={{width:"100%",padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:13,marginTop:4,outline:"none",boxSizing:"border-box"}}/></div>
+      <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Fecha").toUpperCase()}</label><DateField val={playDate} onChange={v=>{setPlayDate(v);setSelBkId(null)}} min={ymdLocal()} title={t("Fecha")} style={{marginTop:4,borderRadius:12,padding:"12px 14px"}}/></div>
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("Hora").toUpperCase()}</label><div style={{display:"flex",gap:8,marginTop:4}}><button onClick={()=>{setFlexTime(!flexTime);if(!flexTime)setPlayTime("")}} style={{flex:"0 0 auto",padding:"12px 14px",borderRadius:12,border:"1px solid "+(flexTime?C.grn:C.bd),background:flexTime?C.grn+"12":C.bg,color:flexTime?C.grn:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{flexTime?"✓ "+t("Flexible"):t("Flexible")}</button><input type="time" value={playTime} disabled={flexTime} onChange={e=>setPlayTime(e.target.value)} style={{flex:1,padding:"12px 14px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:flexTime?C.tm:C.txt,fontSize:13,outline:"none",boxSizing:"border-box",opacity:flexTime?.5:1}}/></div></div>
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("JUGADORES ADICIONALES")}</label><div style={{display:"flex",gap:8,marginTop:6}}>{[1,2,3].map(n=><button key={n} onClick={()=>{setMaxP(n);setGameFmt("");if(n===1&&gameMode==="teams")setGameMode("individual")}} style={{flex:1,padding:12,borderRadius:12,border:"2px solid "+(maxP===n?C.grn:C.bd),background:maxP===n?C.grn+"12":C.bg,color:maxP===n?C.grn:C.ts,fontSize:16,fontWeight:800,cursor:"pointer"}}>{"+"+n}</button>)}</div></div>
       <div style={{marginBottom:12}}><label style={{fontSize:9,fontWeight:700,color:C.tm,textTransform:"uppercase",letterSpacing:".07em"}}>{t("MODALIDAD")}</label><div style={{display:"flex",gap:8,marginTop:6}}><button onClick={()=>{setGameMode("individual");setGameFmt("")}} style={{flex:1,padding:12,borderRadius:12,border:"2px solid "+(gameMode==="individual"?C.grn:C.bd),background:gameMode==="individual"?C.grn+"12":C.bg,color:gameMode==="individual"?C.grn:C.ts,fontSize:12,fontWeight:700,cursor:"pointer",textAlign:"left"}}><div>{t("Individual")}</div><div style={{fontSize:10,color:C.ts,fontWeight:500,marginTop:2}}>{t("Cada jugador compite por sí mismo")}</div></button><button onClick={()=>{if(!canTeams){window.__toast?.(t("Equipos requiere al menos 3 jugadores"),"warn");return}setGameMode("teams");setGameFmt("")}} disabled={!canTeams} style={{flex:1,padding:12,borderRadius:12,border:"2px solid "+(gameMode==="teams"?C.acc:C.bd),background:gameMode==="teams"?C.acc+"12":C.bg,color:gameMode==="teams"?C.acc:(canTeams?C.ts:C.tm),fontSize:12,fontWeight:700,cursor:canTeams?"pointer":"not-allowed",opacity:canTeams?1:.5,textAlign:"left"}}><div>{t("Equipos")}</div><div style={{fontSize:10,color:C.ts,fontWeight:500,marginTop:2}}>{canTeams?t("Dos equipos compiten entre sí"):t("Requiere 3 o 4 jugadores")}</div></button></div></div>
@@ -12451,8 +12474,8 @@ const[groups,setGroups]=useState([]);const[myGroups,setMyGroups]=useState([]);co
       {/* filtros como chips */}
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
         <div style={{position:"relative",display:"inline-flex"}}>
-          <span style={{display:"inline-flex",alignItems:"center",gap:6,background:fDate?"rgba(255,84,112,.12)":C.w06,borderRadius:99,padding:"8px 13px",fontSize:12.5,fontWeight:600,color:fDate?(C.accTx2||"#FF7A90"):(C.ts2||C.ts)}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("calendar",12,fDate?(C.accTx2||"#FF7A90"):C.ts)}}/>{fDate?dTxt9(fDate):t("Cualquier fecha")}<span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("down",10,C.tm)}}/></span>
-          <input type="date" value={fDate} min={today9} onChange={e=>setFDate(e.target.value)} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer"}}/>
+          <span onClick={()=>setFDateOpen(true)} style={{display:"inline-flex",alignItems:"center",gap:6,background:fDate?"rgba(255,84,112,.12)":C.w06,borderRadius:99,padding:"8px 13px",fontSize:12.5,fontWeight:600,color:fDate?(C.accTx2||"#FF7A90"):(C.ts2||C.ts),cursor:"pointer"}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("calendar",12,fDate?(C.accTx2||"#FF7A90"):C.ts)}}/>{fDate?dTxt9(fDate):t("Cualquier fecha")}{fDate?<span onClick={ev=>{ev.stopPropagation();setFDate("")}} aria-label={t("Quitar filtro de fecha")} style={{display:"inline-flex",padding:2}} dangerouslySetInnerHTML={{__html:ic("x",10,C.accTx2||"#FF7A90")}}/>:<span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("down",10,C.tm)}}/>}</span>
+          {fDateOpen&&<DatePick19 onClose={()=>setFDateOpen(false)} val={fDate} onPick={setFDate} title={t("Fecha")} min={today9}/>}
         </div>
         <div style={{position:"relative",display:"inline-flex"}}>
           <span style={{display:"inline-flex",alignItems:"center",gap:6,background:fCourse?"rgba(255,84,112,.12)":C.w06,borderRadius:99,padding:"8px 13px",fontSize:12.5,fontWeight:600,color:fCourse?(C.accTx2||"#FF7A90"):(C.ts2||C.ts),maxWidth:180}}><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("pin",12,fCourse?(C.accTx2||"#FF7A90"):C.ts)}}/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fCourse?(courses.find(c9=>c9.id===fCourse)?.course_name||t("Lugar")):t("Todos")}</span><span style={{display:"inline-flex"}} dangerouslySetInnerHTML={{__html:ic("down",10,C.tm)}}/></span>
@@ -12810,9 +12833,9 @@ function BlockCreateModal({course,onClose,onSaved}){
         <div style={{marginBottom:12}}>
           <div style={sectionH}>Fechas *</div>
           <div style={{display:"flex",gap:6}}>
-            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={inpS}/>
+            <DateField val={startDate} onChange={setStartDate} title={t("Desde")}/>
             <span style={{color:C.tm,alignSelf:"center"}}>→</span>
-            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={inpS}/>
+            <DateField val={endDate} onChange={setEndDate} title={t("Hasta")}/>
           </div>
         </div>
         {/* Time range optional */}
@@ -13345,7 +13368,7 @@ function AdminSlots({course}){const[slots,setSlots]=useState([]);const[ld,setLd]
     </div>
     <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
       <div style={{fontSize:12,fontWeight:700,color:C.txt,textTransform:"capitalize"}}>{dayLabel(selDate)}{selDate===today&&<span style={{fontSize:9,color:C.grnTxt||C.grn,fontWeight:700,letterSpacing:1,marginLeft:7}}>HOY</span>}</div>
-      <input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)} aria-label="Otra fecha" style={{marginLeft:"auto",background:"transparent",border:"none",color:C.tm,fontSize:11,textAlign:"right",cursor:"pointer"}}/>
+      <DateField compact val={selDate} onChange={setSelDate} ariaLabel={t("Otra fecha")} title={t("Otra fecha")} style={{marginLeft:"auto",fontSize:11,textAlign:"right"}}/>
     </div>
     <div style={{fontSize:10.5,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace",margin:"0 2px 12px"}}>{slots.length} slots · <span style={{color:C.grnTxt||C.grn}}>{available.length} {t("libres")}</span> · {booked.length} {t("reservados")} · {blocked.length} {t("bloqueados")}</div>
     {ld?<Skeleton w="100%" h={60}/>:slots.length===0?<div style={{textAlign:"center",padding:30,color:C.tm}}><div dangerouslySetInnerHTML={{__html:ic("calendar",28,C.tm)}} style={{marginBottom:8}}/><p>Sin slots para esta fecha</p><p style={{fontSize:12,marginTop:4}}>Click "Generar 30 días" para crear</p></div>:
@@ -17901,7 +17924,7 @@ function AdminMembers({course,extTiers}){
       <div style={{marginBottom:8}}><label style={L}>NOMBRE DEL SOCIO*</label><input value={form.member_name} onChange={e=>setForm({...form,member_name:e.target.value})} placeholder="Nombre completo" style={{...inp0,marginTop:4}}/></div>
       <div style={{marginBottom:8}}><label style={L}>CORREO (opcional)</label><input value={form.member_email} onChange={e=>setForm({...form,member_email:e.target.value})} placeholder="correo@ejemplo.com" style={{...inp0,marginTop:4}}/></div>
       {sf!=="none"&&<div style={{marginBottom:8}}><label style={L}>{sf==="last_name"?"APELLIDO (2º factor)*":"FECHA DE NACIMIENTO (2º factor)*"}</label><input type={sf==="birth_date"?"date":"text"} value={form.verify_value} onChange={e=>setForm({...form,verify_value:e.target.value})} placeholder={sf==="last_name"?"Apellido para verificar":""} style={{...inp0,marginTop:4}}/><div style={{fontSize:9,color:C.tm,marginTop:3,lineHeight:1.3}}>{t("El jugador deberá ingresar este dato para ligar su membresía.")}</div></div>}
-      <div style={{marginBottom:12}}><label style={L}>VENCE (opcional)</label><input type="date" value={form.expires_at} onChange={e=>setForm({...form,expires_at:e.target.value})} style={{...inp0,marginTop:4}}/></div>
+      <div style={{marginBottom:12}}><label style={L}>VENCE (opcional)</label><DateField val={form.expires_at} onChange={v=>setForm({...form,expires_at:v})} clearable title={t("Vence")} style={{marginTop:4}}/></div>
       <button onClick={save} disabled={saving} style={{width:"100%",padding:12,background:saving?C.bd:`linear-gradient(135deg,${C.grn},#55efc4)`,border:"none",borderRadius:10,color:saving?C.tm:"#fff",fontWeight:800,fontSize:13,cursor:saving?"default":"pointer"}}>{saving?"Guardando…":(form.id?"Guardar cambios":"Cargar socio")}</button>
     </div>;
   }
@@ -18843,7 +18866,7 @@ function AdminTournaments({course}){const{p}=useA();const isTeam=p?.user_role===
       <div style={{marginBottom:8}}><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>NOMBRE*</label><input value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})} placeholder="Open Cabo Mayo 2026" style={{...inpT,marginTop:4}}/></div>
       <div style={{marginBottom:8}}><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>{t("DESCRIPCIÓN")}</label><textarea value={edit.description} onChange={e=>setEdit({...edit,description:e.target.value})} placeholder="Stroke play 18 hoyos. Premios al podio." style={{...inpT,marginTop:4,minHeight:60,fontFamily:"inherit"}}/></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-        <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>FECHA*</label><input type="date" value={edit.play_date} onChange={e=>setEdit({...edit,play_date:e.target.value})} style={{...inpT,marginTop:4}}/></div>
+        <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>FECHA*</label><DateField val={edit.play_date} onChange={v=>setEdit({...edit,play_date:v})} title={t("Fecha")} style={{marginTop:4}}/></div>
         <div><label style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4}}>HORA</label><input type="time" value={edit.play_time} onChange={e=>setEdit({...edit,play_time:e.target.value})} style={{...inpT,marginTop:4}}/></div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
@@ -18868,7 +18891,7 @@ function AdminTournaments({course}){const{p}=useA();const isTeam=p?.user_role===
       <div style={{padding:10,background:C.bd+"30",border:"1px solid "+C.bd,borderRadius:10,marginBottom:8}}>
         <div style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4,marginBottom:6}}>{t("VENTANA DE INSCRIPCIÓN")}</div>
         <button onClick={()=>setEdit({...edit,registration_opens_immediately:!edit.registration_opens_immediately})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid "+(edit.registration_opens_immediately?C.grn:C.bd),background:edit.registration_opens_immediately?C.grn+"15":C.cd,color:edit.registration_opens_immediately?C.grn:C.tm,fontSize:11,fontWeight:600,cursor:"pointer",marginBottom:6,textAlign:"left"}}>{edit.registration_opens_immediately?"✓ ":""}Abrir inscripciones inmediatamente</button>
-        <label style={{fontSize:10,color:C.tm}}>CIERRA EL</label><input type="date" value={edit.registration_closes_at} onChange={e=>setEdit({...edit,registration_closes_at:e.target.value})} style={{...inpT,marginTop:2}}/>
+        <label style={{fontSize:10,color:C.tm}}>CIERRA EL</label><DateField val={edit.registration_closes_at} onChange={v=>setEdit({...edit,registration_closes_at:v})} title={t("Cierre de inscripciones")} style={{marginTop:2}}/>
       </div>
       <div style={{padding:10,background:C.gld+"08",border:"1px solid "+C.gld+"30",borderRadius:10,marginBottom:8}}>
         <div style={{fontSize:10,color:C.ts,fontWeight:700,letterSpacing:.4,marginBottom:6}}>{t("REPARTICIÓN DE BOLSA (debe sumar 100%)")}</div>
