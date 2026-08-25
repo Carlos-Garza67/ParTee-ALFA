@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.39 (Idioma tanda F, el cierre fino: LTV & valor por jugador — el titulo tenia un ampersand que el filtro del transform excluia — mas el fragmento meses del subtitulo (el filtro anti-slug descartaba palabras sueltas en minusculas) y el tercer caso de Jugaste hace X mes-meses migrado al helper AGO como sus dos hermanos. 2 traducciones nuevas — diccionario en 3888. Baseline 278. Base: v33.38)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.40 (Weekly insight: estilo visual estable. El regenerado bilingue evidencio que Pinny variaba los niveles de markdown entre corridas — el reporte nuevo salio con numeral simple para el titulo, que el render ligero no soportaba y mostraba el simbolo crudo, y con dos numerales para secciones, que pinta negro en vez del dorado esperado. Doble fix: renderMd ahora acepta el numeral simple como titulo (mismo estilo que el doble), y el system prompt de generate-weekly-insight v7 fija el formato — titulo con dos numerales, secciones con tres, prohibido el simple — para que el look dorado sea estable en ambos idiomas. Sin cambios de diccionario. Baseline 278. Base: v33.39)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -17328,6 +17328,7 @@ function WeeklyInsightCard({course}){
       if(!trimmed){flushList();return}
       if(trimmed.startsWith("## ")){flushList();blocks.push(<h3 key={"h"+idx} style={{fontSize:14,fontWeight:800,color:C.txt,margin:"6px 0 6px 0",letterSpacing:"-0.01em"}}>{renderInline(trimmed.slice(3))}</h3>);return}
       if(trimmed.startsWith("### ")){flushList();blocks.push(<h4 key={"h"+idx} style={{fontSize:12,fontWeight:800,color:C.gld,margin:"8px 0 4px 0",letterSpacing:.3,textTransform:"uppercase"}}>{renderInline(trimmed.slice(4))}</h4>);return}
+      if(trimmed.startsWith("# ")){flushList();blocks.push(<h3 key={"h"+idx} style={{fontSize:14,fontWeight:800,color:C.txt,margin:"6px 0 6px 0",letterSpacing:"-0.01em"}}>{renderInline(trimmed.slice(2))}</h3>);return}
       if(trimmed.startsWith("- ")){listBuf.push(trimmed.slice(2));return}
       flushList();
       blocks.push(<p key={"p"+idx} style={{fontSize:12,color:C.ts,margin:"4px 0",lineHeight:1.55}}>{renderInline(trimmed)}</p>);
