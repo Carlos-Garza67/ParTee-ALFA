@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.41 (Homologacion de superficies dark: el token c2 seguia en 1a1a2e, un azul-morado heredado del theme navy original, mientras toda la familia de superficies del jugador es neutra (bg 0A0B10, cd 12141A, cd2 0E1015). Solo el admin lo usaba, en 7 superficies: la tarjeta del Insight semanal con su gradiente cd a c2 — el tinte azulado que Carlos fotografio junto al Versus del jugador —, la fila Total de la comparativa de Ventas, paneles de staff-equipo, filas del import CSV y paneles de tiers. Nuevo valor 171A22: el siguiente escalon neutro de la misma familia, un pelo mas claro que la card para conservar el contraste de superficie destacada. El gradiente del insight queda practicamente plano como las tarjetas del jugador. La tarjeta Requiere accion no se toca — su tinte rojo es semantico de alerta. LIGHT ya estaba homologado (c2 e8eaef neutro). Sin cambios de diccionario. Baseline 278. Base: v33.40)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.42 (Homologacion de material de tarjetas: la segunda comparacion lado a lado de Carlos revelo la diferencia de fondo real — las tarjetas del jugador no son solidas, son GlassCard (blanco al 4 por ciento con borde blanco al 10 sobre el fondo de la app, mas sombra de card), mientras la del Insight semanal era opaca con gradiente. La tarjeta del insight ahora usa exactamente el material del jugador: C.glass con C.glassBd y C.shCard, radius 14 — se funde con el fondo igual que las tarjetas del Versus. Era el unico gradiente de card en el admin. Nota de contexto que queda para el futuro: los halos radiales ambientales del body en tablet y desktop se posicionan por porcentaje del viewport, asi que dos ventanas de distinto ancho lado a lado nunca mostraran el fondo identico — es geometria, no tokens; y ese halo usa todavia el rojo viejo e94560 al 10 por ciento, candidato a actualizarse a FF5470 si se quiere pureza de paleta. Baseline 278. Base: v33.41)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -17340,7 +17340,7 @@ function WeeklyInsightCard({course}){
   const sourceBadge=data?.source==="claude"?{label:"Pinny",color:"#7c3aed",icon:ic("bot",11)}:data?.source==="template"?{label:t("Template"),color:C.tm,icon:ic("clipboard",11)}:{label:t("Manual"),color:C.gld,icon:ic("edit",11)};
   const ago=data?.generated_at?(()=>{const ms=Date.now()-new Date(data.generated_at).getTime();const h=Math.floor(ms/3600000);const d=Math.floor(h/24);return d>0?AGO(d+"d"):h>0?AGO(h+"h"):t("hace minutos")})():"";
 
-  return<div style={{marginBottom:14,padding:14,background:`linear-gradient(135deg,${C.cd},${C.c2||C.cd})`,border:"1px solid "+C.bd,borderRadius:14}}>
+  return<div style={{marginBottom:14,padding:14,background:C.glass||C.w04,border:"1px solid "+(C.glassBd||C.bd),borderRadius:14,boxShadow:C.shCard||"none"}}>
     <div style={{..._s.flexB,marginBottom:10,flexWrap:"wrap",gap:8}}>
       <div>
         <div style={{fontSize:13,fontWeight:800,color:C.txt,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:6}}>
