@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.21 (App-mode: la app instalada (TWA Android / PWA standalone) arranca DIRECTO en Login/Registro tras el splash — el landing de marketing y las feature pages son SOLO para visitantes web, decision de producto de Carlos. Deteccion triple evaluada una vez al boot en const global IS_APP: display-mode standalone via matchMedia, query param app=1 (el manifest ahora lanza con start_url /?app=1 y shortcuts marcados), y referrer android-app:// clasico de TWA. Sin sesion: IS_APP renderiza Login directo (sin landing ni features); la rama web queda intacta. Login en modo app no recibe onHome y su boton Volver del modo login solo se pinta si hay onHome — evita boton muerto; en register/reset el Volver regresa a login como siempre)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.22 (Blindaje del flujo de pago embedded de reservas, 3 fixes minimos sin tocar el happy path. F1 Path 2 n>1: el exito del RPC create_booking_with_participants se decide por evidencia — success:true o booking_id, y si no viene, lookup de la booking por stripe_payment_intent — antes de caer al rollback process-orphan-refund, para nunca reembolsar un cobro bueno cuando el RPC creo la booking pero respondio con otro shape. F2 StripePayment: la verificacion post-confirm hace hasta 3 retrievePaymentIntent con backoff 0/1.5s/3s en vez de 1 solo retry, y requires_capture cuenta como exito en ambas ramas — cargo autorizado, la captura es del backend. F3: Sentry.captureMessage con el estado real del PI en todo camino a la pantalla de fallo del pago, tag booking_pay_fail. Base: v33.21)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -1997,28 +1997,32 @@ function StripePayment({amount,bookingId,courseId,paymentMode,membershipMode,pro
       // ya completó exitosamente (race condition o error transitorio), verificar estado
       // real antes de mostrar el mensaje al usuario. Previene falsos negativos donde
       // el cobro pasó pero el frontend muestra "error de procesamiento".
+      // v33.22 F2: verificacion profunda antes de declarar fallo — hasta 3 retrieves
+      // con backoff (0 / 1.5s / 3s). requires_capture cuenta como exito: el cargo ya
+      // quedo autorizado y la captura es responsabilidad del backend. Un rechazo real
+      // (requires_payment_method) corta el loop de inmediato, sin esperas extra.
+      let vSt="";
       try{
-        const{paymentIntent:piCheck}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
-        if(piCheck?.status==="succeeded"){
-          const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
-          setPaying(false);payingRef.current=false;onSuccess?.(piCheck.id,cardDetails);return
-        }
-        if(piCheck?.status==="processing"){
-          // Stripe procesando; esperar 1.5s y reintentar verificación
-          await new Promise(r=>setTimeout(r,1500));
-          const{paymentIntent:piRetry}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
-          if(piRetry?.status==="succeeded"){
+        for(let vAtt=0;vAtt<3;vAtt++){
+          if(vAtt>0)await new Promise(r=>setTimeout(r,1500*vAtt));
+          const{paymentIntent:piCheck}=await stripeRef.current.retrievePaymentIntent(secretRef.current);
+          vSt=piCheck?.status||"";
+          if(vSt==="succeeded"||vSt==="requires_capture"){
             const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
-            setPaying(false);payingRef.current=false;onSuccess?.(piRetry.id,cardDetails);return
+            setPaying(false);payingRef.current=false;onSuccess?.(piCheck.id,cardDetails);return
           }
+          if(vSt!=="processing")break;
         }
       }catch(checkErr){console.warn("[StripePayment] PI verification failed:",checkErr)}
+      // v33.22 F3: todo camino a la pantalla de fallo queda registrado con el estado real del PI.
+      try{window.Sentry&&Sentry.captureMessage("StripePayment fallo post-confirm",{level:"warning",tags:{context:"booking_pay_fail"},extra:{stripe_err:err.message||"",pi_status:vSt}})}catch(e){}
       setPayErr(err.message||"");setPaying(false);payingRef.current=false;return
     }
-    if(paymentIntent?.status==="succeeded"){
+    // v33.22 F2: requires_capture = cargo autorizado (capture manual del backend) — es exito, no rechazo.
+    if(paymentIntent?.status==="succeeded"||paymentIntent?.status==="requires_capture"){
       const cardDetails=paymentMethod.card?{last4:paymentMethod.card.last4,brand:paymentMethod.card.brand}:null;
       setPaying(false);payingRef.current=false;onSuccess?.(paymentIntent.id,cardDetails)
-    }else{setPayErr("Estado: "+(paymentIntent?.status||"desconocido"));setPaying(false);payingRef.current=false}
+    }else{try{window.Sentry&&Sentry.captureMessage("StripePayment estado inesperado",{level:"warning",tags:{context:"booking_pay_fail"},extra:{pi_status:paymentIntent?.status||"desconocido"}})}catch(e){}setPayErr("Estado: "+(paymentIntent?.status||"desconocido"));setPaying(false);payingRef.current=false}
   };
   return<div style={{background:C.cd,borderRadius:20,padding:20,border:"1px solid "+C.bd}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
@@ -2622,11 +2626,21 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
                 p_social_mode:"none",
                 p_invitees:invitees
               });
-              if(rpcErr||!rpcResult?.success){
+              // v33.22 F1: exito por evidencia, no por shape. Si el RPC creo la booking pero su
+              // respuesta no trae success:true (shape distinto o fallo parcial post-INSERT), el
+              // refund destruiria un cobro bueno — antes de ir al rollback se verifica si la
+              // booking existe por stripe_payment_intent y, si existe, se continua como exito.
+              let bkIdOk=(!rpcErr&&(rpcResult?.success===true||rpcResult?.booking_id))?(rpcResult?.booking_id||null):null;
+              if(!bkIdOk){
+                const{data:bkByPi}=await sb.from("bookings").select("id").eq("stripe_payment_intent",paymentIntentId).maybeSingle();
+                if(bkByPi?.id){bkIdOk=bkByPi.id;console.warn("[Path2 F1] RPC sin success pero la booking existe — se trata como exito. id:",bkIdOk)}
+              }
+              if(!bkIdOk){
                 // v29.1: rollback via process-orphan-refund (mismo patron que Path 1 / MED-2).
                 // Antes llamaba a process-refund con un body sin booking_id que v15 rechaza con 400:
                 // el refund NUNCA ocurria y el toast decia "Se reembolso el pago" (mentira). Fix real.
                 console.error("[Path2 rollback] create_booking_with_participants failed -> orphan refund. PI:",paymentIntentId);
+                try{window.Sentry&&Sentry.captureMessage("Path2 rollback: RPC fallo y no hay booking por PI",{level:"error",tags:{context:"booking_pay_fail"},extra:{rpc_err:(rpcErr?.message||rpcResult?.error||"unknown").slice(0,300)}})}catch(e){}
                 try{
                   const res=await fetch(SB_FN_URL+"/process-orphan-refund",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+s.access_token},body:JSON.stringify({payment_intent_id:paymentIntentId,failure_reason:"create_booking_with_participants_failed",failure_details:(rpcErr?.message||rpcResult?.error||"unknown").slice(0,500),attempted_payload:{course_id:c.id,course_name:c.course_name,booking_date:sl.slot_date,booking_time:sl.slot_time,party_size:n,payment_mode:paymentMode}})});
                   const result=await res.json();
@@ -2639,13 +2653,13 @@ function Confirm({c,sl,onBack,onOk}){const{s,p:pr}=useA();const[n,setN]=useState
                 setPayData(null);return;
               }
               // Post-processing: fetch booking row + extras + notifs
-              const{data:bkRow}=await sb.from("bookings").select("*").eq("id",rpcResult.booking_id).maybeSingle();
-              if(payData.extras?.length>0){const{data:exRes}=await sb.rpc("add_extras_to_booking",{p_booking_id:rpcResult.booking_id,p_items:payData.extras});if(exRes&&exRes.skipped>0)console.warn("[extras] omitidos",exRes.skipped,exRes.skipped_reasons)}
+              const{data:bkRow}=await sb.from("bookings").select("*").eq("id",bkIdOk).maybeSingle();
+              if(payData.extras?.length>0){const{data:exRes}=await sb.rpc("add_extras_to_booking",{p_booking_id:bkIdOk,p_items:payData.extras});if(exRes&&exRes.skipped>0)console.warn("[extras] omitidos",exRes.skipped,exRes.skipped_reasons)}
               await lockSlot(c.course_name,sl.slot_date,sl.slot_time,n);
               if(selectedFriends.length>0){
                 // v18.0.19 — alineado con schema real de notifications:
                 // antes usaba {body, metadata:{...}} pero schema real es {message, booking_id, action_route, action_label, course_name}
-                const notifs=selectedFriends.map(fid=>{const split_amt=paymentMode==="split"?Math.round((gT/n)*100)/100:null;return{user_id:fid,type:"booking_invitation",title:"Invitación a jugar",message:c.course_name+" — "+(split_amt?"Tu parte: $"+fm(split_amt)+" MXN":"Invitación sin costo"),booking_id:rpcResult.booking_id,course_name:c.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"}});
+                const notifs=selectedFriends.map(fid=>{const split_amt=paymentMode==="split"?Math.round((gT/n)*100)/100:null;return{user_id:fid,type:"booking_invitation",title:"Invitación a jugar",message:c.course_name+" — "+(split_amt?"Tu parte: $"+fm(split_amt)+" MXN":"Invitación sin costo"),booking_id:bkIdOk,course_name:c.course_name,action_route:"tab:1:requests",action_label:"Ver invitación"}});
                 const{error:notifErr}=await sb.from("notifications").insert(notifs);
                 if(notifErr)console.error("[invitation notifs] insert failed:",notifErr);
               }
