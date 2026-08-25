@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <script>
 // PARTEE BUILD MARKER — para confirmar qué versión está activa en el browser
-console.log("%c[Partee] Build v33.30 (Rojo acc para navegar-seleccionar-actuar en admin, feedback directo de Carlos sobre el verde de seleccion: la pill activa de TODOS los segmented del admin pasa de C.grn a C.acc como los tabs del jugador — AdminSubNav (el componente compartido de sub-tabs) mas los inline: filtros del dash de ventas, Llego ahora-Programada de GuestBooking, porcentaje-fijo de reglas de precio, Mi categoria-Mi region, Calendario-Lista de AdminSlots, rangos y estados de SalesHistory, filtro de payouts, y los chips de categorias del menu FnB (outline acc). Botones de ACCION verde a acc: + Nueva reserva del header, Responder de la bandeja, Enviar de respuestas WhatsApp-soporte x3, Copiar invitacion staff, Guardar x2, Crear tarea del LiveMap y Activar Gratis. El VERDE queda exclusivo de dinero y exito: Marcar pagado, Confirmar pago, Pagar del jugador, check-ins, chips Cobrado, montos, checks de seleccion multiple y toggles on. Nav de admin y plataforma ya estaban en acc. Cero logica. Base: v33.29)","color:#00b894;font-weight:bold");
+console.log("%c[Partee] Build v33.31 (Barrido final del criterio rojo-navega verde-dinero: la pasada v33.30 uso greps por variantes especificas y se le escaparon los segmented con otros nombres de condicion — Carlos los cazo en el LiveMap. Ahora con el patron exhaustivo caen los 7 restantes: El campo-Personal-Equipo del LiveMap (el de su captura), sub-tabs del despacho, Satelite-Esquema del mapa, Ultimas 4 semanas de notifs regulares, Archivo de campanias y 7-30-90d del overview de plataforma. Y los text-links verdes de accion-navegacion pasan a accTx2: + Nueva tarea, Despacho, Mensaje al equipo, Staff y equipo, Tee Sheet, Promocionar huecos, Campanias, Enviar-Reenviar a revision y Sigue del checklist. Quedan verdes SOLO los del criterio: montos, Cobrado, check-ins, precio editable del slot, estados verificados, checkboxes de seleccion multiple, radios de formulario y toggles — igual que en el jugador. Base: v33.30)","color:#00b894;font-weight:bold");
 
 // v20.47 — Sentry init. El loader script lazy-loads el SDK completo on-demand pero podemos
 // configurar custom init con window.sentryOnLoad. Forzamos load inmediato para capturar errores
@@ -8135,7 +8135,7 @@ function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=us
     return<div style={{display:"flex",alignItems:"center",gap:9,padding:"10px 0"}}>
       <span style={{display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:ic("alert",14,C.acc)}}/>
       <span style={{fontSize:12,color:C.ts2||C.ts,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={reason}><span style={{fontWeight:700,color:C.accTx||C.acc}}>{wasRejected?"Cambios necesarios.":"Locación suspendida."}</span> {reason}</span>
-      {wasRejected&&<span onClick={submitting?undefined:submitReview} style={{flexShrink:0,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer",fontSize:11.5,opacity:submitting?.6:1}}>{submitting?"Enviando…":"Reenviar a revisión"}</span>}
+      {wasRejected&&<span onClick={submitting?undefined:submitReview} style={{flexShrink:0,fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer",fontSize:11.5,opacity:submitting?.6:1}}>{submitting?"Enviando…":"Reenviar a revisión"}</span>}
     </div>
   }
   const isPending=status==="pending_review";const barColor=isPending?C.gld:C.acc;const barBg=isPending?C.gld+"12":C.acc+"10";const barBd=isPending?C.gld+"30":C.acc+"25";
@@ -8145,8 +8145,8 @@ function CourseStatusBanner({course,onRefresh,navTo}){const[counts,setCounts]=us
     <span style={{fontSize:12,color:C.ts2||C.ts,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
       <span style={{fontWeight:700,color:C.txt}}>{isPending?"En revisión.":"Tu locación está en borrador."}</span>{" "}
       {isPending?"Te notificaremos cuando sea aprobada.":comp.allDone
-        ?<span onClick={submitting?undefined:submitReview} style={{fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{submitting?"Enviando…":"Enviar a revisión"}</span>
-        :<React.Fragment>Sigue: <span onClick={()=>navTo&&goToReq(firstPending.k)} style={{fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{firstPending?.l||"siguiente requisito"}</span></React.Fragment>}
+        ?<span onClick={submitting?undefined:submitReview} style={{fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer"}}>{submitting?"Enviando…":"Enviar a revisión"}</span>
+        :<React.Fragment>Sigue: <span onClick={()=>navTo&&goToReq(firstPending.k)} style={{fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer"}}>{firstPending?.l||"siguiente requisito"}</span></React.Fragment>}
     </span>
     <span style={{flexShrink:0,fontSize:11,color:C.tm,fontFamily:"ui-monospace,Menlo,monospace"}}>{comp.pct}%</span>
   </div>
@@ -8881,7 +8881,7 @@ function AdminDash({course,onRefresh,navTo,weather}){const{p:selfP}=useA();const
             <div style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{(course.facility_type||"campo")==="campo"?"Salidas de hoy":"Reservas de hoy"}</div>
             {(()=>{const tb=dashV2?.today_bookings||[];if(!tb.length)return null;const unc=tb.filter(b=>b.payment_status!=="paid").length;const seg=(k,l)=><span onClick={()=>setSalFil(k)} style={{padding:"3px 10px",borderRadius:7,background:salFil===k?C.acc:"transparent",color:salFil===k?"#fff":C.ts,fontSize:10,fontWeight:salFil===k?700:600,cursor:"pointer",whiteSpace:"nowrap",boxShadow:salFil===k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{l}</span>;
             return<div style={{display:"flex",background:C.w07,borderRadius:9,padding:2}}>{seg("all","Todas · "+tb.length)}{seg("unpaid","Por cobrar · "+unc)}</div>})()}
-            <span onClick={()=>navTo(1)} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer",whiteSpace:"nowrap"}}>{ft==="campo"?"Tee Sheet →":"Reservas →"}</span>
+            <span onClick={()=>navTo(1)} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer",whiteSpace:"nowrap"}}>{ft==="campo"?"Tee Sheet →":"Reservas →"}</span>
             {dashV2?.today_bookings?.length>0&&<div style={{fontSize:11,color:C.tm}}>{dashV2.today_bookings.filter(b=>{if(!b.checked_in)return false;const endMin=ft==="campo"?360:(course.session_minutes||60);return !(b.booking_time&&(new Date(ymdLocal()+"T"+b.booking_time.slice(0,5)).getTime()+endMin*60000<Date.now()))}).length}/{dashV2.today_bookings.length} {ft==="campo"?t("en campo"):ft==="simulador"?t("en cabinas"):t("en bahías")}</div>}
           </div>
           {(!dashV2?.today_bookings||dashV2.today_bookings.length===0)?<div style={{fontSize:12,color:C.tm,textAlign:"center",padding:"24px 0"}}>{(course.facility_type||"campo")==="campo"?"Sin salidas hoy":t("Sin reservas hoy")}</div>:
@@ -8896,7 +8896,7 @@ function AdminDash({course,onRefresh,navTo,weather}){const{p:selfP}=useA();const
           {st.freeToday&&st.freeToday.length>0&&<div style={{marginTop:12,paddingTop:10,borderTop:"1px solid "+C.bd,display:"flex",alignItems:"center",gap:14,fontSize:11,color:C.tm,flexWrap:"wrap"}}>
             <span>{st.freeToday.length} {st.freeToday.length===1?"horario libre":"horarios libres"} hoy</span>
             <span>siguiente libre {st.freeToday[0]}</span>
-            <span onClick={()=>navTo(2)} style={{marginLeft:"auto",fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>Promocionar huecos →</span>
+            <span onClick={()=>navTo(2)} style={{marginLeft:"auto",fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer"}}>Promocionar huecos →</span>
           </div>}
         </div>
         <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:16}}>
@@ -14180,7 +14180,7 @@ function AdminPayoutsHistory({course,onNav}){const[payouts,setPayouts]=useState(
             <div style={{width:Math.max(3,Math.round(v/mx*100))+"%",height:"100%",borderRadius:5,background:palette[k]||C.grn}}/>
           </div>
         </div>)}
-        {onNav&&<div onClick={()=>onNav("campaigns")} style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd,fontSize:11.5,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Impulsa una categoría · Campañas")} →</div>}
+        {onNav&&<div onClick={()=>onNav("campaigns")} style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.bd,fontSize:11.5,fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer"}}>{t("Impulsa una categoría · Campañas")} →</div>}
       </div>})()}
     </div>
     </div>
@@ -15340,7 +15340,7 @@ function CourseEscalations({course,onChange}){
     </div>}
   </div>;
 }
-function CustomerInbox({course, onExit}){const[sub,setSub]=useState("soporte");const subs=[{k:"soporte",l:t("Soporte"),icon:"clipboard"},{k:"mensajes",l:t("Mensajes"),icon:"mail"}];return ReactDOM.createPortal(<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}><div style={{position:"sticky",top:0,zIndex:10,background:C.bg,borderBottom:"1px solid "+C.bd,padding:"14px 18px"}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{minWidth:0}}><div style={{fontSize:11,color:C.tm,fontWeight:600,letterSpacing:1.5}}>{t("ATENCIÓN A CLIENTES")}</div><div style={{fontSize:18,fontWeight:900,color:C.txt,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{course.course_name}</div></div><button onClick={onExit} style={{padding:"10px 16px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,flexShrink:0}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("x",14,C.txt)}}/>{t("Cerrar")}</button></div><div style={{display:"flex",background:C.w07,borderRadius:10,padding:2}}>{subs.map(x=>{const on=sub===x.k;return <button key={x.k} onClick={()=>setSub(x.k)} style={{flex:1,textAlign:"center",fontSize:13,fontWeight:on?700:600,color:on?"#fff":C.ts,background:on?C.grn:"transparent",border:"none",borderRadius:8,padding:"7px 0",cursor:"pointer",boxShadow:on?"0 1px 3px rgba(0,0,0,.3)":"none",whiteSpace:"nowrap",overflow:"hidden",WebkitTapHighlightColor:"transparent"}}>{x.l}</button>;})}</div></div><div style={{padding:"14px 18px 40px"}}>{sub==="soporte"&&<CourseEscalations course={course} onChange={()=>{}}/>}{sub==="mensajes"&&<WaInbox course={course} only="jugador"/>}</div></div>,document.body);}
+function CustomerInbox({course, onExit}){const[sub,setSub]=useState("soporte");const subs=[{k:"soporte",l:t("Soporte"),icon:"clipboard"},{k:"mensajes",l:t("Mensajes"),icon:"mail"}];return ReactDOM.createPortal(<div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch"}}><div style={{position:"sticky",top:0,zIndex:10,background:C.bg,borderBottom:"1px solid "+C.bd,padding:"14px 18px"}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{minWidth:0}}><div style={{fontSize:11,color:C.tm,fontWeight:600,letterSpacing:1.5}}>{t("ATENCIÓN A CLIENTES")}</div><div style={{fontSize:18,fontWeight:900,color:C.txt,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{course.course_name}</div></div><button onClick={onExit} style={{padding:"10px 16px",background:C.cd,border:"1px solid "+C.bd,borderRadius:12,color:C.txt,fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,flexShrink:0}}><span style={{display:"flex"}} dangerouslySetInnerHTML={{__html:ic("x",14,C.txt)}}/>{t("Cerrar")}</button></div><div style={{display:"flex",background:C.w07,borderRadius:10,padding:2}}>{subs.map(x=>{const on=sub===x.k;return <button key={x.k} onClick={()=>setSub(x.k)} style={{flex:1,textAlign:"center",fontSize:13,fontWeight:on?700:600,color:on?"#fff":C.ts,background:on?C.acc:"transparent",border:"none",borderRadius:8,padding:"7px 0",cursor:"pointer",boxShadow:on?"0 1px 3px rgba(0,0,0,.3)":"none",whiteSpace:"nowrap",overflow:"hidden",WebkitTapHighlightColor:"transparent"}}>{x.l}</button>;})}</div></div><div style={{padding:"14px 18px 40px"}}>{sub==="soporte"&&<CourseEscalations course={course} onChange={()=>{}}/>}{sub==="mensajes"&&<WaInbox course={course} only="jugador"/>}</div></div>,document.body);}
 function WaInbox({course, only}){
   const [threads,setThreads]=useState(null);
   const [openP,setOpenP]=useState(null);
@@ -15565,7 +15565,7 @@ function LiveMap({course}){
     Object.keys(sosMarkersRef.current).forEach(id=>{if(!seen.has(id)){map.removeLayer(sosMarkersRef.current[id]);delete sosMarkersRef.current[id]}});
   },[sos]);
   return <div>
-    {(()=>{const subs=[{k:"campo",l:t("El campo"),icon:"map"},{k:"personal",l:t("Personal"),icon:"users"},{k:"mensajes",l:t("Equipo"),icon:"mail"}];return <div style={{display:"flex",background:C.w07,borderRadius:10,padding:2,marginBottom:14}}>{subs.map(sb2=>{const on=subTab===sb2.k;const sosAl=sb2.k==="personal"&&sos.length>0;const al=sb2.k==="personal"&&(sos.length>0||board.fnb_unassigned.length>0||(board.tasks||[]).some(x=>!x.assigned_staff_id));return <button key={sb2.k} onClick={()=>{hap&&hap();setSubTab(sb2.k)}} style={{flex:1,textAlign:"center",fontSize:13,fontWeight:on?700:600,color:on?"#fff":C.ts,background:on?C.grn:"transparent",border:"none",borderRadius:8,padding:"7px 0",cursor:"pointer",boxShadow:on?"0 1px 3px rgba(0,0,0,.3)":"none",whiteSpace:"nowrap",overflow:"hidden",WebkitTapHighlightColor:"transparent",position:"relative"}}>{sb2.l}{al&&<span style={{position:"absolute",top:5,right:8,width:7,height:7,borderRadius:"50%",background:sosAl?C.acc:C.gld,border:on?"1.5px solid #fff":"none"}}/>}</button>;})}</div>;})()}
+    {(()=>{const subs=[{k:"campo",l:t("El campo"),icon:"map"},{k:"personal",l:t("Personal"),icon:"users"},{k:"mensajes",l:t("Equipo"),icon:"mail"}];return <div style={{display:"flex",background:C.w07,borderRadius:10,padding:2,marginBottom:14}}>{subs.map(sb2=>{const on=subTab===sb2.k;const sosAl=sb2.k==="personal"&&sos.length>0;const al=sb2.k==="personal"&&(sos.length>0||board.fnb_unassigned.length>0||(board.tasks||[]).some(x=>!x.assigned_staff_id));return <button key={sb2.k} onClick={()=>{hap&&hap();setSubTab(sb2.k)}} style={{flex:1,textAlign:"center",fontSize:13,fontWeight:on?700:600,color:on?"#fff":C.ts,background:on?C.acc:"transparent",border:"none",borderRadius:8,padding:"7px 0",cursor:"pointer",boxShadow:on?"0 1px 3px rgba(0,0,0,.3)":"none",whiteSpace:"nowrap",overflow:"hidden",WebkitTapHighlightColor:"transparent",position:"relative"}}>{sb2.l}{al&&<span style={{position:"absolute",top:5,right:8,width:7,height:7,borderRadius:"50%",background:sosAl?C.acc:C.gld,border:on?"1.5px solid #fff":"none"}}/>}</button>;})}</div>;})()}
     {subTab==="campo"&&<>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,gap:10}}>
       <div style={{flex:1,minWidth:0}}>
@@ -15577,8 +15577,8 @@ function LiveMap({course}){
       </div>
     </div>
     <div style={{display:"flex",marginBottom:12,background:C.w07,borderRadius:10,padding:2}}>
-      <button onClick={()=>setMapView("sat")} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:mapView==="sat"?C.grn:"transparent",color:mapView==="sat"?"#fff":C.ts,fontSize:12,fontWeight:mapView==="sat"?700:600,cursor:"pointer",boxShadow:mapView==="sat"?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{t("Satelital")}</button>
-      <button onClick={()=>setMapView("schema")} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:mapView==="schema"?C.grn:"transparent",color:mapView==="schema"?"#fff":C.ts,fontSize:12,fontWeight:mapView==="schema"?700:600,cursor:"pointer",boxShadow:mapView==="schema"?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{t("Esquema Partee")}</button>
+      <button onClick={()=>setMapView("sat")} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:mapView==="sat"?C.acc:"transparent",color:mapView==="sat"?"#fff":C.ts,fontSize:12,fontWeight:mapView==="sat"?700:600,cursor:"pointer",boxShadow:mapView==="sat"?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{t("Satelital")}</button>
+      <button onClick={()=>setMapView("schema")} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:mapView==="schema"?C.acc:"transparent",color:mapView==="schema"?"#fff":C.ts,fontSize:12,fontWeight:mapView==="schema"?700:600,cursor:"pointer",boxShadow:mapView==="schema"?"0 1px 3px rgba(0,0,0,.3)":"none",WebkitTapHighlightColor:"transparent"}}>{t("Esquema Partee")}</button>
     </div>
     {/* v32.80: consola En Vivo — mapa (izq) + rail de operacion (der) en desktop; apilado en movil */}
     <div className="live-2col">
@@ -15647,7 +15647,7 @@ function LiveMap({course}){
     <div style={{background:C.cd,border:"1px solid "+C.bd,borderRadius:14,padding:"13px 15px"}}>
       <div style={{display:"flex",alignItems:"baseline",marginBottom:9}}>
         <span style={{fontSize:12,fontWeight:800,color:C.txt,letterSpacing:".02em"}}>{t("Personal en turno")}</span>
-        <span onClick={()=>setSubTab("mensajes")} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Mensaje al equipo")} →</span>
+        <span onClick={()=>setSubTab("mensajes")} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer"}}>{t("Mensaje al equipo")} →</span>
       </div>
       {(board.free_staff||[]).length===0
         ?<div style={{fontSize:11,color:C.tm}}>{t("Sin personal disponible ahora")}</div>
@@ -15658,7 +15658,7 @@ function LiveMap({course}){
             <span style={{marginLeft:"auto",fontSize:10.5,color:C.tm,flexShrink:0}}>{t("disponible")}</span>
           </div>)}
         </div>}
-      <div onClick={()=>setSubTab("personal")} style={{marginTop:9,fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Despacho")} →</div>
+      <div onClick={()=>setSubTab("personal")} style={{marginTop:9,fontSize:11,fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer"}}>{t("Despacho")} →</div>
     </div>
     </div>
     </div>
@@ -15678,7 +15678,7 @@ function LiveMap({course}){
       <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:16}}>
         <span onClick={()=>setDispatchOpen(true)} style={{...aLink,color:C.ts2||C.ts}}>{t("Despacho")}</span>
         <span onClick={()=>setRosterOpen(true)} style={{...aLink,color:C.ts2||C.ts}}>{t("Staff y equipo")}</span>
-        <span onClick={()=>setTaskOpen(o=>!o)} style={{...aLink,color:C.grnTxt||C.grn}}>+ {t("Nueva tarea")}</span>
+        <span onClick={()=>setTaskOpen(o=>!o)} style={{...aLink,color:C.accTx2||C.acc}}>+ {t("Nueva tarea")}</span>
       </span>
     </div>
       {taskOpen&&<div style={{marginBottom:12,padding:"12px",borderRadius:14,border:"1px solid "+C.bd,background:C.c2}}>
@@ -15734,7 +15734,7 @@ function LiveMap({course}){
         <span onClick={()=>setSubTab("mensajes")} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Mensaje a todos")} →</span>
       </div>
       {(board.roster||[]).length===0
-        ?<div style={{fontSize:12,color:C.tm,padding:"2px 0"}}>{t("Nadie en turno ahora.")} <span onClick={()=>setRosterOpen(true)} style={{fontWeight:700,color:C.grnTxt||C.grn,cursor:"pointer"}}>{t("Staff y equipo")} →</span></div>
+        ?<div style={{fontSize:12,color:C.tm,padding:"2px 0"}}>{t("Nadie en turno ahora.")} <span onClick={()=>setRosterOpen(true)} style={{fontWeight:700,color:C.accTx2||C.acc,cursor:"pointer"}}>{t("Staff y equipo")} →</span></div>
         :(board.roster||[]).map((r,ri)=>{const busy=!!r.task;return <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:ri<(board.roster.length-1)?"1px solid "+C.bd:"none",fontSize:12}}>
           <span style={{width:7,height:7,borderRadius:99,background:busy?C.gld:C.grn,flexShrink:0}}/>
           <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:C.txt}}>{r.full_name} <span style={{color:C.tm}}>· {RSTAFF_LBL[r.role]||r.role}</span></span>
@@ -16427,7 +16427,7 @@ function YieldHeatmap({course}){const{p}=useA();const isTeam=p?.user_role==="cou
         <button onClick={exportPNG} disabled={exporting||!data?.cells?.length} title="Exportar como imagen PNG" style={{padding:"5px 9px",borderRadius:6,border:"1px solid "+C.bd,background:"transparent",color:exporting?C.tm:C.txt,fontSize:10,fontWeight:700,cursor:exporting||!data?.cells?.length?"default":"pointer",opacity:!data?.cells?.length?.5:1}}>{exporting?"...":t("Descargar")}</button>
         {/* Toggle modo */}
         <div style={{display:"flex",padding:2,background:C.w07,borderRadius:8}}>
-          {[{k:"forecast",l:"Próximas 4 semanas"},{k:"historical",l:"Últimas 4 semanas"}].map(m=><button key={m.k} onClick={()=>setMode(m.k)} style={{padding:"5px 11px",borderRadius:6,border:"none",background:mode===m.k?C.grn:"transparent",color:mode===m.k?"#fff":C.tm,fontSize:10,fontWeight:mode===m.k?700:600,cursor:"pointer",letterSpacing:.3,boxShadow:mode===m.k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{m.l}</button>)}
+          {[{k:"forecast",l:"Próximas 4 semanas"},{k:"historical",l:"Últimas 4 semanas"}].map(m=><button key={m.k} onClick={()=>setMode(m.k)} style={{padding:"5px 11px",borderRadius:6,border:"none",background:mode===m.k?C.acc:"transparent",color:mode===m.k?"#fff":C.tm,fontSize:10,fontWeight:mode===m.k?700:600,cursor:"pointer",letterSpacing:.3,boxShadow:mode===m.k?"0 1px 3px rgba(0,0,0,.3)":"none"}}>{m.l}</button>)}
         </div>
       </div>
     </div>
@@ -16632,7 +16632,7 @@ function AdminCampaignsCard({course}){
     </div>
 
     {!ld&&campaigns.length>0&&<div style={{display:"inline-flex",background:C.w07,borderRadius:9,padding:2,marginBottom:8}}>
-      {[["act",t("Activas"),_act.length],["arch",t("Archivo"),_arch.length]].map(([k,l,n])=><button key={k} onClick={()=>setView(k)} style={{padding:"5px 11px",borderRadius:7,border:"none",background:view===k?C.grn:"transparent",color:view===k?"#fff":C.tm,fontSize:10.5,fontWeight:view===k?700:600,boxShadow:view===k?"0 1px 3px rgba(0,0,0,.3)":"none",cursor:"pointer"}}>{l} ({n})</button>)}
+      {[["act",t("Activas"),_act.length],["arch",t("Archivo"),_arch.length]].map(([k,l,n])=><button key={k} onClick={()=>setView(k)} style={{padding:"5px 11px",borderRadius:7,border:"none",background:view===k?C.acc:"transparent",color:view===k?"#fff":C.tm,fontSize:10.5,fontWeight:view===k?700:600,boxShadow:view===k?"0 1px 3px rgba(0,0,0,.3)":"none",cursor:"pointer"}}>{l} ({n})</button>)}
     </div>}
     {ld?<Skeleton w="100%" h={120}/>:campaigns.length===0?<div style={{textAlign:"center",padding:24,color:C.tm,fontSize:11}}>
       <div style={{marginBottom:4,display:"flex",justifyContent:"center"}} dangerouslySetInnerHTML={{__html:ic("inbox",22)}}/>
@@ -19149,7 +19149,7 @@ function PlatformAdminApp(){const{p,out}=useA();const[tab,setTab]=useState(0);co
               <div style={{fontSize:11.5,color:C.ts,marginTop:4,lineHeight:1.5,maxWidth:460}}>{veredicto}</div>
             </div>
             <div style={{display:"flex",gap:4,background:C.cd,border:"1px solid "+C.bd,borderRadius:10,padding:3,flexShrink:0}}>
-              {[7,30,90].map(dd=><button key={dd} onClick={()=>setOvDays(dd)} style={{padding:"5px 11px",borderRadius:7,border:"none",background:ovDays===dd?C.grn:"transparent",color:ovDays===dd?"#fff":C.ts,fontSize:11,fontWeight:800,cursor:"pointer"}}>{dd}d</button>)}
+              {[7,30,90].map(dd=><button key={dd} onClick={()=>setOvDays(dd)} style={{padding:"5px 11px",borderRadius:7,border:"none",background:ovDays===dd?C.acc:"transparent",color:ovDays===dd?"#fff":C.ts,fontSize:11,fontWeight:800,cursor:"pointer"}}>{dd}d</button>)}
             </div>
           </div>
 
