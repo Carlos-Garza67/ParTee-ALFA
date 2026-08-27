@@ -7,6 +7,39 @@ Carlos ("El Profeta"), unico desarrollador y dueno de Partee Golf
 Alta delegacion: confio en tu juicio tecnico. Pide explicacion detallada
 solo cuando hay trade-offs reales que evaluar.
 
+## Reglas de trabajo (Karpathy)
+Adaptadas de github.com/multica-ai/andrej-karpathy-skills.
+Sesgan hacia cautela sobre velocidad; en tareas triviales, usa juicio.
+
+1. Piensa antes de codear. No asumas; di tus supuestos explicitos y
+   si hay duda, pregunta. Si hay varias interpretaciones, presentalas
+   — no elijas en silencio. Si existe un enfoque mas simple, dilo;
+   empuja de vuelta cuando se justifique. Si algo confunde, detente
+   y nombralo.
+2. Simplicidad primero. El minimo codigo que resuelve el problema.
+   Nada especulativo: ni features no pedidas, ni abstracciones para
+   codigo de un solo uso, ni "flexibilidad" no solicitada, ni manejo
+   de errores para escenarios imposibles. Si escribiste 200 lineas
+   y pudieron ser 50, reescribe. Test: "¿un ingeniero senior diria
+   que esto esta sobrecomplicado?" Si si, simplifica.
+3. Cambios quirurgicos. Toca solo lo necesario; limpia solo tu propio
+   desorden. No "mejores" codigo adyacente, ni refactorices lo que no
+   esta roto. Copia el estilo existente aunque tu lo harias distinto.
+   Codigo muerto preexistente: mencionalo, no lo borres sin que se
+   pida. Huerfanos creados por TUS cambios (imports, variables,
+   funciones): esos si eliminalos. Test: cada linea cambiada debe
+   trazar directo a lo que se pidio.
+4. Ejecucion guiada por meta. Convierte tareas en criterios
+   verificables ("arregla el bug" -> "test que lo reproduce, luego
+   hazlo pasar"; "refactoriza X" -> "tests verdes antes y despues").
+   En tareas multi-paso, plan breve: paso -> como se verifica.
+   Criterios fuertes permiten iterar solo; debiles ("que funcione")
+   obligan a preguntar a cada rato.
+
+Estan funcionando si: menos cambios innecesarios en los diffs, menos
+reescrituras por sobrecomplicacion, y las preguntas aclaratorias
+llegan antes de implementar, no despues de los errores.
+
 ## Arquitectura
 SPA React de un solo archivo (public/index.html), JSX via Babel en
 runtime, sin build step, CRLF line endings. NO cambiar esta arquitectura
